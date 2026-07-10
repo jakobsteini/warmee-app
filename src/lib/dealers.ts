@@ -1,33 +1,6 @@
 import { supabase } from './supabase'
+import { getMyOrgId } from './org'
 import type { Dealer, DealerInput } from '../types/dealer'
-
-/**
- * org_id des aktuell angemeldeten Users aus seinem Profil.
- * Wird beim Anlegen eines Händlers gebraucht, da dealers.org_id keinen
- * DB-Default hat und die RLS-Policy (with check) die korrekte Org verlangt.
- */
-async function getMyOrgId(): Promise<string> {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    throw new Error('Nicht angemeldet.')
-  }
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('org_id')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !data) {
-    throw new Error('Organisation konnte nicht ermittelt werden.')
-  }
-
-  return data.org_id
-}
 
 /** Alle Händler der eigenen Org (RLS scoped automatisch), alphabetisch. */
 export async function listDealers(): Promise<Dealer[]> {
