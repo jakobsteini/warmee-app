@@ -3,13 +3,14 @@ import { useAuth } from '../context/AuthContext'
 
 /** Aktive Module (Baustein B – Marketing & Newsletter) */
 const navItems = [
+  { to: '/dealers', label: 'Händler' },
   { to: '/assets', label: 'Bildarchiv' },
   { to: '/crop', label: 'Zuschnitt' },
   { to: '/newsletter', label: 'Newsletter' },
 ]
 
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */
-const futureItems = ['Händler', 'Artikel', 'Orders']
+const futureItems = ['Artikel', 'Orders']
 
 export default function Layout() {
   const { session, signOut } = useAuth()
