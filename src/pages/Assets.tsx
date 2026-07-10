@@ -9,6 +9,7 @@ import {
 import {
   listAssets,
   uploadAsset,
+  updateAsset,
   deleteAsset,
   getAssetDealerIds,
   setAssetDealers,
@@ -354,10 +355,10 @@ export default function Assets() {
         <AssetDetail
           asset={selected}
           dealers={dealers}
-          seasonLabel={seasonLabel(selected.season_id)}
+          seasons={seasons}
           onClose={() => setSelected(null)}
           onDelete={() => handleDelete(selected)}
-          onDealersSaved={loadAssets}
+          onSaved={loadAssets}
         />
       )}
     </div>
@@ -392,18 +393,20 @@ function FilterPill({
 function AssetDetail({
   asset,
   dealers,
-  seasonLabel,
+  seasons,
   onClose,
   onDelete,
-  onDealersSaved,
+  onSaved,
 }: {
   asset: AssetWithMeta
   dealers: Dealer[]
-  seasonLabel: string
+  seasons: Season[]
   onClose: () => void
   onDelete: () => void
-  onDealersSaved: () => Promise<void>
+  onSaved: () => Promise<void>
 }) {
+  const [assetType, setAssetType] = useState<AssetType>(asset.asset_type)
+  const [seasonId, setSeasonId] = useState<string | null>(asset.season_id)
   const [selectedIds, setSelectedIds] = useState<string[]>(asset.dealer_ids)
   const [saving, setSaving] = useState(false)
   const [loadingDealers, setLoadingDealers] = useState(true)
@@ -432,15 +435,24 @@ function AssetDetail({
     setSaving(true)
     setSaveError(null)
     try {
+      if (assetType !== asset.asset_type || seasonId !== asset.season_id) {
+        await updateAsset(asset.id, {
+          asset_type: assetType,
+          season_id: seasonId,
+        })
+      }
       await setAssetDealers(asset.id, selectedIds)
-      await onDealersSaved()
+      await onSaved()
       onClose()
     } catch {
-      setSaveError('Zuordnung konnte nicht gespeichert werden.')
+      setSaveError('Änderungen konnten nicht gespeichert werden.')
     } finally {
       setSaving(false)
     }
   }
+
+  const fieldClass =
+    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
   return (
     <div
@@ -467,24 +479,46 @@ function AssetDetail({
           <h2 className="truncate text-lg font-medium text-ink">
             {asset.filename}
           </h2>
-          <dl className="mt-3 space-y-1 text-sm text-muted">
-            <div className="flex gap-2">
-              <dt>Maße:</dt>
-              <dd className="text-ink">
-                {asset.width && asset.height
-                  ? `${asset.width} × ${asset.height} px`
-                  : '—'}
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt>Typ:</dt>
-              <dd className="text-ink">{ASSET_TYPE_LABELS[asset.asset_type]}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt>Saison:</dt>
-              <dd className="text-ink">{seasonLabel}</dd>
-            </div>
-          </dl>
+          <p className="mt-3 text-sm text-muted">
+            Maße:{' '}
+            <span className="text-ink">
+              {asset.width && asset.height
+                ? `${asset.width} × ${asset.height} px`
+                : '—'}
+            </span>
+          </p>
+
+          <div className="mt-4 flex gap-3">
+            <label className="flex flex-1 flex-col gap-1.5">
+              <span className="text-sm text-muted">Typ</span>
+              <select
+                value={assetType}
+                onChange={(e) => setAssetType(e.target.value as AssetType)}
+                className={fieldClass}
+              >
+                {ASSET_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {ASSET_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-1 flex-col gap-1.5">
+              <span className="text-sm text-muted">Saison</span>
+              <select
+                value={seasonId ?? ''}
+                onChange={(e) => setSeasonId(e.target.value || null)}
+                className={fieldClass}
+              >
+                <option value="">Ohne Saison</option>
+                {seasons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="mt-5 flex-1">
             <p className="mb-2 text-sm font-medium text-ink">Händler zuordnen</p>

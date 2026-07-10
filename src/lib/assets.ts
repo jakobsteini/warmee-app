@@ -147,6 +147,15 @@ export async function uploadAsset(
   return data
 }
 
+/** Typ und/oder Saison eines Assets ändern. */
+export async function updateAsset(
+  id: string,
+  patch: { asset_type?: AssetType; season_id?: string | null },
+): Promise<void> {
+  const { error } = await supabase.from('assets').update(patch).eq('id', id)
+  if (error) throw error
+}
+
 /** Asset löschen: erst die Datei aus dem Bucket, dann den DB-Datensatz. */
 export async function deleteAsset(asset: Asset): Promise<void> {
   const { error: storageError } = await supabase.storage
