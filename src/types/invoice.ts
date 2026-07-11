@@ -25,6 +25,12 @@ export function invoiceStatusLabel(status: string): string {
 export const KLEINUNTERNEHMER_HINWEIS =
   'Umsatzsteuerbefreit gemäß § 6 Abs. 1 Z 27 UStG'
 
+/** Zahlungsziel in Tagen (14 Tage netto). */
+export const ZAHLUNGSZIEL_TAGE = 14
+
+/** Zahlungsziel-Hinweis für Belege. */
+export const ZAHLUNGSZIEL_HINWEIS = `Zahlbar innerhalb von ${ZAHLUNGSZIEL_TAGE} Tagen netto.`
+
 /** Eine Rechnung (snake_case wie in der DB). */
 export interface Invoice {
   id: string

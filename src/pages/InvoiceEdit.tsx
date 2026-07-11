@@ -11,6 +11,7 @@ import { formatEUR } from '../lib/money'
 import {
   invoiceStatusLabel,
   KLEINUNTERNEHMER_HINWEIS,
+  ZAHLUNGSZIEL_HINWEIS,
   type InvoiceWithItems,
 } from '../types/invoice'
 
@@ -128,8 +129,9 @@ export default function InvoiceEdit() {
             Rechnung {invoice.invoice_number}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {invoice.dealer?.name ?? '—'} · {formatDate(invoice.invoice_date)} ·
-            Status:{' '}
+            {invoice.dealer?.name ?? '—'} · {formatDate(invoice.invoice_date)}
+            {invoice.due_date && <> · Fällig am {formatDate(invoice.due_date)}</>}{' '}
+            · Status:{' '}
             <span className="font-medium text-ink">
               {invoiceStatusLabel(invoice.status)}
             </span>
@@ -277,7 +279,11 @@ export default function InvoiceEdit() {
         </table>
       </div>
 
-      <p className="mt-4 text-sm text-muted italic">
+      <p className="mt-4 text-sm text-ink">
+        {ZAHLUNGSZIEL_HINWEIS}
+        {invoice.due_date && ` Fällig am ${formatDate(invoice.due_date)}.`}
+      </p>
+      <p className="mt-1 text-sm text-muted italic">
         {KLEINUNTERNEHMER_HINWEIS}
       </p>
     </div>

@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import type { BelegItem } from './pdf'
+import { ZAHLUNGSZIEL_TAGE } from '../types/invoice'
 import type {
   DeliveryNote,
   Dealerish,
@@ -13,6 +14,13 @@ import type {
 const BUCKET = 'invoices'
 /** Gültigkeit der Signed-URLs für den PDF-Download (privater Bucket). */
 const SIGNED_URL_TTL = 60 * 60 // 1 Stunde
+
+/** ISO-Datum (YYYY-MM-DD) um n Tage verschieben, als YYYY-MM-DD zurück. */
+function addDays(iso: string, days: number): string {
+  const d = new Date(iso)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
 
 /** numeric/number robust zu number. */
 function num(v: number | string | null): number {
@@ -300,6 +308,10 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     .single()
   if (insErr) throw insErr
 
+  // Zahlungsziel 14 Tage netto ab Rechnungsdatum (autoritatives invoice_date
+  // aus der DB als Basis).
+  const dueDate = addDays(invoice.invoice_date, ZAHLUNGSZIEL_TAGE)
+
   const itemRows = ctx.items.map((i) => ({
     invoice_id: invoice.id,
     product_id: i.product_id,
@@ -326,7 +338,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
   const blob = buildInvoicePdf({
     number: invoice.invoice_number,
     date: invoice.invoice_date,
-    dueDate: invoice.due_date,
+    dueDate,
     dealer: ctx.dealer,
     items: ctx.items.map((i) => ({
       description: i.description,
@@ -347,7 +359,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
   )
   const { data: updated, error: upErr } = await supabase
     .from('invoices')
-    .update({ pdf_path: path })
+    .update({ pdf_path: path, due_date: dueDate })
     .eq('id', invoice.id)
     .select()
     .single()

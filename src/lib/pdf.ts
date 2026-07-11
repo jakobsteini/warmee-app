@@ -1,5 +1,9 @@
 import { jsPDF } from 'jspdf'
-import { KLEINUNTERNEHMER_HINWEIS, type Dealerish } from '../types/invoice'
+import {
+  KLEINUNTERNEHMER_HINWEIS,
+  ZAHLUNGSZIEL_HINWEIS,
+  type Dealerish,
+} from '../types/invoice'
 
 /**
  * Absenderdaten für Belege. Zentral hier, damit Rechnung und Lieferschein
@@ -241,10 +245,18 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   doc.text('Gesamtsumme', right - 42, y)
   doc.text(eur(data.total), right, y, { align: 'right' })
 
-  // Kleinunternehmer-Hinweis.
+  // Zahlungsziel + Kleinunternehmer-Hinweis.
   y += 12
-  doc.setFont('helvetica', 'italic')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
+  doc.setTextColor(26, 26, 26)
+  const dueText = data.dueDate
+    ? `${ZAHLUNGSZIEL_HINWEIS} Fällig am ${deDate(data.dueDate)}.`
+    : ZAHLUNGSZIEL_HINWEIS
+  doc.text(dueText, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+
+  y += 6
+  doc.setFont('helvetica', 'italic')
   doc.setTextColor(90, 85, 80)
   doc.text(KLEINUNTERNEHMER_HINWEIS, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
 
