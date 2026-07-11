@@ -10,10 +10,13 @@ const navItems = [
 ]
 
 /** Aktive Module aus Baustein A – Warenwirtschaft */
-const warenItems = [{ to: '/products', label: 'Artikel' }]
+const warenItems = [
+  { to: '/products', label: 'Artikel' },
+  { to: '/orders', label: 'Orders' },
+]
 
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */
-const futureItems = ['Orders']
+const futureItems: string[] = []
 
 export default function Layout() {
   const { session, signOut } = useAuth()

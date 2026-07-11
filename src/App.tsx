@@ -7,6 +7,8 @@ import Assets from './pages/Assets'
 import Crop from './pages/Crop'
 import Newsletter from './pages/Newsletter'
 import Products from './pages/Products'
+import Orders from './pages/Orders'
+import OrderEdit from './pages/OrderEdit'
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
             <Route path="/crop" element={<Crop />} />
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/products" element={<Products />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/:id" element={<OrderEdit />} />
           </Route>
         </Route>
 
