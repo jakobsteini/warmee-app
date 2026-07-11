@@ -14,6 +14,7 @@ const warenItems = [
   { to: '/products', label: 'Artikel' },
   { to: '/orders', label: 'Orders' },
   { to: '/nepal-orders', label: 'Nepal-Bestellung' },
+  { to: '/deliveries', label: 'Wareneingang' },
 ]
 
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */

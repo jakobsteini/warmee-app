@@ -11,6 +11,8 @@ import Orders from './pages/Orders'
 import OrderEdit from './pages/OrderEdit'
 import ProductionOrders from './pages/ProductionOrders'
 import ProductionOrderEdit from './pages/ProductionOrderEdit'
+import Deliveries from './pages/Deliveries'
+import DeliveryEdit from './pages/DeliveryEdit'
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
               path="/nepal-orders/:id"
               element={<ProductionOrderEdit />}
             />
+            <Route path="/deliveries" element={<Deliveries />} />
+            <Route path="/deliveries/:id" element={<DeliveryEdit />} />
           </Route>
         </Route>
 
