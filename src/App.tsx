@@ -9,6 +9,8 @@ import Newsletter from './pages/Newsletter'
 import Products from './pages/Products'
 import Orders from './pages/Orders'
 import OrderEdit from './pages/OrderEdit'
+import ProductionOrders from './pages/ProductionOrders'
+import ProductionOrderEdit from './pages/ProductionOrderEdit'
 
 export default function App() {
   return (
@@ -25,6 +27,11 @@ export default function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:id" element={<OrderEdit />} />
+            <Route path="/nepal-orders" element={<ProductionOrders />} />
+            <Route
+              path="/nepal-orders/:id"
+              element={<ProductionOrderEdit />}
+            />
           </Route>
         </Route>
 

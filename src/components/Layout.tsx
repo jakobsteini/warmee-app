@@ -13,6 +13,7 @@ const navItems = [
 const warenItems = [
   { to: '/products', label: 'Artikel' },
   { to: '/orders', label: 'Orders' },
+  { to: '/nepal-orders', label: 'Nepal-Bestellung' },
 ]
 
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */
@@ -23,7 +24,7 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 shrink-0 flex-col bg-ink text-nav">
+      <aside className="flex w-60 shrink-0 flex-col bg-ink text-nav print:hidden">
         <div className="px-6 py-8">
           <span className="text-sm font-medium uppercase tracking-[4px] text-cream">
             WARM ME
