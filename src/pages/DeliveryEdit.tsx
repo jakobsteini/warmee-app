@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   getDelivery,
   itemKey,
@@ -11,10 +11,21 @@ import {
   type DeliveryDetail,
 } from '../lib/deliveries'
 import {
+  createDeliveryNote,
+  createInvoice,
+  listDeliveryDocuments,
+  signedPdfUrl,
+} from '../lib/invoices'
+import {
   deliveryStatusLabel,
   nextDeliveryStatus,
   type DeliveryItemWithProduct,
 } from '../types/delivery'
+import {
+  invoiceStatusLabel,
+  type DeliveryNote,
+  type Invoice,
+} from '../types/invoice'
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -28,6 +39,7 @@ function formatDate(iso: string | null): string {
 
 export default function DeliveryEdit() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
 
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
   const [items, setItems] = useState<DeliveryItemWithProduct[]>([])
@@ -37,6 +49,17 @@ export default function DeliveryEdit() {
 
   const [notes, setNotes] = useState('')
 
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
+  const [docBusy, setDocBusy] = useState(false)
+  const [docError, setDocError] = useState<string | null>(null)
+
+  async function loadDocs(deliveryId: string) {
+    const docs = await listDeliveryDocuments(deliveryId)
+    setInvoices(docs.invoices)
+    setDeliveryNotes(docs.deliveryNotes)
+  }
+
   async function load() {
     if (!id) return
     setLoading(true)
@@ -45,6 +68,7 @@ export default function DeliveryEdit() {
       const [del, its] = await Promise.all([
         getDelivery(id),
         listDeliveryItems(id),
+        loadDocs(id),
       ])
       setDelivery(del)
       setItems(its)
@@ -58,6 +82,52 @@ export default function DeliveryEdit() {
       setError('Lieferung konnte nicht geladen werden.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function openPdf(path: string | null) {
+    if (!path) return
+    try {
+      window.open(await signedPdfUrl(path), '_blank', 'noopener')
+    } catch {
+      setDocError('PDF konnte nicht geöffnet werden.')
+    }
+  }
+
+  async function handleCreateDeliveryNote() {
+    if (!id) return
+    setDocBusy(true)
+    setDocError(null)
+    try {
+      const note = await createDeliveryNote(id)
+      await loadDocs(id)
+      await openPdf(note.pdf_path)
+    } catch (err) {
+      setDocError(
+        err instanceof Error
+          ? err.message
+          : 'Lieferschein konnte nicht erstellt werden.',
+      )
+    } finally {
+      setDocBusy(false)
+    }
+  }
+
+  async function handleCreateInvoice() {
+    if (!id) return
+    setDocBusy(true)
+    setDocError(null)
+    try {
+      const invoice = await createInvoice(id)
+      navigate(`/invoices/${invoice.id}`)
+    } catch (err) {
+      setDocError(
+        err instanceof Error
+          ? err.message
+          : 'Rechnung konnte nicht erstellt werden.',
+      )
+    } finally {
+      setDocBusy(false)
     }
   }
 
@@ -133,6 +203,7 @@ export default function DeliveryEdit() {
     )
 
   const next = nextDeliveryStatus(delivery.status)
+  const hasActiveInvoice = invoices.some((i) => i.status !== 'cancelled')
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -183,6 +254,87 @@ export default function DeliveryEdit() {
           {error}
         </div>
       )}
+
+      <section className="mb-8 rounded-md border-[0.5px] border-line bg-white px-5 py-4 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-ink">Belege</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Lieferschein und Rechnung als PDF für {delivery.dealer?.name ?? 'den Händler'}.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={docBusy}
+              onClick={handleCreateDeliveryNote}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+            >
+              Lieferschein erstellen
+            </button>
+            <button
+              type="button"
+              disabled={docBusy || hasActiveInvoice}
+              title={
+                hasActiveInvoice
+                  ? 'Es existiert bereits eine aktive Rechnung. Zuerst stornieren.'
+                  : undefined
+              }
+              onClick={handleCreateInvoice}
+              className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Rechnung erstellen
+            </button>
+          </div>
+        </div>
+
+        {docError && (
+          <p className="mt-3 text-sm text-red-700">{docError}</p>
+        )}
+
+        {(deliveryNotes.length > 0 || invoices.length > 0) && (
+          <ul className="mt-4 divide-y divide-line border-t-[0.5px] border-line">
+            {deliveryNotes.map((n) => (
+              <li
+                key={n.id}
+                className="flex items-center justify-between gap-3 py-2.5 text-sm"
+              >
+                <span className="text-ink">
+                  Lieferschein {n.note_number}
+                  <span className="ml-2 text-muted">{formatDate(n.note_date)}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openPdf(n.pdf_path)}
+                  className="text-muted transition-colors hover:text-ink"
+                >
+                  PDF öffnen
+                </button>
+              </li>
+            ))}
+            {invoices.map((inv) => (
+              <li
+                key={inv.id}
+                className="flex items-center justify-between gap-3 py-2.5 text-sm"
+              >
+                <span className="text-ink">
+                  Rechnung {inv.invoice_number}
+                  <span className="ml-2 text-muted">
+                    {formatDate(inv.invoice_date)} · {invoiceStatusLabel(inv.status)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/invoices/${inv.id}`)}
+                  className="text-muted transition-colors hover:text-ink"
+                >
+                  Öffnen
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <label className="mb-8 flex flex-col gap-1.5 print:hidden">
         <span className="text-sm text-muted">Notiz</span>
