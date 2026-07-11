@@ -50,3 +50,28 @@ export interface NewsletterText {
   subject_line: string
   preheader: string
 }
+
+/** Ein Newsletter-Eintrag für die Verlaufsliste (inkl. Händlername). */
+export interface NewsletterListItem {
+  id: string
+  title: string
+  status: NewsletterStatus
+  dealer_name: string | null
+  updated_at: string | null
+  downloaded_at: string | null
+}
+
+/**
+ * Ein vollständig geladener Newsletter zum Wiederöffnen im Editor.
+ * `product_asset_ids` ist nach `position` sortiert (Slot 1, dann Slot 2).
+ */
+export interface NewsletterDetail {
+  id: string
+  title: string
+  subject_line: string | null
+  preheader: string | null
+  dealer_id: string
+  hero_asset_id: string | null
+  status: NewsletterStatus
+  product_asset_ids: string[]
+}

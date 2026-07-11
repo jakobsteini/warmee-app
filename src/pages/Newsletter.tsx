@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { listDealers } from '../lib/dealers'
 import {
+  deleteNewsletter,
+  getNewsletterDetail,
   listDealerNewsletterImages,
+  listNewsletters,
   markNewsletterDownloaded,
   saveNewsletter,
 } from '../lib/newsletters'
@@ -9,6 +12,8 @@ import { buildNewsletterHtml } from '../lib/newsletterHtml'
 import type { Dealer } from '../types/dealer'
 import type {
   DealerImage,
+  NewsletterDetail,
+  NewsletterListItem,
   NewsletterStatus,
 } from '../types/newsletter'
 
@@ -16,6 +21,19 @@ const STATUS_LABELS: Record<NewsletterStatus, string> = {
   draft: 'Entwurf',
   ready: 'Bereit',
   downloaded: 'Heruntergeladen',
+}
+
+/** Datum kurz und deutsch formatieren. */
+function formatDate(value: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
 }
 
 /** Titel in einen dateisystemfreundlichen Slug wandeln. */
@@ -43,27 +61,219 @@ function downloadHtmlFile(html: string, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
+type View =
+  | { mode: 'list' }
+  | { mode: 'editor'; initial: NewsletterDetail | null }
+
 export default function Newsletter() {
+  const [view, setView] = useState<View>({ mode: 'list' })
+
+  return view.mode === 'list' ? (
+    <NewsletterList
+      onNew={() => setView({ mode: 'editor', initial: null })}
+      onOpen={(detail) => setView({ mode: 'editor', initial: detail })}
+    />
+  ) : (
+    <NewsletterEditor
+      // Frischer Editor-Zustand je geöffnetem Newsletter bzw. Neuanlage.
+      key={view.initial?.id ?? 'new'}
+      initial={view.initial}
+      onDone={() => setView({ mode: 'list' })}
+    />
+  )
+}
+
+/** Verlauf: gespeicherte Newsletter listen, öffnen, löschen, neu anlegen. */
+function NewsletterList({
+  onNew,
+  onOpen,
+}: {
+  onNew: () => void
+  onOpen: (detail: NewsletterDetail) => void
+}) {
+  const [items, setItems] = useState<NewsletterListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [openingId, setOpeningId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      setItems(await listNewsletters())
+    } catch {
+      setError('Newsletter konnten nicht geladen werden.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  async function handleOpen(id: string) {
+    setOpeningId(id)
+    setError(null)
+    try {
+      onOpen(await getNewsletterDetail(id))
+    } catch {
+      setError('Newsletter konnte nicht geöffnet werden.')
+      setOpeningId(null)
+    }
+  }
+
+  async function handleDelete(item: NewsletterListItem) {
+    if (!window.confirm(`Newsletter „${item.title}" wirklich löschen?`)) return
+    try {
+      await deleteNewsletter(item.id)
+      await load()
+    } catch {
+      setError('Löschen fehlgeschlagen.')
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-medium text-ink">Newsletter</h1>
+          <p className="mt-1 text-sm text-muted">
+            Gespeicherte Newsletter – öffnen, bearbeiten, erneut herunterladen.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onNew}
+          className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
+        >
+          Neuer Newsletter
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-muted">Lädt…</p>
+      ) : items.length === 0 ? (
+        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
+          <p className="text-sm text-muted">
+            Noch keine Newsletter gespeichert. Lege mit „Neuer Newsletter" den
+            ersten an.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-md border-[0.5px] border-line">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-card text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Titel</th>
+                <th className="px-4 py-3 font-medium">Händler</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Aktualisiert</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-t-[0.5px] border-line bg-white text-ink"
+                >
+                  <td className="px-4 py-3 font-medium">{item.title}</td>
+                  <td className="px-4 py-3 text-muted">
+                    {item.dealer_name ?? '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-card px-2.5 py-1 text-xs text-ink">
+                      {STATUS_LABELS[item.status]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {formatDate(item.updated_at)}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleOpen(item.id)}
+                      disabled={openingId === item.id}
+                      className="text-muted transition-colors hover:text-ink disabled:opacity-50"
+                    >
+                      {openingId === item.id ? 'Öffnet…' : 'Öffnen'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item)}
+                      className="ml-4 text-muted transition-colors hover:text-red-700"
+                    >
+                      Löschen
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Generator/Editor eines Newsletters (Neuanlage oder gespeicherten öffnen). */
+function NewsletterEditor({
+  initial,
+  onDone,
+}: {
+  initial: NewsletterDetail | null
+  onDone: () => void
+}) {
   const [dealers, setDealers] = useState<Dealer[]>([])
-  const [dealerId, setDealerId] = useState('')
+  const [dealerId, setDealerId] = useState(initial?.dealer_id ?? '')
 
   const [images, setImages] = useState<DealerImage[]>([])
   const [imagesLoading, setImagesLoading] = useState(false)
 
-  const [heroId, setHeroId] = useState<string | null>(null)
-  const [productIds, setProductIds] = useState<string[]>([])
+  const [heroId, setHeroId] = useState<string | null>(
+    initial?.hero_asset_id ?? null,
+  )
+  const [productIds, setProductIds] = useState<string[]>(
+    initial?.product_asset_ids ?? [],
+  )
 
-  const [title, setTitle] = useState('')
-  const [subjectLine, setSubjectLine] = useState('')
-  const [preheader, setPreheader] = useState('')
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [subjectLine, setSubjectLine] = useState(initial?.subject_line ?? '')
+  const [preheader, setPreheader] = useState(initial?.preheader ?? '')
 
-  const [newsletterId, setNewsletterId] = useState<string | null>(null)
-  const [status, setStatus] = useState<NewsletterStatus | null>(null)
+  const [newsletterId, setNewsletterId] = useState<string | null>(
+    initial?.id ?? null,
+  )
+  const [status, setStatus] = useState<NewsletterStatus | null>(
+    initial?.status ?? null,
+  )
   const [dirty, setDirty] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Beim ersten Lauf die gespeicherte Auswahl auf die geladenen Bilder
+  // anwenden; danach bedeutet ein Händlerwechsel eine bewusste Änderung.
+  const firstRunRef = useRef(true)
+  const pendingSelectionRef = useRef<{
+    heroId: string | null
+    productIds: string[]
+  } | null>(
+    initial
+      ? {
+          heroId: initial.hero_asset_id,
+          productIds: initial.product_asset_ids,
+        }
+      : null,
+  )
 
   useEffect(() => {
     ;(async () => {
@@ -75,15 +285,21 @@ export default function Newsletter() {
     })()
   }, [])
 
-  // Händlerwechsel: neuer Newsletter-Entwurf, nur die Bildauswahl wird
-  // zurückgesetzt (Textfelder bleiben für schnelles Weiterarbeiten erhalten).
+  // Bilder des gewählten Händlers laden. Beim Händlerwechsel wird die
+  // Bildauswahl zurückgesetzt (andere Bilder); newsletterId/Status bleiben,
+  // damit ein geöffneter Newsletter beim erneuten Speichern aktualisiert wird.
   useEffect(() => {
+    const isFirstRun = firstRunRef.current
+    firstRunRef.current = false
+
     setImages([])
-    setHeroId(null)
-    setProductIds([])
-    setNewsletterId(null)
-    setStatus(null)
-    setDirty(false)
+    if (!isFirstRun) {
+      // Bewusster Händlerwechsel im Editor → Auswahl verwerfen, als geändert
+      // markieren. Beim ersten Lauf stammt die Auswahl aus dem Datensatz.
+      setHeroId(null)
+      setProductIds([])
+      setDirty(true)
+    }
     if (!dealerId) return
 
     let cancelled = false
@@ -92,7 +308,22 @@ export default function Newsletter() {
     ;(async () => {
       try {
         const imgs = await listDealerNewsletterImages(dealerId)
-        if (!cancelled) setImages(imgs)
+        if (cancelled) return
+        setImages(imgs)
+
+        // Gespeicherte Auswahl wiederherstellen, aber nur Bilder, die es
+        // weiterhin gibt (z. B. Zuschnitt inzwischen gelöscht).
+        const pending = pendingSelectionRef.current
+        if (pending) {
+          pendingSelectionRef.current = null
+          const available = new Set(imgs.map((i) => i.asset_id))
+          setHeroId(
+            pending.heroId && available.has(pending.heroId)
+              ? pending.heroId
+              : null,
+          )
+          setProductIds(pending.productIds.filter((id) => available.has(id)))
+        }
       } catch {
         if (!cancelled)
           setError('Bilder des Händlers konnten nicht geladen werden.')
@@ -226,9 +457,21 @@ export default function Newsletter() {
 
   return (
     <div className="mx-auto max-w-6xl">
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onDone}
+          className="rounded-md border-[0.5px] border-line px-3 py-1.5 text-sm text-ink transition-colors hover:bg-card"
+        >
+          ← Verlauf
+        </button>
+        <span className="text-sm text-muted">
+          {initial ? 'Newsletter bearbeiten' : 'Neuer Newsletter'}
+        </span>
+      </div>
+
       <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Newsletter</h1>
-        <p className="mt-1 text-sm text-muted">
+        <p className="text-sm text-muted">
           Händler wählen, drei Bilder setzen, Text erfassen – rechts die
           Live-Vorschau. Danach als standalone HTML herunterladen.
         </p>
@@ -294,9 +537,7 @@ export default function Newsletter() {
                         key={img.asset_id}
                         className={[
                           'overflow-hidden rounded-md border-[0.5px] bg-card',
-                          isHero || isProduct
-                            ? 'border-ink'
-                            : 'border-line',
+                          isHero || isProduct ? 'border-ink' : 'border-line',
                         ].join(' ')}
                       >
                         <div className="relative aspect-[4/5]">

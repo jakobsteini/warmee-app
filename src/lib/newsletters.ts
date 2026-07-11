@@ -1,7 +1,12 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import { cropPublicUrl } from './crops'
-import type { DealerImage, NewsletterStatus } from '../types/newsletter'
+import type {
+  DealerImage,
+  NewsletterDetail,
+  NewsletterListItem,
+  NewsletterStatus,
+} from '../types/newsletter'
 
 /**
  * Alle für den Newsletter verwendbaren Bilder eines Händlers laden.
@@ -126,6 +131,85 @@ export async function saveNewsletter(
   if (insError) throw insError
 
   return newsletterId
+}
+
+/**
+ * Alle Newsletter der eigenen Org für die Verlaufsliste (RLS scoped),
+ * zuletzt geänderte zuerst. Der Händlername wird per Join mitgeladen.
+ */
+export async function listNewsletters(): Promise<NewsletterListItem[]> {
+  const { data, error } = await supabase
+    .from('newsletters')
+    .select('id, title, status, updated_at, downloaded_at, dealers(name)')
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  type Row = {
+    id: string
+    title: string
+    status: NewsletterStatus
+    updated_at: string | null
+    downloaded_at: string | null
+    // PostgREST liefert die many-to-one-Relation als Objekt; defensiv auch Array.
+    dealers: { name: string } | { name: string }[] | null
+  }
+
+  return ((data ?? []) as Row[]).map((row) => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    updated_at: row.updated_at,
+    downloaded_at: row.downloaded_at,
+    dealer_name: Array.isArray(row.dealers)
+      ? (row.dealers[0]?.name ?? null)
+      : (row.dealers?.name ?? null),
+  }))
+}
+
+/**
+ * Einen gespeicherten Newsletter vollständig laden, um ihn im Editor
+ * wieder zu öffnen. Die Produkt-Slots kommen nach `position` sortiert zurück.
+ */
+export async function getNewsletterDetail(
+  id: string,
+): Promise<NewsletterDetail> {
+  const { data, error } = await supabase
+    .from('newsletters')
+    .select(
+      'id, title, subject_line, preheader, dealer_id, hero_asset_id, status, newsletter_products(asset_id, position)',
+    )
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+
+  const products = (
+    (data.newsletter_products ?? []) as {
+      asset_id: string
+      position: number
+    }[]
+  )
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((p) => p.asset_id)
+
+  return {
+    id: data.id,
+    title: data.title,
+    subject_line: data.subject_line,
+    preheader: data.preheader,
+    dealer_id: data.dealer_id,
+    hero_asset_id: data.hero_asset_id,
+    status: data.status,
+    product_asset_ids: products,
+  }
+}
+
+/** Newsletter löschen (newsletter_products hängt per ON DELETE CASCADE dran). */
+export async function deleteNewsletter(id: string): Promise<void> {
+  const { error } = await supabase.from('newsletters').delete().eq('id', id)
+  if (error) throw error
 }
 
 /** Newsletter nach dem HTML-Download als „downloaded" markieren. */
