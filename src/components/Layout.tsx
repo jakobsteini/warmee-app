@@ -9,8 +9,11 @@ const navItems = [
   { to: '/newsletter', label: 'Newsletter' },
 ]
 
+/** Aktive Module aus Baustein A – Warenwirtschaft */
+const warenItems = [{ to: '/products', label: 'Artikel' }]
+
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */
-const futureItems = ['Artikel', 'Orders']
+const futureItems = ['Orders']
 
 export default function Layout() {
   const { session, signOut } = useAuth()
@@ -45,6 +48,22 @@ export default function Layout() {
           <div className="mt-6 px-3 pb-2 text-[11px] uppercase tracking-wider text-muted">
             Warenwirtschaft
           </div>
+          {warenItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                [
+                  'rounded-md px-3 py-2 text-sm transition-colors',
+                  isActive
+                    ? 'bg-white/[0.08] text-cream'
+                    : 'text-nav hover:text-cream',
+                ].join(' ')
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
           {futureItems.map((label) => (
             <span
               key={label}

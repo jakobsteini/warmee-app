@@ -6,6 +6,7 @@ import Dealers from './pages/Dealers'
 import Assets from './pages/Assets'
 import Crop from './pages/Crop'
 import Newsletter from './pages/Newsletter'
+import Products from './pages/Products'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/assets" element={<Assets />} />
             <Route path="/crop" element={<Crop />} />
             <Route path="/newsletter" element={<Newsletter />} />
+            <Route path="/products" element={<Products />} />
           </Route>
         </Route>
 
