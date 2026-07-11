@@ -7,6 +7,7 @@ import { formatEUR } from '../lib/money'
 import { lineTotal, statusLabel, type OrderListRow } from '../types/order'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
+import EmptyState from '../components/EmptyState'
 
 /** Gesamtsumme einer Order aus ihren Zeilen. */
 function orderTotal(order: OrderListRow): number {
@@ -147,9 +148,14 @@ export default function Orders() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : orders.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">Noch keine Orders angelegt.</p>
-        </div>
+        <EmptyState
+          actionLabel="Neue Order"
+          onAction={openCreate}
+          actionDisabled={dealers.length === 0 || seasons.length === 0}
+        >
+          Hier erfasst du Bestellungen je Händler und Saison. Lege die erste
+          Order an.
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

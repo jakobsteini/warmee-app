@@ -10,6 +10,7 @@ import {
   productionStatusLabel,
   type ProductionOrderListRow,
 } from '../types/productionOrder'
+import EmptyState from '../components/EmptyState'
 import type { Season } from '../types/asset'
 
 /** Summe aller Stückzahlen einer Bestellung. */
@@ -160,11 +161,15 @@ export default function ProductionOrders() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : orders.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Noch keine Nepal-Bestellung generiert.
-          </p>
-        </div>
+        <EmptyState
+          actionLabel="Bestellung generieren"
+          onAction={openGenerate}
+          actionDisabled={seasons.length === 0}
+        >
+          Hier führst du die bestätigten Orders einer Saison zu einer
+          Produktionsbestellung für Nepal zusammen. Generiere die erste
+          Bestellung.
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

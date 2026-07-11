@@ -24,6 +24,7 @@ import {
   type AssetWithMeta,
   type Season,
 } from '../types/asset'
+import EmptyState from '../components/EmptyState'
 
 /** Nur JPEGs werden angenommen (Regel: Bildmaterial immer JPEG). */
 function isJpeg(file: File): boolean {
@@ -315,11 +316,23 @@ export default function Assets() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : assets.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            {uploading ? 'Upload läuft…' : 'Keine Bilder in dieser Ansicht.'}
-          </p>
-        </div>
+        uploading ? (
+          <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
+            <p className="text-sm text-muted">Upload läuft…</p>
+          </div>
+        ) : filterType !== null || filterSeason !== null ? (
+          <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
+            <p className="text-sm text-muted">Keine Bilder in dieser Ansicht.</p>
+          </div>
+        ) : (
+          <EmptyState
+            actionLabel="JPEGs auswählen"
+            onAction={() => fileInput.current?.click()}
+          >
+            Hier lädst du dein Bildmaterial hoch und ordnest es Kollektion,
+            Saison und Händlern zu. Lade die ersten JPEGs hoch.
+          </EmptyState>
+        )
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {assets.map((a) => (

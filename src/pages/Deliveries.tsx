@@ -8,6 +8,7 @@ import {
   type ReceivedProductionOrder,
 } from '../lib/deliveries'
 import { deliveryStatusLabel, type DeliveryListRow } from '../types/delivery'
+import EmptyState from '../components/EmptyState'
 
 /** Summe aller Liefer-Stückzahlen einer Lieferung. */
 function deliveryQuantity(d: DeliveryListRow): number {
@@ -152,12 +153,15 @@ export default function Deliveries() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : deliveries.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Noch keine Verteilung erstellt. Sobald eine Nepal-Bestellung den
-            Status „Erhalten" hat, kann die Ware verteilt werden.
-          </p>
-        </div>
+        <EmptyState
+          actionLabel="Verteilung generieren"
+          onAction={openGenerate}
+          actionDisabled={received.length === 0}
+        >
+          Hier verteilst du die angekommene Nepal-Bestellung anhand der
+          Händlerorders auf die einzelnen Händler. Sobald eine Nepal-Bestellung
+          den Status „Erhalten" hat, kannst du die Verteilung erstellen.
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

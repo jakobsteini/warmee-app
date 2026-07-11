@@ -6,6 +6,7 @@ import {
   updateDealer,
   deleteDealer,
 } from '../lib/dealers'
+import EmptyState from '../components/EmptyState'
 
 const emptyForm: DealerInput = {
   name: '',
@@ -147,9 +148,10 @@ export default function Dealers() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : dealers.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">Noch keine Händler angelegt.</p>
-        </div>
+        <EmptyState actionLabel="Händler hinzufügen" onAction={openCreate}>
+          Hier verwaltest du deine Fachhandels-Kontakte für den
+          Newsletter-Versand. Lege den ersten Händler an.
+        </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

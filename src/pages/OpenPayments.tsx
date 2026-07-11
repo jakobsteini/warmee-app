@@ -3,6 +3,7 @@ import { listOpenPayments } from '../lib/openPayments'
 import { setInvoiceStatus } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import type { InvoiceListRow } from '../types/invoice'
+import EmptyState from '../components/EmptyState'
 
 /** Heute als ISO-Kurzdatum (YYYY-MM-DD), für den Fälligkeitsvergleich. */
 function todayIso(): string {
@@ -133,11 +134,10 @@ export default function OpenPayments() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : rows.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Keine offenen Posten. Alle versendeten Rechnungen sind bezahlt.
-          </p>
-        </div>
+        <EmptyState actionLabel="Zu den Rechnungen" actionTo="/invoices">
+          Hier siehst du alle versendeten, noch nicht bezahlten Rechnungen.
+          Aktuell sind keine offen – alle versendeten Rechnungen sind bezahlt.
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

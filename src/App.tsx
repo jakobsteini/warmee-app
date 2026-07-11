@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
 import Dealers from './pages/Dealers'
 import Assets from './pages/Assets'
 import Crop from './pages/Crop'
@@ -25,6 +26,7 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dealers" element={<Dealers />} />
             <Route path="/assets" element={<Assets />} />
             <Route path="/crop" element={<Crop />} />
@@ -45,7 +47,7 @@ export default function App() {
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to="/dealers" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )

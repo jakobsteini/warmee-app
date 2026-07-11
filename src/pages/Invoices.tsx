@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { listInvoices } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { invoiceStatusLabel, type InvoiceListRow } from '../types/invoice'
+import EmptyState from '../components/EmptyState'
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -68,12 +69,10 @@ export default function Invoices() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : invoices.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Noch keine Rechnungen. Öffne im Wareneingang eine Lieferung und
-            erstelle dort eine Rechnung.
-          </p>
-        </div>
+        <EmptyState actionLabel="Zum Wareneingang" actionTo="/deliveries">
+          Rechnungen entstehen aus einer Lieferung im Wareneingang. Öffne dort
+          eine Lieferung und erstelle die erste Rechnung.
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 /** Aktive Module (Baustein B – Marketing & Newsletter) */
 const navItems = [
+  { to: '/dashboard', label: 'Übersicht' },
   { to: '/dealers', label: 'Händler' },
   { to: '/assets', label: 'Bildarchiv' },
   { to: '/crop', label: 'Zuschnitt' },

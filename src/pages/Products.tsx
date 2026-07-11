@@ -13,6 +13,7 @@ import {
   type ProductInput,
 } from '../types/product'
 import type { Season } from '../types/asset'
+import EmptyState from '../components/EmptyState'
 
 /** Preis (number oder numeric-String aus PostgREST) deutsch formatieren. */
 function formatPrice(value: number | string | null): string {
@@ -284,9 +285,10 @@ export default function Products() {
       {loading ? (
         <p className="text-sm text-muted">Lädt…</p>
       ) : products.length === 0 ? (
-        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">Noch keine Artikel angelegt.</p>
-        </div>
+        <EmptyState actionLabel="Artikel anlegen" onAction={openCreate}>
+          Hier pflegst du den Artikelkatalog – Name, Farbe, Größe und Preise je
+          Saison. Lege den ersten Artikel an.
+        </EmptyState>
       ) : filtered.length === 0 ? (
         <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
           <p className="text-sm text-muted">

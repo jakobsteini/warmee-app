@@ -14,7 +14,7 @@ export default function Login() {
   // Bereits angemeldet → weiter ins Bildarchiv
   useEffect(() => {
     if (session) {
-      navigate('/dealers', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }, [session, navigate])
 
@@ -35,7 +35,7 @@ export default function Login() {
       return
     }
 
-    navigate('/dealers', { replace: true })
+    navigate('/dashboard', { replace: true })
   }
 
   return (
