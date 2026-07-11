@@ -45,7 +45,6 @@ export default function Login() {
           <span className="text-lg font-medium uppercase tracking-[4px] text-ink">
             WARM ME
           </span>
-          <p className="mt-2 text-sm text-muted">Marketing-Tool</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
