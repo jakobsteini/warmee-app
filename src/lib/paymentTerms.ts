@@ -57,3 +57,45 @@ export function parsePaymentTerms(
 
   return { skonto_prozent, skonto_tage, zahlungsziel_tage }
 }
+
+/** Zahl ohne überflüssige Nachkommastellen (4.00 → "4", 3.5 → "3,5" mit Komma). */
+function fmtNum(n: number): string {
+  return String(n).replace('.', ',')
+}
+
+/**
+ * Gegenstück zu {@link parsePaymentTerms}: baut aus strukturierten Konditionen
+ * den kanonischen Rohstring (Spalte payment_terms_raw), damit Rohstring und
+ * strukturierte Felder nach dem Speichern nie widersprechen.
+ *
+ * Regeln (round-trip-stabil mit parsePaymentTerms):
+ *   {3, 10, 30}       → "3%10T N30T"
+ *   {0/null, _, 30}   → "N30T"        (kein Skonto)
+ *   {0/null, _, 0}    → "Netto sofort"
+ *   alles leer/0/null → null          (keine Kondition hinterlegt → Hausstandard)
+ */
+export function formatPaymentTerms(t: {
+  skonto_prozent: number | null
+  skonto_tage: number | null
+  zahlungsziel_tage: number | null
+}): string | null {
+  const sp = t.skonto_prozent
+  const st = t.skonto_tage
+  const ziel = t.zahlungsziel_tage
+
+  const noSkonto = sp === null || sp <= 0
+  const noZiel = ziel === null
+
+  // Nichts hinterlegt → kein Rohstring (downstream gilt dann der Hausstandard).
+  if (noSkonto && noZiel && (st === null || st <= 0)) return null
+
+  // Sofort fällig, kein Skonto.
+  if (ziel === 0 && noSkonto) return 'Netto sofort'
+
+  const zielT = ziel ?? DEFAULT_ZAHLUNGSZIEL_TAGE
+
+  if (!noSkonto && st !== null && st > 0) {
+    return `${fmtNum(sp as number)}%${st}T N${zielT}T`
+  }
+  return `N${zielT}T`
+}

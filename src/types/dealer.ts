@@ -62,13 +62,59 @@ export interface Dealer {
 
 /**
  * Felder zum Anlegen/Bearbeiten eines Händlers.
- * `name` ist Pflicht; org_id/agent_id/Zeitstempel werden nicht vom Formular
- * gesetzt (org_id kommt aus dem Profil, agent_id folgt in Baustein A).
+ * `name` ist Pflicht; org_id/agent_id/Zeitstempel und `kundennummer` werden NICHT
+ * vom Formular gesetzt (org_id kommt aus dem Profil, agent_id folgt später,
+ * kundennummer vergibt bei Neuanlage der DB-Default und ist bei Bestehenden
+ * unveränderlich). `payment_terms_raw` wird beim Speichern aus den
+ * strukturierten Konditionen abgeleitet, nicht von Hand getippt.
  */
 export interface DealerInput {
   name: string
+  short_name: string | null
+  company_name: string | null
+  owner_name: string | null
   contact_name: string | null
   email: string | null
   city: string | null
   country: string | null
+
+  // Steuer & Buchhaltung
+  uid: string | null
+  gegenkonto: number | null
+
+  // Zahlungskonditionen (strukturiert = maßgeblich; raw wird daraus abgeleitet)
+  payment_terms_raw: string | null
+  skonto_prozent: number | null
+  skonto_tage: number | null
+  zahlungsziel_tage: number | null
+
+  // Lieferadresse
+  shipping_street: string | null
+  shipping_zip: string | null
+  shipping_city: string | null
+  shipping_country_code: string | null
+  shipping_country_name: string | null
+  shipping_phone: string | null
+  shipping_email: string | null
+  shipping_email2: string | null
+
+  // Rechnungsadresse
+  billing_name: string | null
+  billing_street: string | null
+  billing_zip: string | null
+  billing_city: string | null
+  billing_country_code: string | null
+  billing_country_name: string | null
+  billing_phone: string | null
+  billing_email: string | null
+
+  // Store-/POS-Adresse
+  store_name: string | null
+  store_street: string | null
+  store_zip: string | null
+  store_city: string | null
+  store_country_code: string | null
+  store_country_name: string | null
+  store_phone: string | null
+  store_email: string | null
 }
