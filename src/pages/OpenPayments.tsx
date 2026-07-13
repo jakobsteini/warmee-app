@@ -5,8 +5,10 @@ import { formatEUR } from '../lib/money'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
 import { addDaysIso } from '../lib/dates'
 import type { InvoiceListRow } from '../types/invoice'
+import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import MarkPaidDialog from '../components/MarkPaidDialog'
+import ExportButtons from '../components/ExportButtons'
 
 /** Heute als ISO-Kurzdatum (YYYY-MM-DD), für den Fälligkeitsvergleich. */
 function todayIso(): string {
@@ -48,6 +50,27 @@ function formatDate(iso: string | null): string {
     year: 'numeric',
   })
 }
+
+/** Tage überfällig (heute − Fälligkeit), oder null wenn (noch) nicht überfällig. */
+function daysOverdue(row: InvoiceListRow): number | null {
+  const faellig = faelligkeitIso(row)
+  if (!faellig) return null
+  const d = Math.round(
+    (new Date(todayIso()).getTime() - new Date(faellig).getTime()) / 86_400_000,
+  )
+  return d > 0 ? d : null
+}
+
+/** Spalten für den Offene-Posten-Export (deutsche Überschriften). */
+const OPEN_PAYMENT_EXPORT_COLUMNS: ExportColumn<InvoiceListRow>[] = [
+  { header: 'Rechnungsnummer', value: (r) => r.invoice_number },
+  { header: 'Händler', value: (r) => r.dealer?.name ?? '' },
+  { header: 'Rechnungsdatum', value: (r) => formatDateDE(r.invoice_date) },
+  { header: 'Fällig am', value: (r) => formatDateDE(faelligkeitIso(r)) },
+  { header: 'Status', value: (r) => (isOverdue(r) ? 'Überfällig' : 'Offen') },
+  { header: 'Offener Betrag', value: (r) => numify(r.total) },
+  { header: 'Tage überfällig', value: (r) => daysOverdue(r) },
+]
 
 type Filter = 'all' | 'overdue'
 
@@ -107,12 +130,28 @@ export default function OpenPayments() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Offene Posten</h1>
-        <p className="mt-1 text-sm text-muted">
-          Alle versendeten, noch nicht bezahlten Rechnungen. Eine Rechnung gilt
-          als überfällig, sobald das Fälligkeitsdatum überschritten ist.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium text-ink">Offene Posten</h1>
+          <p className="mt-1 text-sm text-muted">
+            Alle versendeten, noch nicht bezahlten Rechnungen. Eine Rechnung gilt
+            als überfällig, sobald das Fälligkeitsdatum überschritten ist.
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <ExportButtons
+            filenameBase={
+              filter === 'overdue' ? 'offene_posten_ueberfaellig' : 'offene_posten'
+            }
+            sheetName="Offene Posten"
+            columns={OPEN_PAYMENT_EXPORT_COLUMNS}
+            rows={visible}
+          />
+          <p className="text-xs text-muted">
+            Export: {filter === 'overdue' ? 'nur überfällige' : 'alle offenen'}{' '}
+            ({visible.length})
+          </p>
+        </div>
       </div>
 
       {error && (

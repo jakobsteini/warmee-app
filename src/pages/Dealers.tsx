@@ -9,8 +9,10 @@ import {
 import { parsePaymentTerms, formatPaymentTerms } from '../lib/paymentTerms'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
+import { numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import CreditBadge from '../components/CreditBadge'
+import ExportButtons from '../components/ExportButtons'
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -428,6 +430,60 @@ function AddressBlock({
   )
 }
 
+// ─── Export ─────────────────────────────────────────────────────────────────
+
+/** Zahlungskonditionen als lesbarer Text (strukturiert; Fallback: Rohstring). */
+function dealerTermsText(d: Dealer): string {
+  const sp = numify(d.skonto_prozent)
+  const st = d.skonto_tage
+  const ziel = d.zahlungsziel_tage
+  if (sp === null && st === null && ziel === null) return d.payment_terms_raw ?? ''
+  const parts: string[] = []
+  if (sp !== null && sp > 0) {
+    parts.push(`${String(sp).replace('.', ',')} % Skonto in ${st ?? '—'} Tagen`)
+  }
+  parts.push(ziel === 0 ? 'netto sofort' : `netto ${ziel ?? '—'} Tage`)
+  return parts.join(', ')
+}
+
+/** Spalten für den Händler-Export (deutsche Überschriften). */
+const DEALER_EXPORT_COLUMNS: ExportColumn<Dealer>[] = [
+  { header: 'Kundennummer', value: (d) => d.kundennummer },
+  { header: 'Name', value: (d) => d.name },
+  { header: 'Kurzname', value: (d) => d.short_name },
+  { header: 'Firmenname', value: (d) => d.company_name },
+  { header: 'Inhaber', value: (d) => d.owner_name },
+  { header: 'Ansprechpartner', value: (d) => d.contact_name },
+  { header: 'E-Mail', value: (d) => d.email },
+  { header: 'UID-Nr.', value: (d) => d.uid },
+  { header: 'Gegenkonto', value: (d) => d.gegenkonto },
+  { header: 'Zahlungskonditionen', value: (d) => dealerTermsText(d) },
+  { header: 'Zahlungsziel (Tage)', value: (d) => d.zahlungsziel_tage },
+  { header: 'Skonto %', value: (d) => numify(d.skonto_prozent) },
+  { header: 'Skonto-Tage', value: (d) => d.skonto_tage },
+  { header: 'Lieferadresse Straße', value: (d) => d.shipping_street },
+  { header: 'Lieferadresse PLZ', value: (d) => d.shipping_zip },
+  { header: 'Lieferadresse Ort', value: (d) => d.shipping_city },
+  { header: 'Lieferadresse Land', value: (d) => d.shipping_country_name },
+  { header: 'Lieferadresse Telefon', value: (d) => d.shipping_phone },
+  { header: 'Lieferadresse E-Mail', value: (d) => d.shipping_email },
+  { header: 'Lieferadresse E-Mail 2', value: (d) => d.shipping_email2 },
+  { header: 'Rechnungsadresse Name', value: (d) => d.billing_name },
+  { header: 'Rechnungsadresse Straße', value: (d) => d.billing_street },
+  { header: 'Rechnungsadresse PLZ', value: (d) => d.billing_zip },
+  { header: 'Rechnungsadresse Ort', value: (d) => d.billing_city },
+  { header: 'Rechnungsadresse Land', value: (d) => d.billing_country_name },
+  { header: 'Rechnungsadresse Telefon', value: (d) => d.billing_phone },
+  { header: 'Rechnungsadresse E-Mail', value: (d) => d.billing_email },
+  { header: 'Store Name', value: (d) => d.store_name },
+  { header: 'Store Straße', value: (d) => d.store_street },
+  { header: 'Store PLZ', value: (d) => d.store_zip },
+  { header: 'Store Ort', value: (d) => d.store_city },
+  { header: 'Store Land', value: (d) => d.store_country_name },
+  { header: 'Store Telefon', value: (d) => d.store_phone },
+  { header: 'Store E-Mail', value: (d) => d.store_email },
+]
+
 // ─── Seite ──────────────────────────────────────────────────────────────────
 
 export default function Dealers() {
@@ -538,13 +594,21 @@ export default function Dealers() {
             Stammdaten, Konditionen und Adressen der Fachhandels-Kontakte.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
-        >
-          Händler hinzufügen
-        </button>
+        <div className="flex items-center gap-3">
+          <ExportButtons
+            filenameBase="haendler"
+            sheetName="Händler"
+            columns={DEALER_EXPORT_COLUMNS}
+            rows={dealers}
+          />
+          <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
+          >
+            Händler hinzufügen
+          </button>
+        </div>
       </div>
 
       {error && (

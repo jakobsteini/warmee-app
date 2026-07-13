@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { listInvoices } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { invoiceStatusLabel, type InvoiceListRow } from '../types/invoice'
+import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
+import ExportButtons from '../components/ExportButtons'
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -65,6 +67,36 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+/** Status für den Export lesbar (offen/bezahlt/storniert). */
+function statusExportLabel(status: string): string {
+  switch (status) {
+    case 'draft':
+      return 'Entwurf'
+    case 'sent':
+      return 'Offen'
+    case 'paid':
+      return 'Bezahlt'
+    case 'cancelled':
+      return 'Storniert'
+    default:
+      return status
+  }
+}
+
+/** Spalten für den Rechnungs-Export (deutsche Überschriften). */
+const INVOICE_EXPORT_COLUMNS: ExportColumn<InvoiceListRow>[] = [
+  { header: 'Rechnungsnummer', value: (r) => r.invoice_number },
+  { header: 'Rechnungsdatum', value: (r) => formatDateDE(r.invoice_date) },
+  { header: 'Händler', value: (r) => r.dealer?.name ?? '' },
+  { header: 'Netto', value: (r) => numify(r.subtotal) },
+  { header: 'USt (20%)', value: (r) => numify(r.tax_amount) },
+  { header: 'Brutto', value: (r) => numify(r.total) },
+  { header: 'Status', value: (r) => statusExportLabel(r.status) },
+  { header: 'Zahlungsdatum', value: (r) => formatDateDE(r.paid_at) },
+  { header: 'Bezahlter Betrag', value: (r) => numify(r.paid_amount) },
+  { header: 'Fälligkeit', value: (r) => formatDateDE(r.due_date) },
+]
+
 export default function Invoices() {
   const navigate = useNavigate()
   const [invoices, setInvoices] = useState<InvoiceListRow[]>([])
@@ -85,12 +117,20 @@ export default function Invoices() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Rechnungen</h1>
-        <p className="mt-1 text-sm text-muted">
-          Rechnungen werden aus einer Lieferung im Wareneingang erstellt. Die
-          Nummer wird fortlaufend und ohne Lücken vergeben.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium text-ink">Rechnungen</h1>
+          <p className="mt-1 text-sm text-muted">
+            Rechnungen werden aus einer Lieferung im Wareneingang erstellt. Die
+            Nummer wird fortlaufend und ohne Lücken vergeben.
+          </p>
+        </div>
+        <ExportButtons
+          filenameBase="rechnungen"
+          sheetName="Rechnungen"
+          columns={INVOICE_EXPORT_COLUMNS}
+          rows={invoices}
+        />
       </div>
 
       {error && (
