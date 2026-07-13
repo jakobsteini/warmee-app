@@ -170,7 +170,7 @@ function isSummary(row: Row): boolean {
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────
 
-interface DealerRecord {
+export interface DealerRecord {
   org_id: string
   kundennummer: number | null
   name: string
@@ -513,12 +513,18 @@ function main(): void {
   }
 }
 
-// Ausführung: im Dry-Run NUR der Report; Upsert nur mit IMPORT_APPLY=1.
-if (DRY_RUN) {
-  main()
-} else {
-  const path = findSource()
-  const deduped = dedupeRawRows(readDealerRows(path)).map((r) => mapRow(r))
-  console.log(`APPLY-Modus: upserte ${deduped.length} eindeutige Händler …`)
-  await applyUpsert(deduped)
+/** Für den SQL-Generator: final gemappte, deduplizierte Händler (128). */
+export function loadDealerRecords(): DealerRecord[] {
+  return dedupeRawRows(readDealerRows(findSource())).map((r) => mapRow(r))
+}
+
+// Ausführung nur als Skript (nicht beim Import durch den Generator).
+if (import.meta.main) {
+  if (DRY_RUN) {
+    main()
+  } else {
+    const deduped = loadDealerRecords()
+    console.log(`APPLY-Modus: upserte ${deduped.length} eindeutige Händler …`)
+    await applyUpsert(deduped)
+  }
 }

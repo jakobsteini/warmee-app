@@ -114,7 +114,7 @@ function classify(row: Row): Category {
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────
 
-interface PositionRecord {
+export interface PositionRecord {
   modell: string | null
   modell_description: string | null
   quality: string | null
@@ -318,8 +318,17 @@ function main(): void {
     console.log('✅ 0 DB-Writes · nichts in Supabase geschrieben · nichts angewendet · nichts committet.')
 }
 
-if (DRY_RUN) {
-  main()
-} else {
-  await applyUpsert()
+/** Für den SQL-Generator: die 104 echten Positionen. */
+export function loadPositions(): PositionRecord[] {
+  const data = readData(find(SOURCE_CANDIDATES))
+  return data.filter((r) => classify(r) === 'echte Position').map(mapPosition)
+}
+
+// Ausführung nur als Skript (nicht beim Import durch den Generator).
+if (import.meta.main) {
+  if (DRY_RUN) {
+    main()
+  } else {
+    await applyUpsert()
+  }
 }

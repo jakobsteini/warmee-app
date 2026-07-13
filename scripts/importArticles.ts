@@ -123,7 +123,7 @@ function isCategoryHeader(row: Row): boolean {
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────
 
-interface ProductRecord {
+export interface ProductRecord {
   org_id: string
   season: string // 'SS27' — wird beim scharfen Lauf zu season_id aufgelöst
   name: string // Pflicht (products.name NOT NULL)
@@ -458,13 +458,19 @@ function main(): void {
   }
 }
 
-// Ausführung: im Dry-Run NUR der Report; Upsert nur mit IMPORT_APPLY=1.
-if (DRY_RUN) {
-  main()
-} else {
-  const path = findSource()
-  const { data } = readAllRows(path)
-  const articles = data.filter((r) => !isCategoryHeader(r)).map(mapRow)
-  console.log(`APPLY-Modus: upserte ${articles.length} Artikel …`)
-  await applyUpsert(articles)
+/** Für den SQL-Generator: die 48 echten Artikel (ohne Kategorie-Zeilen). */
+export function loadArticleRecords(): ProductRecord[] {
+  const { data } = readAllRows(findSource())
+  return data.filter((r) => !isCategoryHeader(r)).map(mapRow)
+}
+
+// Ausführung nur als Skript (nicht beim Import durch den Generator).
+if (import.meta.main) {
+  if (DRY_RUN) {
+    main()
+  } else {
+    const articles = loadArticleRecords()
+    console.log(`APPLY-Modus: upserte ${articles.length} Artikel …`)
+    await applyUpsert(articles)
+  }
 }
