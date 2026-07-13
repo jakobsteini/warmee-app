@@ -64,11 +64,21 @@ export interface ProductionOrderListRow extends ProductionOrder {
 export interface ProductionOrderItem {
   id: string
   production_order_id: string
-  product_id: string
+  /** Nullable: Positionen ohne Katalog-Treffer (z. B. Nepal-Import) haben keinen Artikel. */
+  product_id: string | null
   color: string | null
   size: string | null
   total_quantity: number
   created_at: string | null
+  // ─── Positions-Felder aus dem Produzenten-Import (alle nullable) ─────────
+  modell: string | null
+  modell_description: string | null
+  quality: string | null
+  color_description: string | null
+  group_name: string | null
+  /** numeric(10,2) – kann als number oder string ankommen. */
+  price_per_piece: number | string | null
+  whole_price: number | string | null
 }
 
 /** Position inkl. mitgeladenem Produkt (für die Detailansicht). */
