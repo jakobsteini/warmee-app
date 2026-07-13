@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { listOpenPayments } from '../lib/openPayments'
 import { setInvoiceStatus } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
+import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
+import { addDaysIso } from '../lib/dates'
 import type { InvoiceListRow } from '../types/invoice'
 import EmptyState from '../components/EmptyState'
 
@@ -10,9 +12,23 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * Fälligkeitsdatum einer Rechnung: das gespeicherte due_date (spiegelt die
+ * Konditionen zum Rechnungszeitpunkt); fehlt es, Rechnungsdatum + Standard-
+ * Zahlungsziel (30 Tage, statt der früheren 14).
+ */
+function faelligkeitIso(row: InvoiceListRow): string | null {
+  if (row.due_date) return row.due_date
+  if (row.invoice_date) {
+    return addDaysIso(row.invoice_date, DEFAULT_ZAHLUNGSZIEL_TAGE)
+  }
+  return null
+}
+
 /** Eine versendete Rechnung ist überfällig, wenn ihr Fälligkeitsdatum vorbei ist. */
 function isOverdue(row: InvoiceListRow): boolean {
-  return row.due_date !== null && row.due_date < todayIso()
+  const faellig = faelligkeitIso(row)
+  return faellig !== null && faellig < todayIso()
 }
 
 /** numeric/number robust zu number. */
@@ -182,7 +198,7 @@ export default function OpenPayments() {
                           overdue ? 'font-medium text-red-700' : 'text-muted'
                         }`}
                       >
-                        {formatDate(r.due_date)}
+                        {formatDate(faelligkeitIso(r))}
                       </td>
                       <td className="px-4 py-3">
                         <span

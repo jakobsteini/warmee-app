@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { ZAHLUNGSZIEL_HINWEIS, type Dealerish } from '../types/invoice'
+import { type Dealerish } from '../types/invoice'
 import { VAT_RATE_PERCENT } from './tax'
 
 /**
@@ -202,6 +202,21 @@ export interface InvoicePdfData {
   tax: number
   /** Bruttobetrag (Netto + USt). */
   total: number
+  /** Zahlungsziel in Tagen (für die Beleg-Zeile „…innerhalb von N Tagen netto"). */
+  zahlungszielTage: number
+  /**
+   * Optionaler Skonto-Hinweis. null / prozent 0 → keine Skonto-Zeile.
+   * Der Rechnungsbetrag bleibt Brutto; Skonto ist nur ein bedingter Nachlass.
+   */
+  skonto?: {
+    prozent: number
+    /** Skonto-Frist als ISO-Datum (Rechnungsdatum + skonto_tage). */
+    date: string
+    /** Skonto-Abzug in EUR. */
+    amount: number
+    /** Zahlbetrag bei Skonto (Brutto − Skonto) in EUR. */
+    payable: number
+  } | null
   notes: string | null
 }
 
@@ -254,9 +269,24 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   doc.setFontSize(9)
   doc.setTextColor(26, 26, 26)
   const dueText = data.dueDate
-    ? `${ZAHLUNGSZIEL_HINWEIS} Fällig am ${deDate(data.dueDate)}.`
-    : ZAHLUNGSZIEL_HINWEIS
+    ? `Zahlbar innerhalb von ${data.zahlungszielTage} Tagen netto. Fällig am ${deDate(data.dueDate)}.`
+    : `Zahlbar innerhalb von ${data.zahlungszielTage} Tagen netto.`
   doc.text(dueText, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+
+  // Skonto als bedingter Nachlass (Rechnungsbetrag bleibt unverändert).
+  if (data.skonto && data.skonto.prozent > 0) {
+    y += 6
+    const s = data.skonto
+    const pct = s.prozent.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+    doc.setTextColor(90, 85, 80)
+    doc.text(
+      `Bei Zahlung bis ${deDate(s.date)}: ${pct} % Skonto = ${eur(s.amount)} — Zahlbetrag ${eur(s.payable)}.`,
+      MARGIN,
+      y,
+      { maxWidth: PAGE_W - MARGIN * 2 },
+    )
+    doc.setTextColor(26, 26, 26)
+  }
 
   if (data.notes) {
     y += 8

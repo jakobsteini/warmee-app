@@ -30,3 +30,79 @@ export function applyVat(net: number): {
   const tax = roundCents(n * VAT_RATE)
   return { net: n, tax, gross: roundCents(n + tax) }
 }
+
+// ─── Zahlungskonditionen ─────────────────────────────────────────────────────
+//
+// WARM-ME-Standard laut echten Belegen: 3 % Skonto bei Zahlung innerhalb von
+// 10 Tagen, netto 30 Tage. Diese Defaults sind die zentrale Quelle — die alte
+// „14 Tage netto"-Annahme ist damit ersetzt. Pro Händler können abweichende
+// Konditionen gelten (Felder aus der Migration: skonto_prozent, skonto_tage,
+// zahlungsziel_tage); greifen sie nicht, gilt der Standard.
+
+/** Standard-Zahlungsziel in Tagen (netto). */
+export const DEFAULT_ZAHLUNGSZIEL_TAGE = 30
+/** Standard-Skontosatz in Prozent. */
+export const DEFAULT_SKONTO_PROZENT = 3
+/** Standard-Skontofrist in Tagen. */
+export const DEFAULT_SKONTO_TAGE = 10
+
+/** Strukturierte Zahlungskonditionen (alle Felder gesetzt). */
+export interface PaymentTerms {
+  skonto_prozent: number
+  skonto_tage: number
+  zahlungsziel_tage: number
+}
+
+/**
+ * Möglicherweise unvollständige Konditionen, wie sie am Händler hängen
+ * (Migrationsspalten sind nullable; numeric kann als String ankommen).
+ */
+export interface PartialPaymentTerms {
+  skonto_prozent?: number | string | null
+  skonto_tage?: number | null
+  zahlungsziel_tage?: number | null
+}
+
+/** Wert übernehmen, falls gesetzt (null/undefined/'' → Fallback). 0 gilt als gesetzt. */
+function orDefault(v: number | string | null | undefined, fallback: number): number {
+  if (v === null || v === undefined || v === '') return fallback
+  const n = typeof v === 'string' ? Number(v) : v
+  return Number.isNaN(n) ? fallback : n
+}
+
+/**
+ * Effektive Konditionen eines Händlers: pro Feld der Händlerwert, falls
+ * gesetzt — sonst der WARM-ME-Standard. Ein explizit gesetztes 0 (z. B.
+ * „N30T" ⇒ skonto_prozent 0) bleibt erhalten und wird NICHT durch den
+ * Standard-Skonto ersetzt.
+ */
+export function effectivePaymentTerms(
+  terms?: PartialPaymentTerms | null,
+): PaymentTerms {
+  return {
+    skonto_prozent: orDefault(terms?.skonto_prozent, DEFAULT_SKONTO_PROZENT),
+    skonto_tage: orDefault(terms?.skonto_tage, DEFAULT_SKONTO_TAGE),
+    zahlungsziel_tage: orDefault(
+      terms?.zahlungsziel_tage,
+      DEFAULT_ZAHLUNGSZIEL_TAGE,
+    ),
+  }
+}
+
+/** Ergebnis einer Skonto-Berechnung. */
+export interface SkontoResult {
+  prozent: number
+  /** Skonto-Abzug in EUR (auf Cent gerundet). */
+  amount: number
+  /** Zahlbetrag bei Skonto-Nutzung = Brutto − Skonto (auf Cent gerundet). */
+  payable: number
+}
+
+/**
+ * Skonto auf den Bruttobetrag rechnen. Der Rechnungsbetrag selbst bleibt
+ * unverändert — das hier ist nur der BEDINGTE Nachlass bei früher Zahlung.
+ */
+export function computeSkonto(gross: number, prozent: number): SkontoResult {
+  const amount = roundCents(gross * (prozent / 100))
+  return { prozent, amount, payable: roundCents(gross - amount) }
+}

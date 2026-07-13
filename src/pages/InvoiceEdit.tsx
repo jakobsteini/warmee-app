@@ -8,12 +8,13 @@ import {
   signedPdfUrl,
 } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
+import { invoiceStatusLabel, type InvoiceWithItems } from '../types/invoice'
 import {
-  invoiceStatusLabel,
-  ZAHLUNGSZIEL_HINWEIS,
-  type InvoiceWithItems,
-} from '../types/invoice'
-import { VAT_RATE_PERCENT } from '../lib/tax'
+  VAT_RATE_PERCENT,
+  computeSkonto,
+  effectivePaymentTerms,
+} from '../lib/tax'
+import { addDaysIso } from '../lib/dates'
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -116,6 +117,17 @@ export default function InvoiceEdit() {
   const canSend = invoice.status === 'draft'
   const canPay = invoice.status === 'sent'
   const canCancel = invoice.status === 'draft' || invoice.status === 'sent'
+
+  // Zahlungskonditionen (WARM-ME-Standard, bis der Händler-Import die Felder
+  // befüllt) — nur Anzeige, spiegelt die Skonto-Zeile der Rechnungs-PDF.
+  const terms = effectivePaymentTerms(null)
+  const totalNum =
+    typeof invoice.total === 'string' ? Number(invoice.total) : invoice.total
+  const skonto =
+    terms.skonto_prozent > 0
+      ? computeSkonto(totalNum, terms.skonto_prozent)
+      : null
+  const skontoDate = addDaysIso(invoice.invoice_date, terms.skonto_tage)
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -280,9 +292,16 @@ export default function InvoiceEdit() {
       </div>
 
       <p className="mt-4 text-sm text-ink">
-        {ZAHLUNGSZIEL_HINWEIS}
+        Zahlbar innerhalb von {terms.zahlungsziel_tage} Tagen netto.
         {invoice.due_date && ` Fällig am ${formatDate(invoice.due_date)}.`}
       </p>
+      {skonto && (
+        <p className="mt-1 text-sm text-muted">
+          Bei Zahlung bis {formatDate(skontoDate)}: {terms.skonto_prozent} %
+          Skonto = {formatEUR(skonto.amount)} — Zahlbetrag{' '}
+          {formatEUR(skonto.payable)}.
+        </p>
+      )}
     </div>
   )
 }

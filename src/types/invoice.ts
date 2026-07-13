@@ -18,12 +18,6 @@ export function invoiceStatusLabel(status: string): string {
   return INVOICE_STATUS_LABELS[status as InvoiceStatus] ?? status
 }
 
-/** Zahlungsziel in Tagen (14 Tage netto). */
-export const ZAHLUNGSZIEL_TAGE = 14
-
-/** Zahlungsziel-Hinweis für Belege. */
-export const ZAHLUNGSZIEL_HINWEIS = `Zahlbar innerhalb von ${ZAHLUNGSZIEL_TAGE} Tagen netto.`
-
 /** Eine Rechnung (snake_case wie in der DB). */
 export interface Invoice {
   id: string

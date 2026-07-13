@@ -1,8 +1,14 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import type { BelegItem } from './pdf'
-import { ZAHLUNGSZIEL_TAGE } from '../types/invoice'
-import { VAT_RATE, applyVat } from './tax'
+import { addDaysIso } from './dates'
+import {
+  VAT_RATE,
+  applyVat,
+  computeSkonto,
+  effectivePaymentTerms,
+  type PaymentTerms,
+} from './tax'
 import type {
   DeliveryNote,
   Dealerish,
@@ -16,11 +22,16 @@ const BUCKET = 'invoices'
 /** Gültigkeit der Signed-URLs für den PDF-Download (privater Bucket). */
 const SIGNED_URL_TTL = 60 * 60 // 1 Stunde
 
-/** ISO-Datum (YYYY-MM-DD) um n Tage verschieben, als YYYY-MM-DD zurück. */
-function addDays(iso: string, days: number): string {
-  const d = new Date(iso)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+/**
+ * Skonto-Block für die PDF aus Rechnungsdatum, Bruttobetrag und Konditionen
+ * bauen — oder null, wenn kein Skonto gilt (prozent 0).
+ */
+function skontoForPdf(invoiceDate: string, gross: number, terms: PaymentTerms) {
+  if (terms.skonto_prozent <= 0) return null
+  return {
+    date: addDaysIso(invoiceDate, terms.skonto_tage),
+    ...computeSkonto(gross, terms.skonto_prozent),
+  }
 }
 
 /** numeric/number robust zu number. */
@@ -308,9 +319,11 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     .single()
   if (insErr) throw insErr
 
-  // Zahlungsziel 14 Tage netto ab Rechnungsdatum (autoritatives invoice_date
-  // aus der DB als Basis).
-  const dueDate = addDays(invoice.invoice_date, ZAHLUNGSZIEL_TAGE)
+  // Zahlungskonditionen: bis der Händler-Import die Felder befüllt (Migration
+  // noch nicht live), gilt der WARM-ME-Standard (30 Tage netto, 3 %/10 Skonto).
+  // Später kommen hier die Händlerwerte hinein: effectivePaymentTerms(dealer).
+  const terms = effectivePaymentTerms(null)
+  const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
 
   const itemRows = ctx.items.map((i) => ({
     invoice_id: invoice.id,
@@ -351,6 +364,8 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     subtotal,
     tax: tax_amount,
     total,
+    zahlungszielTage: terms.zahlungsziel_tage,
+    skonto: skontoForPdf(invoice.invoice_date, total, terms),
     notes: null,
   })
   const path = await uploadPdf(
@@ -372,6 +387,10 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
 export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
   const org_id = await getMyOrgId()
   const inv = await getInvoice(id)
+
+  // Konditionen: WARM-ME-Standard (Händlerwerte kommen mit dem Import).
+  const terms = effectivePaymentTerms(null)
+  const total = num(inv.total)
 
   const { buildInvoicePdf } = await import('./pdf')
   const blob = buildInvoicePdf({
@@ -395,7 +414,9 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
     })),
     subtotal: num(inv.subtotal),
     tax: num(inv.tax_amount),
-    total: num(inv.total),
+    total,
+    zahlungszielTage: terms.zahlungsziel_tage,
+    skonto: skontoForPdf(inv.invoice_date, total, terms),
     notes: inv.notes,
   })
   const path = await uploadPdf(
