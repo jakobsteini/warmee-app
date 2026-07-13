@@ -69,7 +69,7 @@ export default function ProductionOrders() {
       setOrders(ords)
       setSeasons(seas)
     } catch {
-      setError('Nepal-Bestellungen konnten nicht geladen werden.')
+      setError('Produktionsbestellungen konnten nicht geladen werden.')
     } finally {
       setLoading(false)
     }
@@ -101,7 +101,7 @@ export default function ProductionOrders() {
     try {
       const order = await generateProductionOrder(seasonId)
       setFormOpen(false)
-      navigate(`/nepal-orders/${order.id}`)
+      navigate(`/production-orders/${order.id}`)
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -117,7 +117,7 @@ export default function ProductionOrders() {
     const label = order.season?.label ?? seasonLabel.get(order.season_id) ?? ''
     if (
       !window.confirm(
-        `Nepal-Bestellung${label ? ` für Saison ${label}` : ''} wirklich löschen?`,
+        `Produktionsbestellung${label ? ` für Saison ${label}` : ''} wirklich löschen?`,
       )
     )
       return
@@ -136,10 +136,12 @@ export default function ProductionOrders() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Nepal-Bestellung</h1>
+          <h1 className="text-2xl font-medium text-ink">
+            Produktionsbestellung
+          </h1>
           <p className="mt-1 text-sm text-muted">
-            Bestätigte Orders einer Saison zu einer Produktionsbestellung für
-            Nepal zusammenführen.
+            Bestätigte Orders einer Saison zu einer Produktionsbestellung
+            zusammenführen.
           </p>
         </div>
         <button
@@ -167,8 +169,7 @@ export default function ProductionOrders() {
           actionDisabled={seasons.length === 0}
         >
           Hier führst du die bestätigten Orders einer Saison zu einer
-          Produktionsbestellung für Nepal zusammen. Generiere die erste
-          Bestellung.
+          Produktionsbestellung zusammen. Generiere die erste Bestellung.
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
@@ -176,6 +177,7 @@ export default function ProductionOrders() {
             <thead className="bg-card text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">Saison</th>
+                <th className="px-4 py-3 font-medium">Produzent</th>
                 <th className="px-4 py-3 font-medium">Generiert am</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">
@@ -188,11 +190,14 @@ export default function ProductionOrders() {
               {orders.map((o) => (
                 <tr
                   key={o.id}
-                  onClick={() => navigate(`/nepal-orders/${o.id}`)}
+                  onClick={() => navigate(`/production-orders/${o.id}`)}
                   className="cursor-pointer border-t-[0.5px] border-line bg-white text-ink transition-colors hover:bg-card"
                 >
                   <td className="px-4 py-3 font-medium">
                     {o.season?.label ?? seasonLabel.get(o.season_id) ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {o.producer?.name ?? '—'}
                   </td>
                   <td className="px-4 py-3 text-muted">
                     {formatDate(o.generated_at)}
@@ -208,7 +213,7 @@ export default function ProductionOrders() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/nepal-orders/${o.id}`)
+                        navigate(`/production-orders/${o.id}`)
                       }}
                       className="text-muted transition-colors hover:text-ink"
                     >

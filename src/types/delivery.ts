@@ -47,7 +47,7 @@ export interface Delivery {
 
 /**
  * Lieferung für die Übersichtsseite: mit Händlername, Saison-Label (über die
- * Nepal-Bestellung) und den Positions-Stückzahlen zum Aufsummieren.
+ * Produktionsbestellung) und den Positions-Stückzahlen zum Aufsummieren.
  */
 export interface DeliveryListRow extends Delivery {
   dealer: { name: string } | null

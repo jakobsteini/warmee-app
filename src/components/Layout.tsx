@@ -14,7 +14,7 @@ const navItems = [
 const warenItems = [
   { to: '/products', label: 'Artikel' },
   { to: '/orders', label: 'Orders' },
-  { to: '/nepal-orders', label: 'Nepal-Bestellung' },
+  { to: '/production-orders', label: 'Produktionsbestellung' },
   { to: '/deliveries', label: 'Wareneingang' },
   { to: '/invoices', label: 'Rechnungen' },
   { to: '/open-payments', label: 'Offene Posten' },

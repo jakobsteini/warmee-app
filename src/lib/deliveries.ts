@@ -9,7 +9,7 @@ import type {
 
 /**
  * Alle Lieferungen der eigenen Org (RLS scoped automatisch), neueste zuerst.
- * Händlername, Saison-Label (über die Nepal-Bestellung) und die
+ * Händlername, Saison-Label (über die Produktionsbestellung) und die
  * Positions-Stückzahlen werden mitgeladen, damit die Übersicht Summen ohne
  * Nachladen zeigen kann.
  */
@@ -25,20 +25,20 @@ export async function listDeliveries(): Promise<DeliveryListRow[]> {
   return (data ?? []) as unknown as DeliveryListRow[]
 }
 
-/** Nepal-Bestellung, die zu einer Lieferung gehört (mit Saison). */
+/** Produktionsbestellung, die zu einer Lieferung gehört (mit Saison). */
 export interface DeliveryProductionOrder {
   id: string
   season_id: string
   season: { label: string } | null
 }
 
-/** Eine einzelne Lieferung inkl. Nepal-Bestellung, Saison und Händlername. */
+/** Eine einzelne Lieferung inkl. Produktionsbestellung, Saison und Händlername. */
 export interface DeliveryDetail extends Delivery {
   dealer: { name: string } | null
   production_order: DeliveryProductionOrder | null
 }
 
-/** Eine einzelne Lieferung laden (mit Händler + Nepal-Bestellung/Saison). */
+/** Eine einzelne Lieferung laden (mit Händler + Produktionsbestellung/Saison). */
 export async function getDelivery(id: string): Promise<DeliveryDetail> {
   const { data, error } = await supabase
     .from('deliveries')
@@ -66,7 +66,7 @@ export async function listDeliveryItems(
   return (data ?? []) as unknown as DeliveryItemWithProduct[]
 }
 
-/** Nepal-Bestellung mit Status „received" für die Verteilungs-Auswahl. */
+/** Produktionsbestellung mit Status „received" für die Verteilungs-Auswahl. */
 export interface ReceivedProductionOrder {
   id: string
   season_id: string
@@ -75,7 +75,7 @@ export interface ReceivedProductionOrder {
 }
 
 /**
- * Alle Nepal-Bestellungen mit Status „received" (Ware angekommen), neueste
+ * Alle Produktionsbestellungen mit Status „received" (Ware angekommen), neueste
  * zuerst. Basis für „Verteilung generieren".
  */
 export async function listReceivedProductionOrders(): Promise<
@@ -110,7 +110,7 @@ export function itemKey(
 }
 
 /**
- * Verteilung für eine erhaltene Nepal-Bestellung generieren.
+ * Verteilung für eine erhaltene Produktionsbestellung generieren.
  *
  * Legt je Händler, der in der Saison der Bestellung eine bestätigte Order hat,
  * eine Lieferung (Status = pending) an. Die Lieferpositionen werden aus den
@@ -136,7 +136,7 @@ export async function generateDeliveries(
   if (poError) throw poError
   if (po.status !== 'received') {
     throw new Error(
-      'Verteilung nur möglich, wenn die Nepal-Bestellung den Status „Erhalten" hat.',
+      'Verteilung nur möglich, wenn die Produktionsbestellung den Status „Erhalten" hat.',
     )
   }
 
@@ -149,7 +149,7 @@ export async function generateDeliveries(
   if (countError) throw countError
   if ((count ?? 0) > 0) {
     throw new Error(
-      'Für diese Nepal-Bestellung wurde bereits eine Verteilung erstellt.',
+      'Für diese Produktionsbestellung wurde bereits eine Verteilung erstellt.',
     )
   }
 

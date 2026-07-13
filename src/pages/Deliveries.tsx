@@ -82,7 +82,7 @@ export default function Deliveries() {
   async function handleGenerate(e: FormEvent) {
     e.preventDefault()
     if (!productionOrderId) {
-      setFormError('Bitte eine Nepal-Bestellung wählen.')
+      setFormError('Bitte eine Produktionsbestellung wählen.')
       return
     }
     setGenerating(true)
@@ -125,7 +125,7 @@ export default function Deliveries() {
         <div>
           <h1 className="text-2xl font-medium text-ink">Wareneingang</h1>
           <p className="mt-1 text-sm text-muted">
-            Angekommene Nepal-Bestellung anhand der Händlerorders auf die
+            Angekommene Produktionsbestellung anhand der Händlerorders auf die
             einzelnen Händler verteilen.
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function Deliveries() {
           disabled={received.length === 0}
           title={
             received.length === 0
-              ? 'Keine Nepal-Bestellung mit Status „Erhalten"'
+              ? 'Keine Produktionsbestellung mit Status „Erhalten"'
               : undefined
           }
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
@@ -158,8 +158,8 @@ export default function Deliveries() {
           onAction={openGenerate}
           actionDisabled={received.length === 0}
         >
-          Hier verteilst du die angekommene Nepal-Bestellung anhand der
-          Händlerorders auf die einzelnen Händler. Sobald eine Nepal-Bestellung
+          Hier verteilst du die angekommene Produktionsbestellung anhand der
+          Händlerorders auf die einzelnen Händler. Sobald eine Produktionsbestellung
           den Status „Erhalten" hat, kannst du die Verteilung erstellen.
         </EmptyState>
       ) : (
@@ -233,14 +233,14 @@ export default function Deliveries() {
               Verteilung generieren
             </h2>
             <p className="mb-4 text-sm text-muted">
-              Die gewählte Nepal-Bestellung wird anhand der bestätigten
+              Die gewählte Produktionsbestellung wird anhand der bestätigten
               Händlerorders der Saison auf die Händler aufgeteilt — je Händler
               eine Lieferung.
             </p>
             <form onSubmit={handleGenerate} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">
-                  Nepal-Bestellung (Status: Erhalten) *
+                  Produktionsbestellung (Status: Erhalten) *
                 </span>
                 <select
                   required

@@ -34,10 +34,22 @@ export default function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:id" element={<OrderEdit />} />
-            <Route path="/nepal-orders" element={<ProductionOrders />} />
+            <Route
+              path="/production-orders"
+              element={<ProductionOrders />}
+            />
+            <Route
+              path="/production-orders/:id"
+              element={<ProductionOrderEdit />}
+            />
+            {/* Alt-Pfade (frühere „Nepal-Bestellung") weiterleiten. */}
+            <Route
+              path="/nepal-orders"
+              element={<Navigate to="/production-orders" replace />}
+            />
             <Route
               path="/nepal-orders/:id"
-              element={<ProductionOrderEdit />}
+              element={<Navigate to="/production-orders" replace />}
             />
             <Route path="/deliveries" element={<Deliveries />} />
             <Route path="/deliveries/:id" element={<DeliveryEdit />} />

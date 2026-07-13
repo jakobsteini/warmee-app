@@ -8,15 +8,15 @@ import type {
 } from '../types/productionOrder'
 
 /**
- * Alle Nepal-Bestellungen der eigenen Org (RLS scoped automatisch),
- * neueste zuerst. Saison-Label und die Positions-Stückzahlen werden mitgeladen,
- * damit die Übersicht die Gesamtstückzahl ohne Nachladen zeigen kann.
+ * Alle Produktionsbestellungen der eigenen Org (RLS scoped automatisch),
+ * neueste zuerst. Saison-Label, Produzentenname und die Positions-Stückzahlen
+ * werden mitgeladen, damit die Übersicht ohne Nachladen alles zeigen kann.
  */
 export async function listProductionOrders(): Promise<ProductionOrderListRow[]> {
   const { data, error } = await supabase
     .from('production_orders')
     .select(
-      'id, org_id, season_id, status, generated_at, sent_at, notes, created_by, created_at, season:seasons(label), production_order_items(total_quantity)',
+      'id, org_id, season_id, producer_id, status, generated_at, sent_at, notes, created_by, created_at, season:seasons(label), producer:producers(name), production_order_items(total_quantity)',
     )
     .order('created_at', { ascending: false })
 
@@ -24,7 +24,7 @@ export async function listProductionOrders(): Promise<ProductionOrderListRow[]> 
   return (data ?? []) as unknown as ProductionOrderListRow[]
 }
 
-/** Eine einzelne Nepal-Bestellung laden. */
+/** Eine einzelne Produktionsbestellung laden. */
 export async function getProductionOrder(id: string): Promise<ProductionOrder> {
   const { data, error } = await supabase
     .from('production_orders')
@@ -37,7 +37,7 @@ export async function getProductionOrder(id: string): Promise<ProductionOrder> {
 }
 
 /**
- * Alle Positionen einer Nepal-Bestellung inkl. Produktname, sortiert nach
+ * Alle Positionen einer Produktionsbestellung inkl. Produktname, sortiert nach
  * Produkt, Farbe, Größe.
  */
 export async function listProductionOrderItems(
@@ -62,17 +62,23 @@ interface RawOrderItem {
 }
 
 /**
- * Neue Nepal-Bestellung aus allen bestätigten Orders einer Saison generieren.
+ * Neue Produktionsbestellung aus allen bestätigten Orders einer Saison
+ * generieren.
  *
  * Aggregiert alle order_items der bestätigten (status = 'confirmed') Orders der
  * Saison nach Produkt + Farbe + Größe und summiert die Stückzahlen. Legt eine
  * production_orders-Zeile (Status = draft) samt aggregierten
  * production_order_items an und gibt die neue Bestellung zurück.
  *
+ * `producerId` ordnet die Bestellung optional einem Produzenten zu (Nepal,
+ * Portugal, …). null = noch nicht zugeordnet. Die Priorisierung/Aufteilung
+ * auf mehrere Produzenten folgt in einem späteren Schritt.
+ *
  * Wirft, wenn keine bestätigten Orders mit Positionen existieren.
  */
 export async function generateProductionOrder(
   seasonId: string,
+  producerId: string | null = null,
 ): Promise<ProductionOrder> {
   const [org_id, created_by] = await Promise.all([
     getMyOrgId(),
@@ -122,7 +128,7 @@ export async function generateProductionOrder(
   // Kopf-Datensatz anlegen (Status = draft).
   const { data: order, error: orderError } = await supabase
     .from('production_orders')
-    .insert({ org_id, season_id: seasonId, created_by })
+    .insert({ org_id, season_id: seasonId, producer_id: producerId, created_by })
     .select()
     .single()
 
@@ -152,7 +158,7 @@ export async function generateProductionOrder(
 }
 
 /**
- * Status einer Nepal-Bestellung ändern. Beim Übergang auf „Gesendet" wird
+ * Status einer Produktionsbestellung ändern. Beim Übergang auf „Gesendet" wird
  * sent_at gesetzt, sofern noch nicht vorhanden.
  */
 export async function updateProductionStatus(
@@ -175,7 +181,7 @@ export async function updateProductionStatus(
   return data as ProductionOrder
 }
 
-/** Notiz einer Nepal-Bestellung aktualisieren. */
+/** Notiz einer Produktionsbestellung aktualisieren. */
 export async function updateProductionNotes(
   id: string,
   notes: string | null,
@@ -187,7 +193,7 @@ export async function updateProductionNotes(
   if (error) throw error
 }
 
-/** Nepal-Bestellung löschen (Positionen per ON DELETE CASCADE mit). */
+/** Produktionsbestellung löschen (Positionen per ON DELETE CASCADE mit). */
 export async function deleteProductionOrder(id: string): Promise<void> {
   const { error } = await supabase
     .from('production_orders')

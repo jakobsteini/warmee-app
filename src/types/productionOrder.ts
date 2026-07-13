@@ -1,5 +1,5 @@
 /**
- * Mögliche Status einer Nepal-Bestellung (englisch gespeichert, wie in der
+ * Mögliche Status einer Produktionsbestellung (englisch gespeichert, wie in der
  * DB-Check-Constraint). Status-Flow: Entwurf → Gesendet → In Produktion →
  * Versendet → Erhalten.
  */
@@ -25,9 +25,7 @@ export function productionStatusLabel(status: string): string {
   return PRODUCTION_STATUS_LABELS[status as ProductionStatus] ?? status
 }
 
-/**
- * Nächster Status im Flow, oder null wenn bereits „Erhalten".
- */
+/** Nächster Status im Flow, oder null wenn bereits „Erhalten". */
 export function nextProductionStatus(
   status: ProductionStatus,
 ): ProductionStatus | null {
@@ -37,11 +35,13 @@ export function nextProductionStatus(
     : null
 }
 
-/** Eine Nepal-Bestellung (snake_case wie in der DB). */
+/** Eine Produktionsbestellung (snake_case wie in der DB). */
 export interface ProductionOrder {
   id: string
   org_id: string
   season_id: string
+  /** Produzent (Nepal, Portugal, …). Nullable, bis die Zuordnung erfolgt. */
+  producer_id: string | null
   status: ProductionStatus
   generated_at: string | null
   sent_at: string | null
@@ -51,11 +51,12 @@ export interface ProductionOrder {
 }
 
 /**
- * Nepal-Bestellung für die Übersichtsseite: mit Saison-Label und der Anzahl
- * der Positionen (aggregierte Zeilen).
+ * Produktionsbestellung für die Übersichtsseite: mit Saison-Label,
+ * Produzentenname und der Anzahl der Positionen (aggregierte Zeilen).
  */
 export interface ProductionOrderListRow extends ProductionOrder {
   season: { label: string } | null
+  producer: { name: string } | null
   production_order_items: { total_quantity: number }[]
 }
 

@@ -51,7 +51,7 @@ export default function ProductionOrderEdit() {
       setNotes(ord.notes ?? '')
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
     } catch {
-      setError('Nepal-Bestellung konnte nicht geladen werden.')
+      setError('Produktionsbestellung konnte nicht geladen werden.')
     } finally {
       setLoading(false)
     }
@@ -97,10 +97,10 @@ export default function ProductionOrderEdit() {
     return (
       <div className="mx-auto max-w-4xl">
         <Link
-          to="/nepal-orders"
+          to="/production-orders"
           className="text-sm text-muted hover:text-ink"
         >
-          ← Zurück zur Nepal-Bestellung
+          ← Zurück zur Produktionsbestellung
         </Link>
         <p className="mt-6 text-sm text-red-700">
           {error ?? 'Bestellung nicht gefunden.'}
@@ -113,15 +113,18 @@ export default function ProductionOrderEdit() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="print:hidden">
-        <Link to="/nepal-orders" className="text-sm text-muted hover:text-ink">
-          ← Zurück zur Nepal-Bestellung
+        <Link
+          to="/production-orders"
+          className="text-sm text-muted hover:text-ink"
+        >
+          ← Zurück zur Produktionsbestellung
         </Link>
       </div>
 
       <div className="mt-4 mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            Nepal-Bestellung
+            Produktionsbestellung
           </h1>
           <p className="mt-1 text-sm text-muted">
             Saison {season?.label ?? '—'} · Generiert am{' '}
