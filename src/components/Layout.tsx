@@ -18,6 +18,7 @@ const warenItems = [
   { to: '/deliveries', label: 'Wareneingang' },
   { to: '/invoices', label: 'Rechnungen' },
   { to: '/open-payments', label: 'Offene Posten' },
+  { to: '/analytics', label: 'Auswertungen' },
 ]
 
 /** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */

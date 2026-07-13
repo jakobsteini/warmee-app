@@ -17,6 +17,7 @@ import DeliveryEdit from './pages/DeliveryEdit'
 import Invoices from './pages/Invoices'
 import InvoiceEdit from './pages/InvoiceEdit'
 import OpenPayments from './pages/OpenPayments'
+import Analytics from './pages/Analytics'
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/:id" element={<InvoiceEdit />} />
             <Route path="/open-payments" element={<OpenPayments />} />
+            <Route path="/analytics" element={<Analytics />} />
           </Route>
         </Route>
 

@@ -8,7 +8,9 @@ import {
 } from '../lib/dealers'
 import { parsePaymentTerms, formatPaymentTerms } from '../lib/paymentTerms'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
+import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import EmptyState from '../components/EmptyState'
+import CreditBadge from '../components/CreditBadge'
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -430,6 +432,7 @@ function AddressBlock({
 
 export default function Dealers() {
   const [dealers, setDealers] = useState<Dealer[]>([])
+  const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -447,7 +450,14 @@ export default function Dealers() {
     setLoading(true)
     setError(null)
     try {
-      setDealers(await listDealers())
+      // Händler und Bonitäts-Bewertungen parallel; die Ampel ist ergänzend und
+      // soll die Liste nicht blockieren, falls sie fehlschlägt.
+      const [dealerList, creditMap] = await Promise.all([
+        listDealers(),
+        listDealerCredits().catch(() => new Map<string, DealerCredit>()),
+      ])
+      setDealers(dealerList)
+      setCredits(creditMap)
     } catch {
       setError('Händler konnten nicht geladen werden.')
     } finally {
@@ -560,6 +570,7 @@ export default function Dealers() {
                 <th className="px-4 py-3 font-medium">Ansprechpartner</th>
                 <th className="px-4 py-3 font-medium">E-Mail</th>
                 <th className="px-4 py-3 font-medium">Ort</th>
+                <th className="px-4 py-3 font-medium">Bonität</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -577,6 +588,9 @@ export default function Dealers() {
                   <td className="px-4 py-3 text-muted">{d.email ?? '—'}</td>
                   <td className="px-4 py-3 text-muted">
                     {[d.city, d.country].filter(Boolean).join(', ') || '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <CreditBadge credit={credits.get(d.id)} />
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
