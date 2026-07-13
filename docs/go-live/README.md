@@ -91,9 +91,11 @@ Wenn überall **ist = soll** steht, ist der Go-Live erfolgreich. Die
 `RLS aktiv`-Zeilen mit `1` bestätigen, dass der Datenschutz (Row Level Security)
 auf allen Tabellen aktiv ist.
 
-> `ist` darf bei Händlern/Artikeln **größer** als `soll` sein, falls vorher schon
-> Testdaten drin waren — kleiner niemals. Bei kleineren Zahlen: Import-Block
-> erneut ausführen oder Bescheid geben.
+> Die Zieltabellen waren vor dem Go-Live **leer** (geprüft). Deshalb prüfen alle
+> Blöcke auf **exakte Gleichheit** (`ist = soll`) — jede Abweichung (mehr **oder**
+> weniger) bricht mit einer roten Fehlermeldung ab. Block 09 enthält zusätzlich
+> eine strikte Gesamt-Prüfung, die bei der ersten falschen Zahl stoppt. Bei einem
+> Fehler: **stopp** und Bescheid geben.
 
 ---
 

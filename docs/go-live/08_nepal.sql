@@ -143,12 +143,12 @@ cross join (values
 where po.org_id = (select id from organizations) and po.season_id = (select id from seasons where org_id = (select id from organizations) and code = 'FW26') and po.producer_id = (select id from producers where org_id = (select id from organizations) and name = 'Shangri-La') and po.notes = '3. Order FW26'
   and not exists (select 1 from production_order_items i where i.production_order_id = po.id);
 
--- VERIFIKATION (schlägt fehl, wenn zu wenige Zeilen)
+-- VERIFIKATION (schlägt fehl, wenn die Zeilenzahl nicht EXAKT stimmt)
 do $$
 declare n int;
 begin
   select (select count(*) from production_order_items i join production_orders po on po.id = i.production_order_id where po.org_id = (select id from organizations) and po.season_id = (select id from seasons where org_id = (select id from organizations) and code = 'FW26') and po.producer_id = (select id from producers where org_id = (select id from organizations) and name = 'Shangri-La') and po.notes = '3. Order FW26') into n;
-  raise notice 'nepal_items: % (erwartet >= 104)', n;
-  if n < 104 then raise exception 'FEHLER nepal_items: nur % statt 104', n; end if;
+  raise notice 'nepal_items: % (erwartet genau 104)', n;
+  if n <> 104 then raise exception 'FEHLER nepal_items: % statt genau 104', n; end if;
 end $$;
 select (select count(*) from production_order_items i join production_orders po on po.id = i.production_order_id where po.org_id = (select id from organizations) and po.season_id = (select id from seasons where org_id = (select id from organizations) and code = 'FW26') and po.producer_id = (select id from producers where org_id = (select id from organizations) and name = 'Shangri-La') and po.notes = '3. Order FW26') as nepal_items;

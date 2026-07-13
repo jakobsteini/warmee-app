@@ -48,13 +48,15 @@ const banner = (title: string, expect: string) =>
   `-- Ausführen ist unschädlich). Erwartetes Ergebnis: ${expect}\n` +
   `-- ============================================================================\n`
 
-// Verifikations-Block, der bei falscher Zeilenzahl SICHTBAR fehlschlägt.
+// Verifikations-Block, der bei NICHT-exakter Zeilenzahl SICHTBAR fehlschlägt.
+// Die Zieltabellen sind vor dem Go-Live leer (per Live-DB-Check bestätigt),
+// daher strikte Gleichheit: weder mehr noch weniger.
 const verify = (label: string, sqlCount: string, expect: number) =>
-  `\n-- VERIFIKATION (schlägt fehl, wenn zu wenige Zeilen)\n` +
+  `\n-- VERIFIKATION (schlägt fehl, wenn die Zeilenzahl nicht EXAKT stimmt)\n` +
   `do $$\ndeclare n int;\nbegin\n` +
   `  select ${sqlCount} into n;\n` +
-  `  raise notice '${label}: % (erwartet >= ${expect})', n;\n` +
-  `  if n < ${expect} then raise exception 'FEHLER ${label}: nur % statt ${expect}', n; end if;\n` +
+  `  raise notice '${label}: % (erwartet genau ${expect})', n;\n` +
+  `  if n <> ${expect} then raise exception 'FEHLER ${label}: % statt genau ${expect}', n; end if;\n` +
   `end $$;\n` +
   `select ${sqlCount} as ${label};\n`
 
@@ -186,9 +188,34 @@ function genNepal(pos: PositionRecord[]): string {
 // ─── 09 · Gesamt-Verifikation ────────────────────────────────────────────────
 function genVerify(): string {
   const s27 = `(select id from seasons where org_id = ${ORG} and code = 'SS27')`
+  const nepalItems =
+    `(select count(*) from production_order_items i join production_orders po ` +
+    `on po.id = i.production_order_id where po.org_id = ${ORG} and po.notes = '3. Order FW26')`
+  // Strikte Soll-Zahlen (Zieltabellen sind vor dem Go-Live leer, per Live-DB-Check bestätigt).
+  const strict: [string, string, number][] = [
+    ['organisationen', `(select count(*) from organizations)`, 1],
+    ['haendler', `(select count(*) from dealers where org_id = ${ORG})`, 128],
+    ['artikel_ss27', `(select count(*) from products where org_id = ${ORG} and season_id = ${s27})`, 48],
+    ['produzent_shangri_la', `(select count(*) from producers where org_id = ${ORG} and name = 'Shangri-La')`, 1],
+    ['produktionsbestellung_fw26', `(select count(*) from production_orders where org_id = ${ORG} and notes = '3. Order FW26')`, 1],
+    ['nepal_positionen', nepalItems, 104],
+  ]
+  const strictBlock =
+    `\n-- STRIKTE GESAMT-PRÜFUNG: bricht ab, wenn IRGENDEINE Zahl nicht EXAKT stimmt.\n` +
+    `do $$\ndeclare n int;\nbegin\n` +
+    strict
+      .map(
+        ([label, sql, exp]) =>
+          `  select ${sql} into n;\n` +
+          `  if n <> ${exp} then raise exception 'FEHLER ${label}: % statt genau ${exp}', n; end if;\n`,
+      )
+      .join('') +
+    `  raise notice 'OK: alle Soll-Zahlen exakt getroffen.';\nend $$;\n\n` +
+    `-- Anzeige-Tabelle (ist / soll):\n`
   return (
-    banner('09 · GESAMT-VERIFIKATION', 'Soll: 1 org, 128 dealers, 48 products SS27, 1 producer, 1 order/104 items, RLS aktiv.') +
-    `\nselect 'organisationen' as pruefung, count(*) as ist, 1 as soll from organizations\n` +
+    banner('09 · GESAMT-VERIFIKATION', 'Soll (strikt): 1 org, 128 dealers, 48 products SS27, 1 producer, 1 order/104 items, RLS aktiv.') +
+    strictBlock +
+    `select 'organisationen' as pruefung, count(*) as ist, 1 as soll from organizations\n` +
     `union all select 'haendler (WARM ME)', count(*), 128 from dealers where org_id = ${ORG}\n` +
     `union all select 'artikel SS27', count(*), 48 from products where org_id = ${ORG} and season_id = ${s27}\n` +
     `union all select 'produzent Shangri-La', count(*), 1 from producers where org_id = ${ORG} and name = 'Shangri-La'\n` +

@@ -175,12 +175,12 @@ on conflict (org_id, kundennummer) do update set
   store_phone = excluded.store_phone,
   store_email = excluded.store_email;
 
--- VERIFIKATION (schlägt fehl, wenn zu wenige Zeilen)
+-- VERIFIKATION (schlägt fehl, wenn die Zeilenzahl nicht EXAKT stimmt)
 do $$
 declare n int;
 begin
   select (select count(*) from dealers where org_id = (select id from organizations)) into n;
-  raise notice 'dealers_warmme: % (erwartet >= 128)', n;
-  if n < 128 then raise exception 'FEHLER dealers_warmme: nur % statt 128', n; end if;
+  raise notice 'dealers_warmme: % (erwartet genau 128)', n;
+  if n <> 128 then raise exception 'FEHLER dealers_warmme: % statt genau 128', n; end if;
 end $$;
 select (select count(*) from dealers where org_id = (select id from organizations)) as dealers_warmme;

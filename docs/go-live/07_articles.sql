@@ -72,12 +72,12 @@ on conflict (org_id, season_id, style) do update set
   wholesale_price = excluded.wholesale_price,
   retail_price = excluded.retail_price;
 
--- VERIFIKATION (schlägt fehl, wenn zu wenige Zeilen)
+-- VERIFIKATION (schlägt fehl, wenn die Zeilenzahl nicht EXAKT stimmt)
 do $$
 declare n int;
 begin
   select (select count(*) from products where org_id = (select id from organizations) and season_id = (select id from seasons where org_id = (select id from organizations) and code = 'SS27')) into n;
-  raise notice 'products_ss27: % (erwartet >= 48)', n;
-  if n < 48 then raise exception 'FEHLER products_ss27: nur % statt 48', n; end if;
+  raise notice 'products_ss27: % (erwartet genau 48)', n;
+  if n <> 48 then raise exception 'FEHLER products_ss27: % statt genau 48', n; end if;
 end $$;
 select (select count(*) from products where org_id = (select id from organizations) and season_id = (select id from seasons where org_id = (select id from organizations) and code = 'SS27')) as products_ss27;
