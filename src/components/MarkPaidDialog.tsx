@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { formatEUR } from '../lib/money'
 
 const inputClass =
-  'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+  'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
 /** Heute als ISO-Kurzdatum (YYYY-MM-DD) für das Default-Zahlungsdatum. */
 function todayIso(): string {

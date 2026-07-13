@@ -228,7 +228,7 @@ export default function InvoiceEdit() {
       )}
 
       {/* Empfänger */}
-      <div className="mb-6 rounded-md border-[0.5px] border-line bg-white px-5 py-4">
+      <div className="mb-6 rounded-md border-[0.5px] border-line bg-surface px-5 py-4">
         <p className="text-xs uppercase tracking-wider text-muted">
           Rechnungsempfänger
         </p>
@@ -263,7 +263,7 @@ export default function InvoiceEdit() {
             {invoice.invoice_items.map((i) => (
               <tr
                 key={i.id}
-                className="border-t-[0.5px] border-line bg-white text-ink"
+                className="border-t-[0.5px] border-line bg-surface text-ink"
               >
                 <td className="px-4 py-2.5 font-medium">{i.description}</td>
                 <td className="px-4 py-2.5">{i.color ?? '—'}</td>
@@ -279,7 +279,7 @@ export default function InvoiceEdit() {
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-[0.5px] border-line bg-white text-ink">
+            <tr className="border-t-[0.5px] border-line bg-surface text-ink">
               <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
                 Nettobetrag
               </td>
@@ -287,7 +287,7 @@ export default function InvoiceEdit() {
                 {formatEUR(invoice.subtotal)}
               </td>
             </tr>
-            <tr className="bg-white text-ink">
+            <tr className="bg-surface text-ink">
               <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
                 USt ({VAT_RATE_PERCENT} %)
               </td>

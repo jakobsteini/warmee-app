@@ -15,7 +15,7 @@ import CreditBadge from '../components/CreditBadge'
 import ExportButtons from '../components/ExportButtons'
 
 const inputClass =
-  'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+  'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
 /**
  * Alle Formularfelder als Strings (kontrollierte Inputs). Umwandlung in die
@@ -642,7 +642,7 @@ export default function Dealers() {
               {dealers.map((d) => (
                 <tr
                   key={d.id}
-                  className="border-t-[0.5px] border-line bg-white text-ink"
+                  className="border-t-[0.5px] border-line bg-surface text-ink"
                 >
                   <td className="px-4 py-3 text-muted tabular-nums">
                     {d.kundennummer ?? '—'}

@@ -162,7 +162,7 @@ export default function Assets() {
   }, [seasons])
 
   const selectClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -225,7 +225,7 @@ export default function Assets() {
             'flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed px-6 py-12 text-center transition-colors',
             dragOver
               ? 'border-ink bg-card'
-              : 'border-line bg-white hover:bg-card',
+              : 'border-line bg-surface hover:bg-card',
           ].join(' ')}
         >
           <p className="text-sm text-ink">
@@ -465,7 +465,7 @@ function AssetDetail({
   }
 
   const fieldClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
   return (
     <div

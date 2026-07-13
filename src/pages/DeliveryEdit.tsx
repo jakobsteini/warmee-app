@@ -185,9 +185,9 @@ export default function DeliveryEdit() {
   }
 
   const inputClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
   const cellInput =
-    'w-full rounded-md border-[0.5px] border-line bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
+    'w-full rounded-md border-[0.5px] border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
 
   if (loading) return <p className="text-sm text-muted">Lädt…</p>
   if (!delivery)
@@ -255,7 +255,7 @@ export default function DeliveryEdit() {
         </div>
       )}
 
-      <section className="mb-8 rounded-md border-[0.5px] border-line bg-white px-5 py-4 print:hidden">
+      <section className="mb-8 rounded-md border-[0.5px] border-line bg-surface px-5 py-4 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium text-ink">Belege</h2>
@@ -376,7 +376,7 @@ export default function DeliveryEdit() {
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <tr className="border-t-[0.5px] border-line bg-white">
+              <tr className="border-t-[0.5px] border-line bg-surface">
                 <td colSpan={6} className="px-4 py-6 text-center text-muted">
                   Keine Positionen.
                 </td>
@@ -389,7 +389,7 @@ export default function DeliveryEdit() {
                 return (
                   <tr
                     key={i.id}
-                    className="border-t-[0.5px] border-line bg-white text-ink"
+                    className="border-t-[0.5px] border-line bg-surface text-ink"
                   >
                     <td className="px-4 py-2.5 font-medium">
                       {i.product?.name ?? '—'}

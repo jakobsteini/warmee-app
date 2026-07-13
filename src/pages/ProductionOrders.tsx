@@ -130,7 +130,7 @@ export default function ProductionOrders() {
   }
 
   const inputClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -191,7 +191,7 @@ export default function ProductionOrders() {
                 <tr
                   key={o.id}
                   onClick={() => navigate(`/production-orders/${o.id}`)}
-                  className="cursor-pointer border-t-[0.5px] border-line bg-white text-ink transition-colors hover:bg-card"
+                  className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                 >
                   <td className="px-4 py-3 font-medium">
                     {o.season?.label ?? seasonLabel.get(o.season_id) ?? '—'}

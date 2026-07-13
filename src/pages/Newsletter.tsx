@@ -182,7 +182,7 @@ function NewsletterList({
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-t-[0.5px] border-line bg-white text-ink"
+                  className="border-t-[0.5px] border-line bg-surface text-ink"
                 >
                   <td className="px-4 py-3 font-medium">{item.title}</td>
                   <td className="px-4 py-3 text-muted">
@@ -452,7 +452,7 @@ function NewsletterEditor({
   }
 
   const selectClass =
-    'w-full rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'w-full rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
   const inputClass = selectClass
 
   return (
@@ -679,7 +679,7 @@ function NewsletterEditor({
         {/* Live-Vorschau */}
         <div className="xl:sticky xl:top-8 xl:self-start">
           <p className="mb-2 text-sm font-medium text-ink">Vorschau</p>
-          <div className="overflow-hidden rounded-lg border-[0.5px] border-line bg-white">
+          <div className="overflow-hidden rounded-lg border-[0.5px] border-line bg-surface">
             <iframe
               title="Newsletter-Vorschau"
               srcDoc={previewHtml}

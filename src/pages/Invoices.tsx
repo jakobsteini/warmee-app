@@ -164,7 +164,7 @@ export default function Invoices() {
                 <tr
                   key={inv.id}
                   onClick={() => navigate(`/invoices/${inv.id}`)}
-                  className="cursor-pointer border-t-[0.5px] border-line bg-white text-ink transition-colors hover:bg-card"
+                  className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                 >
                   <td className="px-4 py-3 font-medium">{inv.invoice_number}</td>
                   <td className="px-4 py-3">{inv.dealer?.name ?? '—'}</td>

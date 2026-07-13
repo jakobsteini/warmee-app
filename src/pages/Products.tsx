@@ -195,7 +195,7 @@ export default function Products() {
   }
 
   const inputClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
   const pillClass = (active: boolean) =>
     [
       'rounded-full px-4 py-1.5 text-sm transition-colors',
@@ -313,7 +313,7 @@ export default function Products() {
               {filtered.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-t-[0.5px] border-line bg-white text-ink"
+                  className="border-t-[0.5px] border-line bg-surface text-ink"
                 >
                   <td className="px-4 py-3 font-medium">{p.name}</td>
                   <td className="px-4 py-3 text-muted">

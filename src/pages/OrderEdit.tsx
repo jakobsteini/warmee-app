@@ -188,9 +188,9 @@ export default function OrderEdit() {
   }
 
   const inputClass =
-    'rounded-md border-[0.5px] border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+    'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
   const cellInput =
-    'w-full rounded-md border-[0.5px] border-line bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
+    'w-full rounded-md border-[0.5px] border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
 
   if (loading) return <p className="text-sm text-muted">Lädt…</p>
   if (!order)
@@ -277,7 +277,7 @@ export default function OrderEdit() {
           </thead>
           <tbody>
             {items.length === 0 ? (
-              <tr className="border-t-[0.5px] border-line bg-white">
+              <tr className="border-t-[0.5px] border-line bg-surface">
                 <td colSpan={7} className="px-3 py-6 text-center text-muted">
                   Noch keine Artikel. Unten hinzufügen.
                 </td>
@@ -288,7 +288,7 @@ export default function OrderEdit() {
                 return (
                   <tr
                     key={i.id}
-                    className="border-t-[0.5px] border-line bg-white text-ink"
+                    className="border-t-[0.5px] border-line bg-surface text-ink"
                   >
                     <td className="px-3 py-2 font-medium">
                       {i.product?.name ?? '—'}

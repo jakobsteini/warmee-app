@@ -16,7 +16,7 @@ interface EmptyStateProps {
 
 /**
  * Einheitlicher Leer-Zustand für alle Tabellen-Seiten: zentrierter Text plus
- * optionaler Button zum Anlegen. Text in #8A8178 (muted), Button in #1A1A1A (ink).
+ * optionaler Button zum Anlegen. Text im muted-Ton, Button in ink (Design-Tokens).
  */
 export default function EmptyState({
   children,

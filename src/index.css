@@ -2,13 +2,21 @@
 @import 'tailwindcss';
 
 @theme {
-  /* WARM ME Farbwelt */
-  --color-cream: #f9f8f6; /* Hintergrund, Off-White mit Wärme */
-  --color-ink: #1a1a1a; /* Text / Sidebar, Fast-Schwarz */
-  --color-muted: #8a8178; /* Sekundärtext, Warm-Grau */
-  --color-line: #c5bfba; /* Borders, Sanftes Warm-Grau */
-  --color-card: #f1efea; /* Cards / Stats, Helles Warm-Grau */
-  --color-nav: #9a9590; /* Inaktive Nav in der Sidebar */
+  /* ── WARM ME Farbwelt — Beige + Dunkelgrün ──────────────────────────────
+   * Token-Namen bewusst beibehalten (cream/ink/…), damit der Re-Theme über die
+   * Werte lückenlos greift; die Semantik ist unten je Token vermerkt.
+   * Kontraste (WCAG): ink↔cream ≈ 9,3:1 (AAA), muted auf cream ≈ 5:1 (AA),
+   * nav auf ink ≈ 4,6:1 (AA), accent auf ink ≈ 5,2:1 (AA). */
+  --color-cream: #e7e0d2; /* Beige — Haupt-Hintergrund UND helle Schrift auf Dunkelgrün */
+  --color-ink: #2b3a2d; /* Dunkelgrün — Text / Sidebar / primäre Buttons */
+  --color-muted: #5a6152; /* Sekundärtext — gedämpftes Oliv, auf Beige noch AA-lesbar */
+  --color-line: #cfc5b2; /* Borders / Haarlinien — weiches Beige-Grau */
+  --color-card: #efeadf; /* Karten / Stats / Tabellenkopf / Hover — helles warmes Beige */
+  --color-nav: #9da394; /* Inaktive Nav in der Sidebar — Salbei-Grau auf Dunkelgrün */
+
+  /* Neue Rollen */
+  --color-surface: #fbf9f4; /* Sehr helles Beige — Tabellen-/Karten-/Input-Flächen (Inhalt hebt sich vom Beige ab) */
+  --color-accent: #c9a17a; /* Cashmere-Tan — sparsamer Akzent (Wortmarke, Details) */
 
   --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
 }

@@ -200,7 +200,7 @@ export default function OpenPayments() {
             </thead>
             <tbody>
               {visible.length === 0 ? (
-                <tr className="border-t-[0.5px] border-line bg-white">
+                <tr className="border-t-[0.5px] border-line bg-surface">
                   <td
                     colSpan={7}
                     className="px-4 py-8 text-center text-sm text-muted"
@@ -214,7 +214,7 @@ export default function OpenPayments() {
                   return (
                     <tr
                       key={r.id}
-                      className="border-t-[0.5px] border-line bg-white text-ink"
+                      className="border-t-[0.5px] border-line bg-surface text-ink"
                     >
                       <td className="px-4 py-3 font-medium">
                         {r.invoice_number}

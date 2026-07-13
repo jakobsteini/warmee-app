@@ -16,7 +16,7 @@ export default function BarList({
   const max = rows.reduce((m, r) => Math.max(m, r.amount), 0)
 
   return (
-    <div className="rounded-md border-[0.5px] border-line bg-white px-5 py-4">
+    <div className="rounded-md border-[0.5px] border-line bg-surface px-5 py-4">
       <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted">
         {title}
       </h3>
