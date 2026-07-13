@@ -10,6 +10,54 @@ export interface Dealer {
   agent_id: string | null
   created_at: string | null
   updated_at: string | null
+
+  // ─── Echtdaten-Felder (FW26-Import), alle nullable ───────────────────────
+  /** Kundennummer. Import-Kunden behalten ihre echte Nummer; neue Händler
+   *  bekommen per DB-Sequence eine ab 92836. */
+  kundennummer: number | null
+  short_name: string | null
+  company_name: string | null
+  owner_name: string | null
+  /** Umsatzsteuer-Identifikationsnummer, z. B. "ATU61622989". */
+  uid: string | null
+  gegenkonto: number | null
+
+  /** Original-Zahlungskondition wie geliefert, z. B. "4,00%10T N30T". */
+  payment_terms_raw: string | null
+  /** Strukturierte Konditionen — werden erst in Schritt 3 (Geld-Logik) befüllt. */
+  skonto_prozent: number | string | null
+  skonto_tage: number | null
+  zahlungsziel_tage: number | null
+
+  // Lieferadresse (Excel: LS-*)
+  shipping_street: string | null
+  shipping_zip: string | null
+  shipping_city: string | null
+  shipping_country_code: string | null
+  shipping_country_name: string | null
+  shipping_phone: string | null
+  shipping_email: string | null
+  shipping_email2: string | null
+
+  // Rechnungsadresse (Excel: Re-*)
+  billing_name: string | null
+  billing_street: string | null
+  billing_zip: string | null
+  billing_city: string | null
+  billing_country_code: string | null
+  billing_country_name: string | null
+  billing_phone: string | null
+  billing_email: string | null
+
+  // Store-/POS-Adresse (Excel: Store Name, POS-*)
+  store_name: string | null
+  store_street: string | null
+  store_zip: string | null
+  store_city: string | null
+  store_country_code: string | null
+  store_country_name: string | null
+  store_phone: string | null
+  store_email: string | null
 }
 
 /**

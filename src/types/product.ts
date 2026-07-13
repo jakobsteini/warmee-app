@@ -6,12 +6,30 @@ export interface Product {
   category: string | null
   /** Mehrfarbig möglich (Postgres text[]). */
   color: string[] | null
-  /** Endkundenpreis; numeric(10,2) – kann als number oder string ankommen. */
+  /** Endkundenpreis (RTL); numeric(10,2) – kann als number oder string ankommen. */
   retail_price: number | string | null
-  /** Großhandelspreis; numeric(10,2). */
+  /** Großhandelspreis (WHS); numeric(10,2). */
   wholesale_price: number | string | null
+  /** Einkaufspreis (EK) vom Produzenten; numeric(10,2). Excel: "price shangrila". */
+  purchase_price: number | string | null
   season_id: string | null
   created_at: string | null
+
+  // ─── Artikelstamm SS27 (Import), alle nullable ───────────────────────────
+  /** Artikelbezeichnung des Produzenten (Excel: Style). */
+  style: string | null
+  /** Materialzusammensetzung, z. B. "100% cashmere". */
+  composition: string | null
+  /** Feinheit/Gauge, z. B. "14gg". */
+  gauge: string | null
+  /** Fachung, z. B. "1 ply". */
+  ply: string | null
+  /** Garnstärke, z. B. "42/2". */
+  yarn_count: string | null
+  /** Gewicht, z. B. "122gms". */
+  weight: string | null
+  /** Freitext-Notiz (Excel: NOTE). */
+  note: string | null
 }
 
 /** Felder zum Anlegen/Bearbeiten eines Produkts (org_id kommt aus dem Profil). */
