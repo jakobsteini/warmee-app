@@ -1,9 +1,6 @@
 import { jsPDF } from 'jspdf'
-import {
-  KLEINUNTERNEHMER_HINWEIS,
-  ZAHLUNGSZIEL_HINWEIS,
-  type Dealerish,
-} from '../types/invoice'
+import { ZAHLUNGSZIEL_HINWEIS, type Dealerish } from '../types/invoice'
+import { VAT_RATE_PERCENT } from './tax'
 
 /**
  * Absenderdaten für Belege. Zentral hier, damit Rechnung und Lieferschein
@@ -199,12 +196,16 @@ export interface InvoicePdfData {
   dueDate: string | null
   dealer: Dealerish
   items: BelegItem[]
+  /** Nettobetrag (Summe der Positionen ohne USt). */
   subtotal: number
+  /** Ausgewiesene Umsatzsteuer (20 % auf den Nettobetrag). */
+  tax: number
+  /** Bruttobetrag (Netto + USt). */
   total: number
   notes: string | null
 }
 
-/** Rechnung als PDF-Blob erzeugen (mit Preisen, Summen, Kleinunternehmer-Hinweis). */
+/** Rechnung als PDF-Blob erzeugen (mit Preisen und Steuerausweisung Netto/USt/Brutto). */
 export function buildInvoicePdf(data: InvoicePdfData): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
@@ -226,15 +227,15 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   y += 2
   doc.setFontSize(9.5)
   doc.setTextColor(90, 85, 80)
-  doc.text('Zwischensumme', right - 42, y)
+  doc.text('Nettobetrag', right - 42, y)
   doc.setTextColor(26, 26, 26)
   doc.text(eur(data.subtotal), right, y, { align: 'right' })
 
   y += 5
   doc.setTextColor(90, 85, 80)
-  doc.text('USt (0 %)', right - 42, y)
+  doc.text(`USt (${VAT_RATE_PERCENT} %)`, right - 42, y)
   doc.setTextColor(26, 26, 26)
-  doc.text(eur(0), right, y, { align: 'right' })
+  doc.text(eur(data.tax), right, y, { align: 'right' })
 
   y += 3
   doc.setDrawColor(26, 26, 26)
@@ -242,10 +243,12 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   y += 6
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.text('Gesamtsumme', right - 42, y)
+  // Label weiter links ansetzen — „Gesamtbetrag (brutto)" ist breiter als die
+  // Netto-/USt-Labels und würde sonst in den Betrag laufen.
+  doc.text('Gesamtbetrag (brutto)', right - 72, y)
   doc.text(eur(data.total), right, y, { align: 'right' })
 
-  // Zahlungsziel + Kleinunternehmer-Hinweis.
+  // Zahlungsziel.
   y += 12
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -254,11 +257,6 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
     ? `${ZAHLUNGSZIEL_HINWEIS} Fällig am ${deDate(data.dueDate)}.`
     : ZAHLUNGSZIEL_HINWEIS
   doc.text(dueText, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
-
-  y += 6
-  doc.setFont('helvetica', 'italic')
-  doc.setTextColor(90, 85, 80)
-  doc.text(KLEINUNTERNEHMER_HINWEIS, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
 
   if (data.notes) {
     y += 8

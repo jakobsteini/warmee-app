@@ -18,13 +18,6 @@ export function invoiceStatusLabel(status: string): string {
   return INVOICE_STATUS_LABELS[status as InvoiceStatus] ?? status
 }
 
-/**
- * Kleinunternehmer-Hinweis (Österreich). Steht auf jeder Rechnung, solange
- * keine USt ausgewiesen wird (tax_rate = 0).
- */
-export const KLEINUNTERNEHMER_HINWEIS =
-  'Umsatzsteuerbefreit gemäß § 6 Abs. 1 Z 27 UStG'
-
 /** Zahlungsziel in Tagen (14 Tage netto). */
 export const ZAHLUNGSZIEL_TAGE = 14
 

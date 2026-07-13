@@ -10,10 +10,10 @@ import {
 import { formatEUR } from '../lib/money'
 import {
   invoiceStatusLabel,
-  KLEINUNTERNEHMER_HINWEIS,
   ZAHLUNGSZIEL_HINWEIS,
   type InvoiceWithItems,
 } from '../types/invoice'
+import { VAT_RATE_PERCENT } from '../lib/tax'
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -253,7 +253,7 @@ export default function InvoiceEdit() {
           <tfoot>
             <tr className="border-t-[0.5px] border-line bg-white text-ink">
               <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
-                Zwischensumme
+                Nettobetrag
               </td>
               <td className="px-4 py-2.5 text-right whitespace-nowrap">
                 {formatEUR(invoice.subtotal)}
@@ -261,15 +261,15 @@ export default function InvoiceEdit() {
             </tr>
             <tr className="bg-white text-ink">
               <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
-                USt (0 %)
+                USt ({VAT_RATE_PERCENT} %)
               </td>
               <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                {formatEUR(0)}
+                {formatEUR(invoice.tax_amount)}
               </td>
             </tr>
             <tr className="border-t-[0.5px] border-line bg-card text-ink">
               <td colSpan={5} className="px-4 py-3 text-right font-medium">
-                Gesamtsumme
+                Gesamtbetrag (brutto)
               </td>
               <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                 {formatEUR(invoice.total)}
@@ -282,9 +282,6 @@ export default function InvoiceEdit() {
       <p className="mt-4 text-sm text-ink">
         {ZAHLUNGSZIEL_HINWEIS}
         {invoice.due_date && ` Fällig am ${formatDate(invoice.due_date)}.`}
-      </p>
-      <p className="mt-1 text-sm text-muted italic">
-        {KLEINUNTERNEHMER_HINWEIS}
       </p>
     </div>
   )

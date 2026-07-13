@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import type { BelegItem } from './pdf'
 import { ZAHLUNGSZIEL_TAGE } from '../types/invoice'
+import { VAT_RATE, applyVat } from './tax'
 import type {
   DeliveryNote,
   Dealerish,
@@ -245,8 +246,8 @@ export async function createDeliveryNote(
 
 /**
  * Rechnung aus einer Lieferung erzeugen: fortlaufende Nummer (YYYY-0001),
- * Positionen aus den Lieferpositionen (Großhandelspreis), Kleinunternehmer
- * (0 % USt). Die Nummer wird mit dem Datensatz sofort committet — auch wenn
+ * Positionen aus den Lieferpositionen (Großhandelspreis), Regelbesteuerung
+ * mit 20 % USt. Die Nummer wird mit dem Datensatz sofort committet — auch wenn
  * die PDF-Erzeugung fehlschlägt, entsteht keine Lücke.
  *
  * Wirft, wenn bereits eine aktive (nicht stornierte) Rechnung zur Lieferung
@@ -279,10 +280,9 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     (s, i) => s + i.quantity * i.wholesale_price,
     0,
   )
-  // Kleinunternehmer: keine USt.
-  const tax_rate = 0
-  const tax_amount = 0
-  const total = subtotal
+  // Regelbesteuerung: 20 % USt auf den Nettobetrag.
+  const tax_rate = VAT_RATE
+  const { tax: tax_amount, gross: total } = applyVat(subtotal)
 
   const { data: number, error: numErr } = await supabase.rpc(
     'next_invoice_number',
@@ -349,6 +349,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
       lineTotal: i.quantity * i.wholesale_price,
     })),
     subtotal,
+    tax: tax_amount,
     total,
     notes: null,
   })
@@ -393,6 +394,7 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
       lineTotal: num(i.line_total),
     })),
     subtotal: num(inv.subtotal),
+    tax: num(inv.tax_amount),
     total: num(inv.total),
     notes: inv.notes,
   })
