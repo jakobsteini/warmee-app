@@ -15,6 +15,39 @@ function formatDate(iso: string | null): string {
   })
 }
 
+/** Datum (ISO) als kurzes TT.MM. (für die kompakte Zahlungsspalte). */
+function formatDateShort(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+  })
+}
+
+/**
+ * Zahlungszelle: bei bezahlten Rechnungen Datum + Betrag als Badge, bei offenen
+ * (Entwurf/Versendet) der offene Betrag, bei stornierten nichts. Konsistent mit
+ * dem Zahlungsdialog (paid_at / paid_amount).
+ */
+function PaymentCell({ inv }: { inv: InvoiceListRow }) {
+  if (inv.status === 'paid') {
+    return (
+      <span className="inline-block whitespace-nowrap rounded-full bg-ink px-2.5 py-0.5 text-xs text-cream">
+        bezahlt am {formatDateShort(inv.paid_at)}
+        {inv.paid_amount != null && <> · {formatEUR(inv.paid_amount)}</>}
+      </span>
+    )
+  }
+  if (inv.status === 'cancelled') {
+    return <span className="text-xs text-muted">—</span>
+  }
+  return (
+    <span className="whitespace-nowrap text-xs text-muted">
+      offen: {formatEUR(inv.total)}
+    </span>
+  )
+}
+
 /** Farbige Status-Badge. */
 function StatusBadge({ status }: { status: string }) {
   const tone =
@@ -82,6 +115,7 @@ export default function Invoices() {
                 <th className="px-4 py-3 font-medium">Händler</th>
                 <th className="px-4 py-3 font-medium">Datum</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Zahlung</th>
                 <th className="px-4 py-3 text-right font-medium">Betrag</th>
               </tr>
             </thead>
@@ -99,6 +133,9 @@ export default function Invoices() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={inv.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <PaymentCell inv={inv} />
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     {formatEUR(inv.total)}

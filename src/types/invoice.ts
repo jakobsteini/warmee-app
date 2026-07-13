@@ -33,6 +33,10 @@ export interface Invoice {
   tax_amount: number | string
   total: number | string
   status: InvoiceStatus
+  /** Tatsächliches Zahlungsdatum (maßgebliche Quelle des Bezahlt-Zustands). */
+  paid_at: string | null
+  /** Gezahlter Bruttobetrag; numeric(10,2). Ohne Teilzahlungen = voller Betrag. */
+  paid_amount: number | string | null
   cancelled_by: string | null
   notes: string | null
   pdf_path: string | null

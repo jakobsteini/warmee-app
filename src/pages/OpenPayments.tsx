@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listOpenPayments } from '../lib/openPayments'
-import { setInvoiceStatus } from '../lib/invoices'
+import { markInvoicePaid } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
 import { addDaysIso } from '../lib/dates'
 import type { InvoiceListRow } from '../types/invoice'
 import EmptyState from '../components/EmptyState'
+import MarkPaidDialog from '../components/MarkPaidDialog'
 
 /** Heute als ISO-Kurzdatum (YYYY-MM-DD), für den Fälligkeitsvergleich. */
 function todayIso(): string {
@@ -55,7 +56,7 @@ export default function OpenPayments() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const [payingId, setPayingId] = useState<string | null>(null)
+  const [payRow, setPayRow] = useState<InvoiceListRow | null>(null)
 
   async function load() {
     setLoading(true)
@@ -73,24 +74,14 @@ export default function OpenPayments() {
     load()
   }, [])
 
-  async function handleMarkPaid(row: InvoiceListRow) {
-    if (
-      !window.confirm(
-        `Rechnung ${row.invoice_number} als bezahlt markieren?`,
-      )
-    )
-      return
-    setPayingId(row.id)
+  async function handleMarkPaid(paidAt: string, paidAmount: number) {
+    if (!payRow) return
+    const id = payRow.id
     setError(null)
-    try {
-      await setInvoiceStatus(row.id, 'paid')
-      // Bezahlte Rechnung ist kein offener Posten mehr → aus der Liste nehmen.
-      setRows((prev) => prev.filter((r) => r.id !== row.id))
-    } catch {
-      setError('Rechnung konnte nicht als bezahlt markiert werden.')
-    } finally {
-      setPayingId(null)
-    }
+    await markInvoicePaid(id, paidAt, paidAmount)
+    // Bezahlte Rechnung ist kein offener Posten mehr → aus der Liste nehmen.
+    setRows((prev) => prev.filter((r) => r.id !== id))
+    setPayRow(null)
   }
 
   // Summen über alle offenen Posten (unabhängig vom Filter).
@@ -217,13 +208,10 @@ export default function OpenPayments() {
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button
                           type="button"
-                          onClick={() => handleMarkPaid(r)}
-                          disabled={payingId === r.id}
-                          className="text-muted transition-colors hover:text-ink disabled:opacity-50"
+                          onClick={() => setPayRow(r)}
+                          className="text-muted transition-colors hover:text-ink"
                         >
-                          {payingId === r.id
-                            ? 'Speichert…'
-                            : 'Als bezahlt markieren'}
+                          Zahlung erfassen
                         </button>
                       </td>
                     </tr>
@@ -247,6 +235,15 @@ export default function OpenPayments() {
             </tfoot>
           </table>
         </div>
+      )}
+
+      {payRow && (
+        <MarkPaidDialog
+          invoiceNumber={payRow.invoice_number}
+          defaultAmount={num(payRow.total)}
+          onConfirm={handleMarkPaid}
+          onClose={() => setPayRow(null)}
+        />
       )}
     </div>
   )

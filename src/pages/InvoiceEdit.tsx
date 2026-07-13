@@ -3,12 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   cancelInvoice,
   getInvoice,
+  markInvoicePaid,
   regenerateInvoicePdf,
   setInvoiceStatus,
   signedPdfUrl,
 } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { invoiceStatusLabel, type InvoiceWithItems } from '../types/invoice'
+import MarkPaidDialog from '../components/MarkPaidDialog'
 import {
   VAT_RATE_PERCENT,
   computeSkonto,
@@ -33,6 +35,7 @@ export default function InvoiceEdit() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [payOpen, setPayOpen] = useState(false)
 
   async function load() {
     if (!id) return
@@ -68,17 +71,29 @@ export default function InvoiceEdit() {
     }
   }
 
-  async function handleStatus(next: 'sent' | 'paid') {
+  async function handleSend() {
     if (!invoice) return
     setBusy(true)
     try {
-      const updated = await setInvoiceStatus(invoice.id, next)
+      const updated = await setInvoiceStatus(invoice.id, 'sent')
       setInvoice({ ...invoice, status: updated.status })
     } catch {
       setError('Status konnte nicht geändert werden.')
     } finally {
       setBusy(false)
     }
+  }
+
+  async function handleMarkPaid(paidAt: string, paidAmount: number) {
+    if (!invoice) return
+    const updated = await markInvoicePaid(invoice.id, paidAt, paidAmount)
+    setInvoice({
+      ...invoice,
+      status: updated.status,
+      paid_at: updated.paid_at,
+      paid_amount: updated.paid_amount,
+    })
+    setPayOpen(false)
   }
 
   async function handleCancel() {
@@ -114,6 +129,7 @@ export default function InvoiceEdit() {
     )
 
   const isCancelled = invoice.status === 'cancelled'
+  const isPaid = invoice.status === 'paid'
   const canSend = invoice.status === 'draft'
   const canPay = invoice.status === 'sent'
   const canCancel = invoice.status === 'draft' || invoice.status === 'sent'
@@ -161,7 +177,7 @@ export default function InvoiceEdit() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => handleStatus('sent')}
+              onClick={handleSend}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               Als versendet markieren
@@ -171,10 +187,10 @@ export default function InvoiceEdit() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => handleStatus('paid')}
+              onClick={() => setPayOpen(true)}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Als bezahlt markieren
+              Zahlung erfassen
             </button>
           )}
           {canCancel && (
@@ -291,16 +307,36 @@ export default function InvoiceEdit() {
         </table>
       </div>
 
-      <p className="mt-4 text-sm text-ink">
-        Zahlbar innerhalb von {terms.zahlungsziel_tage} Tagen netto.
-        {invoice.due_date && ` Fällig am ${formatDate(invoice.due_date)}.`}
-      </p>
-      {skonto && (
-        <p className="mt-1 text-sm text-muted">
-          Bei Zahlung bis {formatDate(skontoDate)}: {terms.skonto_prozent} %
-          Skonto = {formatEUR(skonto.amount)} — Zahlbetrag{' '}
-          {formatEUR(skonto.payable)}.
-        </p>
+      {isPaid ? (
+        <div className="mt-4 rounded-md border-[0.5px] border-ink bg-card px-4 py-3 text-sm text-ink">
+          Bezahlt am {formatDate(invoice.paid_at)}
+          {invoice.paid_amount != null && (
+            <> · Betrag {formatEUR(invoice.paid_amount)}</>
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="mt-4 text-sm text-ink">
+            Zahlbar innerhalb von {terms.zahlungsziel_tage} Tagen netto.
+            {invoice.due_date && ` Fällig am ${formatDate(invoice.due_date)}.`}
+          </p>
+          {skonto && (
+            <p className="mt-1 text-sm text-muted">
+              Bei Zahlung bis {formatDate(skontoDate)}: {terms.skonto_prozent} %
+              Skonto = {formatEUR(skonto.amount)} — Zahlbetrag{' '}
+              {formatEUR(skonto.payable)}.
+            </p>
+          )}
+        </>
+      )}
+
+      {payOpen && (
+        <MarkPaidDialog
+          invoiceNumber={invoice.invoice_number}
+          defaultAmount={totalNum}
+          onConfirm={handleMarkPaid}
+          onClose={() => setPayOpen(false)}
+        />
       )}
     </div>
   )

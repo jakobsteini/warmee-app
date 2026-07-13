@@ -435,16 +435,38 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
 }
 
 /**
- * Rechnungs-Status setzen. Eine versendete/bezahlte Rechnung wird nicht mehr
- * inhaltlich geändert — erlaubt sind Entwurf → Versendet → Bezahlt.
+ * Rechnung als versendet markieren (Entwurf → Versendet). Für „bezahlt" gibt es
+ * einen eigenen Weg mit Datum und Betrag ({@link markInvoicePaid}), damit ein
+ * Zahlungseingang nie ohne diese Daten entsteht.
  */
 export async function setInvoiceStatus(
   id: string,
-  status: Extract<InvoiceStatus, 'sent' | 'paid'>,
+  status: Extract<InvoiceStatus, 'sent'>,
 ): Promise<Invoice> {
   const { data, error } = await supabase
     .from('invoices')
     .update({ status })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Invoice
+}
+
+/**
+ * Zahlungseingang erfassen: Rechnung mit Zahlungsdatum und -betrag als bezahlt
+ * markieren. paid_at ist die maßgebliche Quelle des Bezahlt-Zustands; status
+ * wird synchron auf 'paid' gesetzt (Badges/Listen hängen daran). Keine
+ * Teilzahlungen — ein Datum + ein Betrag je Rechnung.
+ */
+export async function markInvoicePaid(
+  id: string,
+  paidAt: string,
+  paidAmount: number,
+): Promise<Invoice> {
+  const { data, error } = await supabase
+    .from('invoices')
+    .update({ status: 'paid', paid_at: paidAt, paid_amount: paidAmount })
     .eq('id', id)
     .select()
     .single()
