@@ -132,7 +132,7 @@ export default function BrandEntryOverlay({
 
       {/* ─── Mitarbeiter-Auswahl (über dem expandierten WARM ME) ─────────── */}
       {phase === 'employees' && (
-        <div className="emp-layer absolute inset-0 flex flex-col items-center justify-center bg-surface px-6">
+        <div className="emp-layer absolute inset-0 flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-surface px-6 py-16">
           <button
             type="button"
             onClick={() => setPhase('brands')}
@@ -141,13 +141,13 @@ export default function BrandEntryOverlay({
             ← {t('entry.back')}
           </button>
 
-          <h2 className="emp-head mb-10 text-lg font-medium uppercase tracking-[4px] text-ink">
+          <h2 className="emp-head mb-14 text-lg font-medium uppercase tracking-[4px] text-ink">
             {t('entry.who')}
           </h2>
 
           {/* Admins */}
           <SectionLabel delay={120}>{t('entry.admins')}</SectionLabel>
-          <div className="mb-9 flex flex-wrap justify-center gap-7">
+          <div className="mb-14 flex flex-wrap justify-center gap-x-12 gap-y-10">
             {admins.map((e, i) => (
               <PersonCard
                 key={e.id}
@@ -163,7 +163,7 @@ export default function BrandEntryOverlay({
           <SectionLabel delay={120 + admins.length * 80}>
             {t('entry.team')}
           </SectionLabel>
-          <div className="flex max-w-2xl flex-wrap justify-center gap-7">
+          <div className="flex max-w-3xl flex-wrap justify-center gap-x-12 gap-y-10">
             {team.map((e, i) => (
               <PersonCard
                 key={e.id}
@@ -280,7 +280,7 @@ function SectionLabel({
 }) {
   return (
     <p
-      className="card-in mb-4 text-[11px] uppercase tracking-wider text-muted"
+      className="card-in mb-6 text-[11px] uppercase tracking-wider text-muted"
       style={{ animationDelay: `${delay}ms` }}
     >
       {children}
@@ -308,16 +308,16 @@ function PersonCard({
       style={{ animationDelay: `${180 + index * 80}ms` }}
     >
       <span
-        className="card-avatar flex h-16 w-16 items-center justify-center rounded-full bg-card text-lg font-medium text-ink shadow-sm"
+        className="card-avatar flex h-[clamp(92px,24vw,120px)] w-[clamp(92px,24vw,120px)] items-center justify-center rounded-full bg-card text-[clamp(1.75rem,6vw,2.25rem)] font-medium text-ink shadow-sm"
         style={
           gold
-            ? { border: `2px solid ${GOLD}` }
-            : { border: '0.5px solid var(--color-line)' }
+            ? { border: `3px solid ${GOLD}` }
+            : { border: '1px solid var(--color-line)' }
         }
       >
         {initials(employee.name)}
       </span>
-      <span className="text-sm text-ink">{employee.name}</span>
+      <span className="text-base text-ink">{employee.name}</span>
     </button>
   )
 }
