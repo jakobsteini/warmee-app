@@ -5,8 +5,14 @@ import { useT } from '../i18n'
 /** Gold-Akzent für Admin-Karten (dezent, außerhalb der Theme-Tokens). */
 const GOLD = '#c9a227'
 
-/** Öffentlicher Pfad des WARM-ME-Logos (liegt in public/, per Root-URL geladen). */
+/** Öffentliche Logo-Pfade (liegen in public/, per Root-URL geladen). */
 const WARM_ME_LOGO = '/warm_me_logo.png'
+/** Swap-ready: sobald public/rwav_logo.png existiert, ersetzt es den Platzhalter. */
+const RWAV_LOGO = '/rwav_logo.png'
+
+/** Einheitliche, große Logo-Fläche (responsiv). Transparenter Hintergrund. */
+const LOGO_SIZE =
+  'h-[clamp(140px,18vw,200px)] w-[clamp(140px,18vw,200px)] object-contain'
 
 type Phase = 'brands' | 'employees'
 
@@ -39,6 +45,7 @@ export default function BrandEntryOverlay({
   const [phase, setPhase] = useState<Phase>('brands')
   const [closing, setClosing] = useState(false)
   const [logoError, setLogoError] = useState(false)
+  const [rwavLogoError, setRwavLogoError] = useState(false)
 
   const admins = EMPLOYEES.filter((e) => e.is_admin)
   const team = EMPLOYEES.filter((e) => !e.is_admin)
@@ -54,13 +61,13 @@ export default function BrandEntryOverlay({
   return (
     <div
       className={[
-        'ov-root fixed inset-0 z-50 overflow-hidden bg-surface',
+        'ov-root fixed inset-0 z-50 overflow-hidden bg-cream',
         closing ? 'ov-closing' : '',
       ].join(' ')}
       role="dialog"
       aria-modal="true"
     >
-      {/* ─── Marken-Split ───────────────────────────────────────────────── */}
+      {/* ─── Marken-Split (kein harter Trennbalken) ─────────────────────── */}
       <div className="flex h-full w-full">
         {/* WARM ME – klickbar, expandiert in Phase "employees" */}
         <button
@@ -68,14 +75,14 @@ export default function BrandEntryOverlay({
           onClick={() => isBrands && setPhase('employees')}
           disabled={!isBrands}
           aria-label="WARM ME"
-          className="brand-btn group relative flex h-full flex-col items-center justify-center border-r-[0.5px] border-line focus:outline-none"
+          className="brand-btn group relative flex h-full flex-col items-center justify-center focus:outline-none"
           style={{
             width: isBrands ? '50%' : '100%',
             transition: 'width 820ms cubic-bezier(0.65, 0, 0.35, 1)',
           }}
         >
-          <div className="ov-in-left flex flex-col items-center gap-6 px-8">
-            {/* Hover-Skalierung außen, „Atmen" innen (getrennte Ebenen). */}
+          <div className="ov-in-left flex flex-col items-center gap-7 px-8">
+            {/* Hover-Skalierung außen, „Atmen" innen (getrennte, transparente Ebenen). */}
             <div className="hoverlift">
               <div className="breathe">
                 {logoError ? (
@@ -85,7 +92,7 @@ export default function BrandEntryOverlay({
                     src={WARM_ME_LOGO}
                     alt="WARM ME"
                     onError={() => setLogoError(true)}
-                    className="h-32 w-32 select-none object-contain"
+                    className={`${LOGO_SIZE} select-none`}
                     draggable={false}
                   />
                 )}
@@ -105,7 +112,7 @@ export default function BrandEntryOverlay({
         <div
           aria-label="Room With A View"
           aria-disabled="true"
-          className="relative flex h-full flex-col items-center justify-center bg-card/40"
+          className="relative flex h-full flex-col items-center justify-center"
           style={{
             width: isBrands ? '50%' : '0%',
             opacity: isBrands ? 1 : 0,
@@ -115,13 +122,25 @@ export default function BrandEntryOverlay({
               'width 820ms cubic-bezier(0.65, 0, 0.35, 1), opacity 620ms ease, transform 820ms cubic-bezier(0.65, 0, 0.35, 1), filter 620ms ease',
           }}
         >
-          <div className="ov-in-right flex select-none flex-col items-center gap-6 px-8 opacity-60">
-            <LogoSlot label="rwav_logo" hint={t('entry.logoHint')} />
+          <div className="ov-in-right flex select-none flex-col items-center gap-7 px-8">
+            <div className="opacity-70">
+              {rwavLogoError ? (
+                <LogoSlot label="rwav_logo" hint={t('entry.logoHint')} />
+              ) : (
+                <img
+                  src={RWAV_LOGO}
+                  alt="Room With A View"
+                  onError={() => setRwavLogoError(true)}
+                  className={`${LOGO_SIZE} select-none`}
+                  draggable={false}
+                />
+              )}
+            </div>
             <span className="whitespace-nowrap text-sm font-medium uppercase tracking-[6px] text-muted">
               Room With A View
             </span>
             <span
-              className="mt-1 rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider"
+              className="rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider"
               style={{ borderColor: GOLD, color: GOLD }}
             >
               {t('entry.comingSoon')}
@@ -130,9 +149,23 @@ export default function BrandEntryOverlay({
         </div>
       </div>
 
+      {/* ─── Leuchtender grüner Mittelstrich (nur in der Marken-Phase) ───── */}
+      {isBrands && (
+        <div
+          className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2"
+          aria-hidden="true"
+        >
+          <div className="relative h-full w-6">
+            <span className="divider-glow-2" />
+            <span className="divider-glow-1" />
+            <span className="divider-core" />
+          </div>
+        </div>
+      )}
+
       {/* ─── Mitarbeiter-Auswahl (über dem expandierten WARM ME) ─────────── */}
       {phase === 'employees' && (
-        <div className="emp-layer absolute inset-0 flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-surface px-6 py-16">
+        <div className="emp-layer absolute inset-0 flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-surface px-6 py-12">
           <button
             type="button"
             onClick={() => setPhase('brands')}
@@ -141,13 +174,13 @@ export default function BrandEntryOverlay({
             ← {t('entry.back')}
           </button>
 
-          <h2 className="emp-head mb-14 text-lg font-medium uppercase tracking-[4px] text-ink">
+          <h2 className="emp-head mb-12 text-lg font-medium uppercase tracking-[4px] text-ink">
             {t('entry.who')}
           </h2>
 
           {/* Admins */}
           <SectionLabel delay={120}>{t('entry.admins')}</SectionLabel>
-          <div className="mb-14 flex flex-wrap justify-center gap-x-12 gap-y-10">
+          <div className="mb-12 flex flex-wrap justify-center gap-x-12 gap-y-10">
             {admins.map((e, i) => (
               <PersonCard
                 key={e.id}
@@ -163,7 +196,7 @@ export default function BrandEntryOverlay({
           <SectionLabel delay={120 + admins.length * 80}>
             {t('entry.team')}
           </SectionLabel>
-          <div className="flex max-w-3xl flex-wrap justify-center gap-x-12 gap-y-10">
+          <div className="flex w-full max-w-md flex-wrap justify-center gap-x-12 gap-y-10 md:max-w-xl lg:max-w-5xl">
             {team.map((e, i) => (
               <PersonCard
                 key={e.id}
@@ -246,10 +279,41 @@ export default function BrandEntryOverlay({
         }
         .card-btn:hover .card-avatar { transform: translateY(-6px) scale(1.05); }
 
+        /* Leuchtender grüner Mittelstrich: Kern + zwei weiche Glow-Ebenen.
+           Enden laufen über den vertikalen Verlauf weich zu transparent aus. */
+        .divider-core, .divider-glow-1, .divider-glow-2 {
+          position: absolute; top: 0; bottom: 0; left: 50%;
+          transform: translateX(-50%);
+        }
+        .divider-core {
+          width: 2px; border-radius: 2px;
+          background: linear-gradient(to bottom,
+            transparent 0%, #2b3a2d 16%, #2b3a2d 84%, transparent 100%);
+        }
+        .divider-glow-1 {
+          width: 5px;
+          background: linear-gradient(to bottom,
+            transparent 4%, rgba(76,111,82,0.85) 20%, rgba(76,111,82,0.85) 80%, transparent 96%);
+          filter: blur(5px);
+          animation: dividerPulse 4.6s ease-in-out infinite;
+        }
+        .divider-glow-2 {
+          width: 16px;
+          background: linear-gradient(to bottom,
+            transparent 8%, rgba(96,131,101,0.5) 26%, rgba(96,131,101,0.5) 74%, transparent 92%);
+          filter: blur(16px);
+          animation: dividerPulse 4.6s ease-in-out infinite;
+        }
+        @keyframes dividerPulse {
+          0%, 100% { opacity: 0.45; }
+          50%      { opacity: 0.95; }
+        }
+
         /* Reduzierte Bewegung: keine großen Bewegungen, alles ruhig einblenden */
         @media (prefers-reduced-motion: reduce) {
           .ov-root, .ov-closing, .ov-in-left, .ov-in-right, .breathe,
-          .emp-layer, .emp-back, .emp-head, .card-in {
+          .emp-layer, .emp-back, .emp-head, .card-in,
+          .divider-glow-1, .divider-glow-2 {
             animation: none !important;
           }
           .hoverlift, .tintlayer, .card-avatar { transition: none !important; }
@@ -264,7 +328,7 @@ export default function BrandEntryOverlay({
 /** Platzhalter-Slot für ein späteres Logo (kein nachgezeichnetes Logo). */
 function LogoSlot({ label, hint }: { label: string; hint: string }) {
   return (
-    <div className="flex h-32 w-32 flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
+    <div className="flex h-[clamp(140px,18vw,200px)] w-[clamp(140px,18vw,200px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
       <span className="font-mono text-[11px] text-muted">{label}</span>
       <span className="mt-0.5 text-[10px] text-muted/70">{hint}</span>
     </div>
@@ -280,7 +344,7 @@ function SectionLabel({
 }) {
   return (
     <p
-      className="card-in mb-6 text-[11px] uppercase tracking-wider text-muted"
+      className="card-in mb-5 text-[11px] uppercase tracking-wider text-muted"
       style={{ animationDelay: `${delay}ms` }}
     >
       {children}
