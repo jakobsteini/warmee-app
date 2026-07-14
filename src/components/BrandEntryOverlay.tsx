@@ -1,25 +1,25 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { EMPLOYEES, initials, type Employee } from '../lib/employees'
 import { useT } from '../i18n'
 
-/** Gold-Akzent für Admin-Karten (dezent, außerhalb der Theme-Tokens). */
-const GOLD = '#c9a227'
+/** Badge-Farbe: warmes Hell-Creme, gut lesbar auf Dunkelgrün. */
+const BADGE = '#e8ddc0'
 
-/** Öffentliche Logo-Pfade (liegen in public/, per Root-URL geladen). */
+/** Öffentliche Logo-Pfade (liegen in public/, per Root-URL geladen, RGBA). */
 const WARM_ME_LOGO = '/warm_me_logo.png'
-/** Swap-ready: sobald public/rwav_logo.png existiert, ersetzt es den Platzhalter. */
 const RWAV_LOGO = '/rwav_logo.png'
 
-/** Einheitliche Logo-Größe: beide Dateien haben nun dieselbe quadratische
- *  Leinwand + denselben Rand, daher keine Sonderbehandlung mehr nötig. */
-const LOGO_SIZE =
-  'h-[clamp(200px,26vw,290px)] w-[clamp(200px,26vw,290px)] object-contain'
+/** Einheitliche Logo-Maße (beide Dateien: gleiche quadratische Leinwand). */
+const LOGO_DIM = 'h-[clamp(200px,26vw,290px)] w-[clamp(200px,26vw,290px)]'
 /** Feste Höhe der Logo-Reihe – hält beide Logos exakt auf einer Achse. */
 const LOGO_ROW = 'h-[clamp(200px,26vw,290px)]'
 
-type Phase = 'brands' | 'employees'
+type Phase = 'brands' | 'employees' | 'rwavSoon'
+type Zoom = null | 'warm' | 'rwav'
 
-/** Prüft einmalig, ob der Nutzer reduzierte Bewegung wünscht. */
+/** Dauer des Zoom-Through in ms (edel, weich). */
+const ZOOM_MS = 900
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -28,16 +28,12 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Vollbild-Einstiegs-Overlay: Zwei-Marken-Split (WARM ME klickbar, Room With A
- * View gesperrt) → gestaffelte Mitarbeiter-Auswahl. Rein visuelle Persona-Geste
- * ohne Rechteprüfung.
- *
- * Bewegungssprache (konsistent, GPU-freundlich – nur transform/opacity/filter,
- * Ausnahme: der strukturelle Split animiert width):
- *   – Auftritt (ease-out):      cubic-bezier(0.22, 0.61, 0.36, 1)
- *   – Split (weiches ease-in-out): cubic-bezier(0.65, 0, 0.35, 1)
- *   – Ruhe-„Atmen" des Logos:   6 s, kaum merklich
- * prefers-reduced-motion schaltet alle Animationen/Transitions ab (siehe <style>).
+ * Vollbild-Einstiegs-Overlay: Split Beige/Dunkelgrün (WARM ME links, Room With
+ * A View rechts) mit weichem Farbverlauf als Grenze. Klick auf ein Logo löst
+ * einen „Zoom-Through" aus, der nahtlos in den Mitarbeiter-Screen (WARM ME) bzw.
+ * den „kommt bald"-Zustand (RWAV) übergeht. Rein visuelle Persona-Geste ohne
+ * Rechteprüfung. prefers-reduced-motion deaktiviert die großen Bewegungen und
+ * navigiert direkt (siehe <style> + Handler).
  */
 export default function BrandEntryOverlay({
   onSelect,
@@ -46,20 +42,33 @@ export default function BrandEntryOverlay({
 }) {
   const t = useT()
   const [phase, setPhase] = useState<Phase>('brands')
+  const [zoom, setZoom] = useState<Zoom>(null)
   const [closing, setClosing] = useState(false)
   const [logoError, setLogoError] = useState(false)
-  const [rwavLogoError, setRwavLogoError] = useState(false)
 
   const admins = EMPLOYEES.filter((e) => e.is_admin)
   const team = EMPLOYEES.filter((e) => !e.is_admin)
+
+  /** Zoom-Through starten, dann (nach Abschluss) in die Zielansicht wechseln. */
+  function enter(side: 'warm' | 'rwav') {
+    if (zoom || phase !== 'brands') return
+    const target: Phase = side === 'warm' ? 'employees' : 'rwavSoon'
+    if (prefersReducedMotion()) {
+      setPhase(target)
+      return
+    }
+    setZoom(side)
+    window.setTimeout(() => {
+      setPhase(target)
+      setZoom(null)
+    }, ZOOM_MS)
+  }
 
   function choose(employee: Employee) {
     setClosing(true)
     const delay = prefersReducedMotion() ? 0 : 460
     window.setTimeout(() => onSelect(employee), delay)
   }
-
-  const isBrands = phase === 'brands'
 
   return (
     <div
@@ -70,121 +79,99 @@ export default function BrandEntryOverlay({
       role="dialog"
       aria-modal="true"
     >
-      {/* ─── Marken-Split (kein harter Trennbalken) ─────────────────────── */}
-      <div className="flex h-full w-full">
-        {/* WARM ME – klickbar, expandiert in Phase "employees" */}
-        <button
-          type="button"
-          onClick={() => isBrands && setPhase('employees')}
-          disabled={!isBrands}
-          aria-label="WARM ME"
-          className="brand-btn group relative flex h-full flex-col items-center justify-center focus:outline-none"
-          style={{
-            width: isBrands ? '50%' : '100%',
-            transition: 'width 820ms cubic-bezier(0.65, 0, 0.35, 1)',
-          }}
-        >
-          <div className="ov-in-left flex flex-col items-center gap-6 px-8">
-            {/* Feste Logo-Reihe: Logo vertikal zentriert → gemeinsame Achse mit RWAV. */}
-            <div className={`flex ${LOGO_ROW} items-center justify-center`}>
-              {/* Hover-Skalierung außen, „Atmen" innen (transparente Ebenen, kein Kasten). */}
-              <div className="hoverlift">
-                <div className="breathe">
-                  {logoError ? (
-                    <LogoSlot label="warm_me_logo" hint={t('entry.logoHint')} />
-                  ) : (
-                    <img
-                      src={WARM_ME_LOGO}
-                      alt="WARM ME"
-                      onError={() => setLogoError(true)}
-                      className={`${LOGO_SIZE} select-none`}
-                      draggable={false}
-                    />
-                  )}
+      {/* Hintergrund: EIN weicher Beige→Dunkelgrün-Verlauf (keine Kante, keine
+          zwei getrennt eingefärbten Hälften → keine Naht). */}
+      {phase === 'brands' && (
+        <div
+          className={[
+            'split-bg absolute inset-0',
+            zoom === 'warm' ? 'bg-out' : '',
+          ].join(' ')}
+          aria-hidden="true"
+        />
+      )}
+      {/* RWAV-Zoom: Dunkelgrün dehnt sich über den ganzen Screen. */}
+      {zoom === 'rwav' && (
+        <div className="green-in absolute inset-0 bg-ink" aria-hidden="true" />
+      )}
+
+      {/* ─── Marken-Split ───────────────────────────────────────────────── */}
+      {phase === 'brands' && (
+        <div className="relative flex h-full w-full flex-col md:flex-row">
+          {/* WARM ME */}
+          <button
+            type="button"
+            onClick={() => enter('warm')}
+            aria-label="WARM ME"
+            className={[
+              'brand-btn group relative flex flex-1 items-center justify-center focus:outline-none',
+              zoom === 'rwav' ? 'recede' : '',
+            ].join(' ')}
+          >
+            <div className="ov-in-left flex flex-col items-center gap-6 px-8">
+              <div
+                className={[
+                  'flex items-center justify-center',
+                  LOGO_ROW,
+                  zoom === 'warm' ? 'zoom-through' : '',
+                ].join(' ')}
+              >
+                <div className="hoverlift">
+                  <div className="breathe">
+                    {logoError ? (
+                      <LogoSlot label="warm_me_logo" hint={t('entry.logoHint')} />
+                    ) : (
+                      <img
+                        src={WARM_ME_LOGO}
+                        alt="WARM ME"
+                        onError={() => setLogoError(true)}
+                        className={`${LOGO_DIM} select-none object-contain`}
+                        draggable={false}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
+              {/* Unsichtbarer Platzhalter in Badge-Höhe → Logos auf einer Achse. */}
+              <BadgeChip invisible>{t('entry.comingSoon')}</BadgeChip>
             </div>
-            <span className="text-sm font-medium uppercase tracking-[6px] text-ink">
-              WARM ME
-            </span>
-            {/* Unsichtbarer Platzhalter in Höhe des „kommt bald"-Badges → gleiche
-                Baseline wie RWAV, ohne die Ausrichtung zu verschieben. */}
-            <span
-              aria-hidden="true"
-              className="invisible rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider"
-            >
-              {t('entry.comingSoon')}
-            </span>
-          </div>
-          {/* Sehr dezenter Hover-Tint nur in der Marken-Phase */}
-          {isBrands && (
-            <span className="tintlayer pointer-events-none absolute inset-0" />
-          )}
-        </button>
+          </button>
 
-        {/* Room With A View – gesperrt, blendet mit Scale+Blur weich aus */}
-        <div
-          aria-label="Room With A View"
-          aria-disabled="true"
-          className="relative flex h-full flex-col items-center justify-center"
-          style={{
-            width: isBrands ? '50%' : '0%',
-            opacity: isBrands ? 1 : 0,
-            transform: isBrands ? undefined : 'scale(0.94)',
-            filter: isBrands ? undefined : 'blur(6px)',
-            transition:
-              'width 820ms cubic-bezier(0.65, 0, 0.35, 1), opacity 620ms ease, transform 820ms cubic-bezier(0.65, 0, 0.35, 1), filter 620ms ease',
-          }}
-        >
-          <div className="ov-in-right flex select-none flex-col items-center gap-6 px-8">
-            {/* Gleiche feste Logo-Reihe wie WARM ME → Logos auf einer Achse. */}
-            <div className={`flex ${LOGO_ROW} items-center justify-center`}>
-              <div className="opacity-70">
-                {rwavLogoError ? (
-                  <LogoSlot label="rwav_logo" hint={t('entry.logoHint')} />
-                ) : (
-                  <img
-                    src={RWAV_LOGO}
-                    alt="Room With A View"
-                    onError={() => setRwavLogoError(true)}
-                    className={`${LOGO_SIZE} select-none`}
-                    draggable={false}
-                  />
-                )}
+          {/* Room With A View */}
+          <button
+            type="button"
+            onClick={() => enter('rwav')}
+            aria-label="Room With A View"
+            className={[
+              'brand-btn group relative flex flex-1 items-center justify-center focus:outline-none',
+              zoom === 'warm' ? 'recede' : '',
+            ].join(' ')}
+          >
+            <div className="ov-in-right flex flex-col items-center gap-6 px-8">
+              <div
+                className={[
+                  'flex items-center justify-center',
+                  LOGO_ROW,
+                  zoom === 'rwav' ? 'zoom-through' : '',
+                ].join(' ')}
+              >
+                <div className="hoverlift">
+                  <div className="breathe">
+                    <RwavLogo />
+                  </div>
+                </div>
+              </div>
+              <div className={zoom === 'rwav' ? 'zoom-fade' : ''}>
+                <BadgeChip>{t('entry.comingSoon')}</BadgeChip>
               </div>
             </div>
-            <span className="whitespace-nowrap text-sm font-medium uppercase tracking-[6px] text-muted">
-              Room With A View
-            </span>
-            <span
-              className="rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider"
-              style={{ borderColor: GOLD, color: GOLD }}
-            >
-              {t('entry.comingSoon')}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── Leuchtender grüner Mittelstrich (nur in der Marken-Phase) ───── */}
-      {isBrands && (
-        <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          aria-hidden="true"
-        >
-          {/* Auf ~68% der Höhe begrenzt, an beiden Enden weicher Verlauf zu transparent. */}
-          <div className="relative h-[68%] w-10">
-            <span className="divider-glow-3" />
-            <span className="divider-glow-2" />
-            <span className="divider-glow-1" />
-            <span className="divider-core" />
-          </div>
+          </button>
         </div>
       )}
 
-      {/* ─── Mitarbeiter-Auswahl (über dem expandierten WARM ME) ─────────── */}
+      {/* ─── Mitarbeiter-Auswahl (nahtlos aus dem Beige) ─────────────────── */}
       {phase === 'employees' && (
-        <div className="emp-layer absolute inset-0 flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-surface px-6 py-12">
+        <div className="emp-layer absolute inset-0 flex min-h-screen flex-col items-center justify-center overflow-y-auto bg-cream px-6 py-12">
           <button
             type="button"
             onClick={() => setPhase('brands')}
@@ -198,7 +185,7 @@ export default function BrandEntryOverlay({
           </h2>
 
           {/* Admins */}
-          <SectionLabel delay={120}>{t('entry.admins')}</SectionLabel>
+          <SectionLabel delay={40}>{t('entry.admins')}</SectionLabel>
           <div className="mb-12 flex flex-wrap justify-center gap-x-12 gap-y-10">
             {admins.map((e, i) => (
               <PersonCard
@@ -212,7 +199,7 @@ export default function BrandEntryOverlay({
           </div>
 
           {/* Team */}
-          <SectionLabel delay={120 + admins.length * 80}>
+          <SectionLabel delay={60 + admins.length * 50}>
             {t('entry.team')}
           </SectionLabel>
           <div className="flex w-full max-w-md flex-wrap justify-center gap-x-12 gap-y-10 md:max-w-xl lg:max-w-5xl">
@@ -228,15 +215,44 @@ export default function BrandEntryOverlay({
         </div>
       )}
 
+      {/* ─── RWAV „kommt bald"-Zustand (Dunkelgrün) ──────────────────────── */}
+      {phase === 'rwavSoon' && (
+        <div className="emp-layer absolute inset-0 flex flex-col items-center justify-center bg-ink px-6 text-cream">
+          <button
+            type="button"
+            onClick={() => setPhase('brands')}
+            className="absolute left-6 top-6 text-sm text-cream/70 transition-colors duration-300 hover:text-cream"
+          >
+            ← {t('entry.back')}
+          </button>
+          <RwavLogo />
+          <div className="mt-8">
+            <BadgeChip>{t('entry.comingSoon')}</BadgeChip>
+          </div>
+        </div>
+      )}
+
       {/* Komponenten-lokale Keyframes, Hover-Regeln + Reduced-Motion-Fallback. */}
       <style>{`
-        /* Auftritt des gesamten Overlays */
+        /* Weicher Beige→Dunkelgrün-Verlauf (Grenze ~20% der Breite, keine Linie) */
+        .split-bg {
+          background: linear-gradient(to right,
+            var(--color-cream) 0%, var(--color-cream) 40%,
+            var(--color-ink) 60%, var(--color-ink) 100%);
+        }
+        @media (max-width: 767px) {
+          .split-bg {
+            background: linear-gradient(to bottom,
+              var(--color-cream) 0%, var(--color-cream) 42%,
+              var(--color-ink) 58%, var(--color-ink) 100%);
+          }
+        }
+
+        /* Auftritt des Overlays + erstes Erscheinen der Hälften */
         @keyframes ovRoot { from { opacity: 0; } to { opacity: 1; } }
         @keyframes ovClose { from { opacity: 1; } to { opacity: 0; } }
         .ov-root { animation: ovRoot 560ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
         .ov-closing { animation: ovClose 460ms cubic-bezier(0.65, 0, 0.35, 1) forwards; }
-
-        /* Gestaffelter Auftritt der beiden Markenhälften (Slide + Fade + micro-scale) */
         @keyframes inFromLeft {
           from { opacity: 0; transform: translateX(-24px) scale(0.985); }
           to   { opacity: 1; transform: none; }
@@ -251,100 +267,71 @@ export default function BrandEntryOverlay({
         /* WARM-ME-Kreis: sehr langsames, kaum merkliches „Atmen" */
         @keyframes breathe {
           0%, 100% { transform: scale(1); }
-          50%      { transform: scale(1.025); }
+          50%      { transform: scale(1.02); }
         }
         .breathe { animation: breathe 6s ease-in-out infinite; will-change: transform; }
 
-        /* Hover: edle Mikro-Anhebung + weicher Schatten; „Atmen" pausiert */
+        /* Dezenter Hover: leichtes Scale-up */
         .hoverlift {
-          transition: transform 780ms cubic-bezier(0.22, 0.61, 0.36, 1),
-                      filter   780ms cubic-bezier(0.22, 0.61, 0.36, 1);
+          transition: transform 620ms cubic-bezier(0.22, 0.61, 0.36, 1);
           will-change: transform;
         }
-        .brand-btn:hover .hoverlift {
-          transform: scale(1.06);
-          filter: drop-shadow(0 12px 26px rgba(43, 58, 45, 0.18));
-        }
+        .brand-btn:hover .hoverlift { transform: scale(1.05); }
         .brand-btn:hover .breathe { animation-play-state: paused; }
 
-        /* Hover-Tint (opacity-only, GPU-freundlich) */
-        .tintlayer {
-          background: var(--color-ink);
-          opacity: 0;
-          transition: opacity 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
+        /* Zoom-Through: gewähltes Logo skaliert über den Viewport, blendet aus */
+        @keyframes zoomThrough {
+          0%   { transform: scale(1);  opacity: 1; }
+          65%  { opacity: 1; }
+          100% { transform: scale(16); opacity: 0; }
         }
-        .brand-btn:hover .tintlayer { opacity: 0.04; }
+        .zoom-through {
+          animation: zoomThrough ${ZOOM_MS}ms cubic-bezier(0.7, 0, 0.3, 1) forwards;
+          transform-origin: center;
+          will-change: transform, opacity;
+        }
+        /* Andere Hälfte weicht zurück; Badge der gewählten Seite blendet aus */
+        @keyframes recede {
+          from { transform: scale(1); opacity: 1; }
+          to   { transform: scale(0.86); opacity: 0; }
+        }
+        .recede { animation: recede 680ms cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+        @keyframes fadeOut { to { opacity: 0; } }
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        .zoom-fade { animation: fadeOut 280ms ease forwards; }
+        .bg-out    { animation: fadeOut 640ms ease forwards; }
+        .green-in  { animation: fadeIn  620ms ease forwards; }
 
-        /* Mitarbeiter-Ebene + Kopf/Labels */
+        /* Mitarbeiter-Screen: Kopf/Labels dezent, Avatare als schnelle Welle */
         @keyframes empLayer { from { opacity: 0; } to { opacity: 1; } }
-        .emp-layer { animation: empLayer 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+        .emp-layer { animation: empLayer 360ms ease both; }
         @keyframes riseIn {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: none; }
         }
-        .emp-back { animation: riseIn 560ms cubic-bezier(0.22, 0.61, 0.36, 1) 80ms both; }
-        .emp-head { animation: riseIn 620ms cubic-bezier(0.22, 0.61, 0.36, 1) 120ms both; }
+        .emp-back { animation: riseIn 420ms cubic-bezier(0.22, 0.61, 0.36, 1) 40ms both; }
+        .emp-head { animation: riseIn 460ms cubic-bezier(0.22, 0.61, 0.36, 1) 60ms both; }
 
-        /* Karten: fade + leichtes Aufsteigen + minimale Skalierung, gestaffelt */
-        @keyframes cardIn {
-          from { opacity: 0; transform: translateY(18px) scale(0.96); }
+        /* Avatar-Welle: an Ort und Stelle von klein hochwachsen + Fade */
+        @keyframes avatarPop {
+          from { opacity: 0; transform: scale(0.35); }
           to   { opacity: 1; transform: none; }
         }
-        .card-in { animation: cardIn 580ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+        .avatar-pop { animation: avatarPop 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
         .card-avatar {
-          transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-                      box-shadow 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+          transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
           will-change: transform;
         }
         .card-btn:hover .card-avatar { transform: translateY(-6px) scale(1.05); }
 
-        /* Leuchtender grüner Mittelstrich: heller Kern + drei weiche Glow-Ebenen
-           mit steigendem Radius/fallender Deckkraft. Enden laufen über den
-           vertikalen Verlauf weich zu transparent aus. */
-        .divider-core, .divider-glow-1, .divider-glow-2, .divider-glow-3 {
-          position: absolute; top: 0; bottom: 0; left: 50%;
-          transform: translateX(-50%);
-        }
-        .divider-core {
-          width: 2px; border-radius: 2px;
-          background: linear-gradient(to bottom,
-            transparent 0%, #8fe3a0 14%, #8fe3a0 86%, transparent 100%);
-        }
-        .divider-glow-1 {
-          width: 6px;
-          background: linear-gradient(to bottom,
-            transparent 8%, rgba(120,214,140,0.90) 22%, rgba(120,214,140,0.90) 78%, transparent 92%);
-          filter: blur(4px);
-          animation: dividerPulse 4.6s ease-in-out infinite;
-        }
-        .divider-glow-3 {
-          width: 34px;
-          background: linear-gradient(to bottom,
-            transparent 16%, rgba(90,165,108,0.40) 30%, rgba(90,165,108,0.36) 70%, transparent 84%);
-          filter: blur(28px);
-          animation: dividerPulse 4.6s ease-in-out infinite;
-        }
-        .divider-glow-2 {
-          width: 18px;
-          background: linear-gradient(to bottom,
-            transparent 12%, rgba(104,190,124,0.60) 26%, rgba(104,190,124,0.60) 74%, transparent 88%);
-          filter: blur(12px);
-          animation: dividerPulse 4.6s ease-in-out infinite;
-        }
-        @keyframes dividerPulse {
-          0%, 100% { opacity: 0.45; }
-          50%      { opacity: 0.95; }
-        }
-
-        /* Reduzierte Bewegung: keine großen Bewegungen, alles ruhig einblenden */
         @media (prefers-reduced-motion: reduce) {
           .ov-root, .ov-closing, .ov-in-left, .ov-in-right, .breathe,
-          .emp-layer, .emp-back, .emp-head, .card-in,
-          .divider-glow-1, .divider-glow-2, .divider-glow-3 {
+          .emp-layer, .emp-back, .emp-head, .avatar-pop,
+          .zoom-through, .recede, .zoom-fade, .bg-out, .green-in {
             animation: none !important;
           }
-          .hoverlift, .tintlayer, .card-avatar { transition: none !important; }
-          .brand-btn:hover .hoverlift { transform: none; filter: none; }
+          .hoverlift, .card-avatar { transition: none !important; }
+          .brand-btn:hover .hoverlift { transform: none; }
           .ov-closing { opacity: 0; }
         }
       `}</style>
@@ -352,7 +339,51 @@ export default function BrandEntryOverlay({
   )
 }
 
-/** Platzhalter-Slot für ein späteres Logo (kein nachgezeichnetes Logo). */
+/** RWAV-Logo als Maske in Creme umgefärbt (schwarze Linien → hell auf Grün). */
+function RwavLogo() {
+  return (
+    <div
+      role="img"
+      aria-label="Room With A View"
+      className={`${LOGO_DIM} select-none`}
+      style={{
+        WebkitMaskImage: `url(${RWAV_LOGO})`,
+        maskImage: `url(${RWAV_LOGO})`,
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        backgroundColor: 'var(--color-cream)',
+      }}
+    />
+  )
+}
+
+/** „kommt bald"-Badge (warmes Creme auf Dunkelgrün). Optional unsichtbar (Platzhalter). */
+function BadgeChip({
+  children,
+  invisible,
+}: {
+  children: ReactNode
+  invisible?: boolean
+}) {
+  return (
+    <span
+      aria-hidden={invisible ? 'true' : undefined}
+      className={[
+        'rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider',
+        invisible ? 'invisible' : '',
+      ].join(' ')}
+      style={{ borderColor: BADGE, color: BADGE }}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Platzhalter-Slot (nur WARM-ME-Fallback, falls die Datei fehlt). */
 function LogoSlot({ label, hint }: { label: string; hint: string }) {
   return (
     <div className="flex h-[clamp(200px,26vw,290px)] w-[clamp(200px,26vw,290px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
@@ -366,12 +397,12 @@ function SectionLabel({
   children,
   delay,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   delay: number
 }) {
   return (
     <p
-      className="card-in mb-5 text-[11px] uppercase tracking-wider text-muted"
+      className="avatar-pop mb-5 text-[11px] uppercase tracking-wider text-muted"
       style={{ animationDelay: `${delay}ms` }}
     >
       {children}
@@ -379,7 +410,7 @@ function SectionLabel({
   )
 }
 
-/** Anklickbare Mitarbeiter-Karte mit gestaffelter Einblendung. */
+/** Anklickbare Mitarbeiter-Karte; Teil der links→rechts laufenden Avatar-Welle. */
 function PersonCard({
   employee,
   index,
@@ -395,14 +426,14 @@ function PersonCard({
     <button
       type="button"
       onClick={onClick}
-      className="card-in card-btn group flex flex-col items-center gap-2.5 focus:outline-none"
-      style={{ animationDelay: `${180 + index * 80}ms` }}
+      className="avatar-pop card-btn group flex flex-col items-center gap-2.5 focus:outline-none"
+      style={{ animationDelay: `${60 + index * 50}ms` }}
     >
       <span
         className="card-avatar flex h-[clamp(92px,24vw,120px)] w-[clamp(92px,24vw,120px)] items-center justify-center rounded-full bg-card text-[clamp(1.75rem,6vw,2.25rem)] font-medium text-ink shadow-sm"
         style={
           gold
-            ? { border: `3px solid ${GOLD}` }
+            ? { border: `3px solid #c9a227` }
             : { border: '1px solid var(--color-line)' }
         }
       >
