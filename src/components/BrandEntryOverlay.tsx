@@ -10,9 +10,13 @@ const WARM_ME_LOGO = '/warm_me_logo.png'
 /** Swap-ready: sobald public/rwav_logo.png existiert, ersetzt es den Platzhalter. */
 const RWAV_LOGO = '/rwav_logo.png'
 
-/** Einheitliche, große Logo-Fläche (responsiv). Transparenter Hintergrund. */
-const LOGO_SIZE =
-  'h-[clamp(140px,18vw,200px)] w-[clamp(140px,18vw,200px)] object-contain'
+/** Gemeinsame Höhe der Logo-Reihe (größter Wert) – hält beide Logos auf einer Achse. */
+const LOGO_ROW = 'h-[clamp(216px,27vw,300px)]'
+/** WARM-ME-Kreis etwas größer, damit die offene Form optisch gleich groß wirkt. */
+const LOGO_WARM =
+  'h-[clamp(216px,27vw,300px)] w-[clamp(216px,27vw,300px)] object-contain'
+/** RWAV-Logo/Platzhalter (Basisgröße). Transparenter Hintergrund. */
+const LOGO_BOX = 'h-[clamp(196px,25vw,280px)] w-[clamp(196px,25vw,280px)]'
 
 type Phase = 'brands' | 'employees'
 
@@ -81,25 +85,36 @@ export default function BrandEntryOverlay({
             transition: 'width 820ms cubic-bezier(0.65, 0, 0.35, 1)',
           }}
         >
-          <div className="ov-in-left flex flex-col items-center gap-7 px-8">
-            {/* Hover-Skalierung außen, „Atmen" innen (getrennte, transparente Ebenen). */}
-            <div className="hoverlift">
-              <div className="breathe">
-                {logoError ? (
-                  <LogoSlot label="warm_me_logo" hint={t('entry.logoHint')} />
-                ) : (
-                  <img
-                    src={WARM_ME_LOGO}
-                    alt="WARM ME"
-                    onError={() => setLogoError(true)}
-                    className={`${LOGO_SIZE} select-none`}
-                    draggable={false}
-                  />
-                )}
+          <div className="ov-in-left flex flex-col items-center gap-6 px-8">
+            {/* Feste Logo-Reihe: Logo vertikal zentriert → gemeinsame Achse mit RWAV. */}
+            <div className={`flex ${LOGO_ROW} items-center justify-center`}>
+              {/* Hover-Skalierung außen, „Atmen" innen (transparente Ebenen, kein Kasten). */}
+              <div className="hoverlift">
+                <div className="breathe">
+                  {logoError ? (
+                    <LogoSlot label="warm_me_logo" hint={t('entry.logoHint')} />
+                  ) : (
+                    <img
+                      src={WARM_ME_LOGO}
+                      alt="WARM ME"
+                      onError={() => setLogoError(true)}
+                      className={`${LOGO_WARM} select-none`}
+                      draggable={false}
+                    />
+                  )}
+                </div>
               </div>
             </div>
             <span className="text-sm font-medium uppercase tracking-[6px] text-ink">
               WARM ME
+            </span>
+            {/* Unsichtbarer Platzhalter in Höhe des „kommt bald"-Badges → gleiche
+                Baseline wie RWAV, ohne die Ausrichtung zu verschieben. */}
+            <span
+              aria-hidden="true"
+              className="invisible rounded-full border-[0.5px] px-3 py-1 text-xs uppercase tracking-wider"
+            >
+              {t('entry.comingSoon')}
             </span>
           </div>
           {/* Sehr dezenter Hover-Tint nur in der Marken-Phase */}
@@ -122,19 +137,22 @@ export default function BrandEntryOverlay({
               'width 820ms cubic-bezier(0.65, 0, 0.35, 1), opacity 620ms ease, transform 820ms cubic-bezier(0.65, 0, 0.35, 1), filter 620ms ease',
           }}
         >
-          <div className="ov-in-right flex select-none flex-col items-center gap-7 px-8">
-            <div className="opacity-70">
-              {rwavLogoError ? (
-                <LogoSlot label="rwav_logo" hint={t('entry.logoHint')} />
-              ) : (
-                <img
-                  src={RWAV_LOGO}
-                  alt="Room With A View"
-                  onError={() => setRwavLogoError(true)}
-                  className={`${LOGO_SIZE} select-none`}
-                  draggable={false}
-                />
-              )}
+          <div className="ov-in-right flex select-none flex-col items-center gap-6 px-8">
+            {/* Gleiche feste Logo-Reihe wie WARM ME → Logos auf einer Achse. */}
+            <div className={`flex ${LOGO_ROW} items-center justify-center`}>
+              <div className="opacity-70">
+                {rwavLogoError ? (
+                  <LogoSlot label="rwav_logo" hint={t('entry.logoHint')} />
+                ) : (
+                  <img
+                    src={RWAV_LOGO}
+                    alt="Room With A View"
+                    onError={() => setRwavLogoError(true)}
+                    className={`${LOGO_BOX} object-contain select-none`}
+                    draggable={false}
+                  />
+                )}
+              </div>
             </div>
             <span className="whitespace-nowrap text-sm font-medium uppercase tracking-[6px] text-muted">
               Room With A View
@@ -152,10 +170,12 @@ export default function BrandEntryOverlay({
       {/* ─── Leuchtender grüner Mittelstrich (nur in der Marken-Phase) ───── */}
       {isBrands && (
         <div
-          className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
           aria-hidden="true"
         >
-          <div className="relative h-full w-6">
+          {/* Auf ~68% der Höhe begrenzt, an beiden Enden weicher Verlauf zu transparent. */}
+          <div className="relative h-[68%] w-10">
+            <span className="divider-glow-3" />
             <span className="divider-glow-2" />
             <span className="divider-glow-1" />
             <span className="divider-core" />
@@ -279,29 +299,37 @@ export default function BrandEntryOverlay({
         }
         .card-btn:hover .card-avatar { transform: translateY(-6px) scale(1.05); }
 
-        /* Leuchtender grüner Mittelstrich: Kern + zwei weiche Glow-Ebenen.
-           Enden laufen über den vertikalen Verlauf weich zu transparent aus. */
-        .divider-core, .divider-glow-1, .divider-glow-2 {
+        /* Leuchtender grüner Mittelstrich: heller Kern + drei weiche Glow-Ebenen
+           mit steigendem Radius/fallender Deckkraft. Enden laufen über den
+           vertikalen Verlauf weich zu transparent aus. */
+        .divider-core, .divider-glow-1, .divider-glow-2, .divider-glow-3 {
           position: absolute; top: 0; bottom: 0; left: 50%;
           transform: translateX(-50%);
         }
         .divider-core {
           width: 2px; border-radius: 2px;
           background: linear-gradient(to bottom,
-            transparent 0%, #2b3a2d 16%, #2b3a2d 84%, transparent 100%);
+            transparent 0%, #8fe3a0 14%, #8fe3a0 86%, transparent 100%);
         }
         .divider-glow-1 {
-          width: 5px;
+          width: 6px;
           background: linear-gradient(to bottom,
-            transparent 4%, rgba(76,111,82,0.85) 20%, rgba(76,111,82,0.85) 80%, transparent 96%);
-          filter: blur(5px);
+            transparent 8%, rgba(120,214,140,0.90) 22%, rgba(120,214,140,0.90) 78%, transparent 92%);
+          filter: blur(4px);
+          animation: dividerPulse 4.6s ease-in-out infinite;
+        }
+        .divider-glow-3 {
+          width: 34px;
+          background: linear-gradient(to bottom,
+            transparent 16%, rgba(90,165,108,0.40) 30%, rgba(90,165,108,0.36) 70%, transparent 84%);
+          filter: blur(28px);
           animation: dividerPulse 4.6s ease-in-out infinite;
         }
         .divider-glow-2 {
-          width: 16px;
+          width: 18px;
           background: linear-gradient(to bottom,
-            transparent 8%, rgba(96,131,101,0.5) 26%, rgba(96,131,101,0.5) 74%, transparent 92%);
-          filter: blur(16px);
+            transparent 12%, rgba(104,190,124,0.60) 26%, rgba(104,190,124,0.60) 74%, transparent 88%);
+          filter: blur(12px);
           animation: dividerPulse 4.6s ease-in-out infinite;
         }
         @keyframes dividerPulse {
@@ -313,7 +341,7 @@ export default function BrandEntryOverlay({
         @media (prefers-reduced-motion: reduce) {
           .ov-root, .ov-closing, .ov-in-left, .ov-in-right, .breathe,
           .emp-layer, .emp-back, .emp-head, .card-in,
-          .divider-glow-1, .divider-glow-2 {
+          .divider-glow-1, .divider-glow-2, .divider-glow-3 {
             animation: none !important;
           }
           .hoverlift, .tintlayer, .card-avatar { transition: none !important; }
@@ -328,7 +356,7 @@ export default function BrandEntryOverlay({
 /** Platzhalter-Slot für ein späteres Logo (kein nachgezeichnetes Logo). */
 function LogoSlot({ label, hint }: { label: string; hint: string }) {
   return (
-    <div className="flex h-[clamp(140px,18vw,200px)] w-[clamp(140px,18vw,200px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
+    <div className="flex h-[clamp(196px,25vw,280px)] w-[clamp(196px,25vw,280px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
       <span className="font-mono text-[11px] text-muted">{label}</span>
       <span className="mt-0.5 text-[10px] text-muted/70">{hint}</span>
     </div>
