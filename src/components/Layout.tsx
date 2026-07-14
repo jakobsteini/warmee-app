@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useCurrentUser } from '../context/CurrentUser'
+import BrandEntryOverlay from './BrandEntryOverlay'
 import { useI18n } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 import type { Lang } from '../i18n/dict'
@@ -39,6 +41,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 export default function Layout() {
   const { session, signOut } = useAuth()
   const { t, lang, setLang } = useI18n()
+  const { currentUser, setCurrentUser } = useCurrentUser()
+
+  // Persona noch nicht gewählt → Einstiegs-Overlay (pro Sitzung).
+  if (!currentUser) {
+    return <BrandEntryOverlay onSelect={setCurrentUser} />
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -86,18 +94,28 @@ export default function Layout() {
               </button>
             ))}
           </div>
-          {session?.user?.email && (
-            <p className="mb-2 truncate text-xs text-muted">
-              {session.user.email}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={signOut}
-            className="text-sm text-nav transition-colors hover:text-cream"
-          >
-            {t('nav.signOut')}
-          </button>
+          <p className="mb-2 truncate text-xs text-muted">
+            {currentUser.name}
+            {session?.user?.email && (
+              <span className="text-nav"> · {session.user.email}</span>
+            )}
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentUser(null)}
+              className="text-left text-sm text-nav transition-colors hover:text-cream"
+            >
+              {t('nav.switchUser')}
+            </button>
+            <button
+              type="button"
+              onClick={signOut}
+              className="text-left text-sm text-nav transition-colors hover:text-cream"
+            >
+              {t('nav.signOut')}
+            </button>
+          </div>
         </div>
       </aside>
 

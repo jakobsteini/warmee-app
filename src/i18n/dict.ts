@@ -30,7 +30,17 @@ export const de = {
   'nav.openPayments': 'Offene Posten',
   'nav.analytics': 'Auswertungen',
   'nav.signOut': 'Abmelden',
+  'nav.switchUser': 'Benutzer wechseln',
   'lang.label': 'Sprache',
+
+  // ─── Einstiegs-Overlay ───────────────────────────────────────────────────
+  'entry.comingSoon': 'kommt bald',
+  'entry.locked': 'gesperrt',
+  'entry.who': 'Wer arbeitet heute?',
+  'entry.admins': 'Admins',
+  'entry.team': 'Team',
+  'entry.back': 'Zurück',
+  'entry.logoHint': 'Logo folgt',
 
   // ─── Gemeinsame Bausteine ────────────────────────────────────────────────
   'common.loading': 'Lädt…',
@@ -167,7 +177,16 @@ export const en: Record<TranslationKey, string> = {
   'nav.openPayments': 'Open payments',
   'nav.analytics': 'Analytics',
   'nav.signOut': 'Sign out',
+  'nav.switchUser': 'Switch user',
   'lang.label': 'Language',
+
+  'entry.comingSoon': 'coming soon',
+  'entry.locked': 'locked',
+  'entry.who': "Who's working today?",
+  'entry.admins': 'Admins',
+  'entry.team': 'Team',
+  'entry.back': 'Back',
+  'entry.logoHint': 'Logo to follow',
 
   'common.loading': 'Loading…',
   'common.all': 'All',
