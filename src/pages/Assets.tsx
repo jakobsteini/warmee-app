@@ -14,12 +14,14 @@ import {
   getAssetDealerIds,
   setAssetDealers,
 } from '../lib/assets'
+import { metaFromFilename } from '../lib/assetFilename'
 import { listSeasons } from '../lib/seasons'
 import { listDealers } from '../lib/dealers'
 import type { Dealer } from '../types/dealer'
 import {
   ASSET_TYPES,
   ASSET_TYPE_LABELS,
+  type AssetFileMeta,
   type AssetType,
   type AssetWithMeta,
   type Season,
@@ -35,9 +37,12 @@ function isJpeg(file: File): boolean {
   )
 }
 
-interface UploadItem {
-  name: string
-  status: 'pending' | 'done' | 'error'
+/** Eine zum Upload vorgemerkte Datei mit editierbaren, vorbefüllten Metadaten. */
+interface StagedFile {
+  id: string
+  file: File
+  meta: AssetFileMeta
+  status: 'pending' | 'uploading' | 'done' | 'error'
 }
 
 export default function Assets() {
@@ -55,7 +60,7 @@ export default function Assets() {
   const [uploadType, setUploadType] = useState<AssetType>('product')
   const [uploadSeason, setUploadSeason] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [uploads, setUploads] = useState<UploadItem[]>([])
+  const [staged, setStaged] = useState<StagedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -95,7 +100,12 @@ export default function Assets() {
     })()
   }, [])
 
-  async function handleFiles(fileList: FileList | File[]) {
+  /**
+   * Ausgewählte/gedroppte Dateien vormerken: JPEGs filtern, Metadaten aus dem
+   * Dateinamen vorbefüllen und in die editierbare Staging-Liste legen.
+   * Es wird noch NICHT hochgeladen – der Upload passiert erst per Button.
+   */
+  function stageFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList)
     const jpegs = files.filter(isJpeg)
     const skipped = files.length - jpegs.length
@@ -114,35 +124,64 @@ export default function Assets() {
         ? `${skipped} Datei(en) übersprungen – nur JPEG wird unterstützt.`
         : null,
     )
-    setUploading(true)
-    setUploads(jpegs.map((f) => ({ name: f.name, status: 'pending' })))
 
-    for (let i = 0; i < jpegs.length; i++) {
+    setStaged((prev) => [
+      ...prev,
+      ...jpegs.map<StagedFile>((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        meta: metaFromFilename(file.name),
+        status: 'pending',
+      })),
+    ])
+  }
+
+  function updateStagedMeta(id: string, patch: Partial<AssetFileMeta>) {
+    setStaged((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, meta: { ...s.meta, ...patch } } : s)),
+    )
+  }
+
+  function removeStaged(id: string) {
+    setStaged((prev) => prev.filter((s) => s.id !== id))
+  }
+
+  /**
+   * Alle noch nicht hochgeladenen Dateien nacheinander hochladen – mit den
+   * (ggf. korrigierten) Metadaten. Fehler pro Datei stoppen den Batch nicht;
+   * erfolgreiche Dateien fallen danach aus der Liste, Fehler bleiben stehen.
+   */
+  async function uploadAll() {
+    const pending = staged.filter((s) => s.status !== 'done')
+    if (pending.length === 0) return
+
+    setUploading(true)
+    setError(null)
+
+    for (const item of pending) {
+      setStaged((prev) =>
+        prev.map((s) => (s.id === item.id ? { ...s, status: 'uploading' } : s)),
+      )
       try {
-        await uploadAsset(jpegs[i], {
-          asset_type: uploadType,
-          season_id: uploadSeason,
-        })
-        setUploads((prev) =>
-          prev.map((u, idx) => (idx === i ? { ...u, status: 'done' } : u)),
+        await uploadAsset(
+          item.file,
+          { asset_type: uploadType, season_id: uploadSeason },
+          item.meta,
+        )
+        setStaged((prev) =>
+          prev.map((s) => (s.id === item.id ? { ...s, status: 'done' } : s)),
         )
       } catch {
-        setUploads((prev) =>
-          prev.map((u, idx) => (idx === i ? { ...u, status: 'error' } : u)),
+        setStaged((prev) =>
+          prev.map((s) => (s.id === item.id ? { ...s, status: 'error' } : s)),
         )
       }
     }
 
     setUploading(false)
     await loadAssets()
-    // Erfolgsmeldungen nach kurzer Zeit ausblenden.
-    setTimeout(() => setUploads([]), 2500)
-  }
-
-  function onDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setDragOver(false)
-    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
+    // Erfolgreiche entfernen, Fehler zum erneuten Versuch stehen lassen.
+    setStaged((prev) => prev.filter((s) => s.status !== 'done'))
   }
 
   async function handleDelete(asset: AssetWithMeta) {
@@ -156,10 +195,18 @@ export default function Assets() {
     }
   }
 
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files.length > 0) stageFiles(e.dataTransfer.files)
+  }
+
   const seasonLabel = useMemo(() => {
     const map = new Map(seasons.map((s) => [s.id, s.label]))
     return (id: string | null) => (id ? (map.get(id) ?? '—') : '—')
   }, [seasons])
+
+  const pendingCount = staged.filter((s) => s.status !== 'done').length
 
   const selectClass =
     'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -232,8 +279,9 @@ export default function Assets() {
             JPEGs hierher ziehen oder klicken zum Auswählen
           </p>
           <p className="mt-1 text-xs text-muted">
-            Neue Bilder erhalten Typ „{ASSET_TYPE_LABELS[uploadType]}" und Saison
-            „{uploadSeason ? seasonLabel(uploadSeason) : 'ohne'}".
+            Typ „{ASSET_TYPE_LABELS[uploadType]}" und Saison „
+            {uploadSeason ? seasonLabel(uploadSeason) : 'ohne'}" gelten für alle.
+            Modell/Farbe werden je Datei aus dem Namen vorbefüllt.
           </p>
           <input
             ref={fileInput}
@@ -242,37 +290,53 @@ export default function Assets() {
             multiple
             hidden
             onChange={(e) => {
-              if (e.target.files) handleFiles(e.target.files)
+              if (e.target.files) stageFiles(e.target.files)
               e.target.value = ''
             }}
           />
         </div>
 
-        {uploads.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1">
-            {uploads.map((u, i) => (
-              <div
-                key={`${u.name}-${i}`}
-                className="flex items-center justify-between text-xs"
-              >
-                <span className="truncate text-muted">{u.name}</span>
-                <span
-                  className={
-                    u.status === 'error'
-                      ? 'text-red-700'
-                      : u.status === 'done'
-                        ? 'text-ink'
-                        : 'text-muted'
-                  }
+        {/* Staging-Liste: vorbefüllte, editierbare Metadaten pro Datei */}
+        {staged.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">
+                {staged.length} Datei(en) vorgemerkt – Werte prüfen und ggf.
+                korrigieren, dann hochladen.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStaged([])}
+                  disabled={uploading}
+                  className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
                 >
-                  {u.status === 'error'
-                    ? 'Fehler'
-                    : u.status === 'done'
-                      ? 'Fertig'
-                      : 'Lädt…'}
-                </span>
+                  Liste leeren
+                </button>
+                <button
+                  type="button"
+                  onClick={uploadAll}
+                  disabled={uploading || pendingCount === 0}
+                  className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {uploading
+                    ? 'Lädt…'
+                    : `${pendingCount} Bild(er) hochladen`}
+                </button>
               </div>
-            ))}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {staged.map((item) => (
+                <StagedCard
+                  key={item.id}
+                  item={item}
+                  disabled={uploading}
+                  onChange={(patch) => updateStagedMeta(item.id, patch)}
+                  onRemove={() => removeStaged(item.id)}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -378,6 +442,126 @@ export default function Assets() {
   )
 }
 
+/** Editierbare Metadaten-Karte für eine vorgemerkte Upload-Datei. */
+function StagedCard({
+  item,
+  disabled,
+  onChange,
+  onRemove,
+}: {
+  item: StagedFile
+  disabled: boolean
+  onChange: (patch: Partial<AssetFileMeta>) => void
+  onRemove: () => void
+}) {
+  const { meta } = item
+  const inputClass =
+    'w-full rounded-md border-[0.5px] border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink disabled:opacity-60'
+  const statusLabel =
+    item.status === 'error'
+      ? 'Fehler'
+      : item.status === 'done'
+        ? 'Fertig'
+        : item.status === 'uploading'
+          ? 'Lädt…'
+          : 'Vorgemerkt'
+
+  return (
+    <div className="rounded-md border-[0.5px] border-line bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="truncate text-sm text-ink" title={item.file.name}>
+          {item.file.name}
+        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span
+            className={
+              item.status === 'error'
+                ? 'text-xs text-red-700'
+                : item.status === 'done'
+                  ? 'text-xs text-ink'
+                  : 'text-xs text-muted'
+            }
+          >
+            {statusLabel}
+          </span>
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={disabled}
+            className="text-sm text-muted transition-colors hover:text-red-700 disabled:opacity-50"
+            aria-label="Aus Liste entfernen"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
+          <span className="text-xs text-muted">Modell</span>
+          <input
+            type="text"
+            value={meta.model ?? ''}
+            disabled={disabled}
+            onChange={(e) => onChange({ model: e.target.value || null })}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted">Farbcode</span>
+          <input
+            type="text"
+            value={meta.color_code ?? ''}
+            disabled={disabled}
+            onChange={(e) => onChange({ color_code: e.target.value || null })}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted">Farbe</span>
+          <input
+            type="text"
+            value={meta.color_name ?? ''}
+            disabled={disabled}
+            onChange={(e) => onChange({ color_name: e.target.value || null })}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted">2. Farbcode</span>
+          <input
+            type="text"
+            value={meta.color_code_2 ?? ''}
+            disabled={disabled}
+            onChange={(e) => onChange({ color_code_2: e.target.value || null })}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted">2. Farbe</span>
+          <input
+            type="text"
+            value={meta.color_name_2 ?? ''}
+            disabled={disabled}
+            onChange={(e) => onChange({ color_name_2: e.target.value || null })}
+            className={inputClass}
+          />
+        </label>
+        <label className="col-span-2 flex items-center gap-2 sm:col-span-1">
+          <input
+            type="checkbox"
+            checked={meta.is_social_media}
+            disabled={disabled}
+            onChange={(e) => onChange({ is_social_media: e.target.checked })}
+            className="accent-ink"
+          />
+          <span className="text-xs text-muted">Social Media</span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
 function FilterPill({
   active,
   onClick,
@@ -467,6 +651,14 @@ function AssetDetail({
   const fieldClass =
     'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
+  // Farb-Zusammenfassung aus den (vorbefüllten) Metadaten.
+  const colorSummary = [
+    [asset.color_code, asset.color_name].filter(Boolean).join(' '),
+    [asset.color_code_2, asset.color_name_2].filter(Boolean).join(' '),
+  ]
+    .filter((s) => s.length > 0)
+    .join(', ')
+
   return (
     <div
       className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 px-4"
@@ -500,6 +692,25 @@ function AssetDetail({
                 : '—'}
             </span>
           </p>
+          {(asset.model || colorSummary || asset.is_social_media) && (
+            <p className="mt-1 text-sm text-muted">
+              {asset.model && (
+                <>
+                  Modell: <span className="text-ink">{asset.model}</span>
+                  {(colorSummary || asset.is_social_media) && ' · '}
+                </>
+              )}
+              {colorSummary && (
+                <>
+                  Farbe: <span className="text-ink">{colorSummary}</span>
+                  {asset.is_social_media && ' · '}
+                </>
+              )}
+              {asset.is_social_media && (
+                <span className="text-ink">Social Media</span>
+              )}
+            </p>
+          )}
 
           <div className="mt-4 flex gap-3">
             <label className="flex flex-1 flex-col gap-1.5">

@@ -33,6 +33,37 @@ export interface Asset {
   season_id: string | null
   status: AssetStatus
   created_at: string | null
+
+  // ─── Aus dem Dateinamen abgeleitet (Parser: assetFilename.ts) ─────────────
+  /** Modellname, z. B. "EmyShaded". Null, wenn nur Farbe im Namen steht. */
+  model: string | null
+  /** Haupt-Farbcode, z. B. "530". */
+  color_code: string | null
+  /** Haupt-Farbname, z. B. "olivine". */
+  color_name: string | null
+  /** Optionaler Zweit-Farbcode, z. B. "531". */
+  color_code_2: string | null
+  /** Optionaler Zweit-Farbname, z. B. "mayfly". */
+  color_name_2: string | null
+  /** True bei einer "_SocialMedia"-Variante des Bildes. */
+  is_social_media: boolean
+
+  /** Bewusst KEINEM Artikel zugeordnet (z. B. reines Farbmuster) → erledigt. */
+  no_product_match: boolean
+}
+
+/**
+ * Editierbare, pro Datei individuelle Metadaten für den Upload. Wird aus dem
+ * Dateinamen vorbefüllt (metaFromFilename) und kann vor dem Speichern im UI
+ * korrigiert werden.
+ */
+export interface AssetFileMeta {
+  model: string | null
+  color_code: string | null
+  color_name: string | null
+  color_code_2: string | null
+  color_name_2: string | null
+  is_social_media: boolean
 }
 
 /**

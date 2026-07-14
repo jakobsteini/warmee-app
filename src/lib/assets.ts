@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import type {
   Asset,
+  AssetFileMeta,
   AssetType,
   AssetWithMeta,
   UploadOptions,
@@ -14,6 +15,8 @@ const SIGNED_URL_TTL = 60 * 60 // 1 Stunde
 export interface AssetFilters {
   asset_type?: AssetType | null
   season_id?: string | null
+  /** true = nur zugeordnete, false = nur nicht zugeordnete, null/undef = alle. */
+  assigned?: boolean | null
 }
 
 /** Pixelmaße einer Bilddatei im Browser auslesen. */
@@ -68,6 +71,8 @@ export async function listAssets(
 
   if (filters.asset_type) query = query.eq('asset_type', filters.asset_type)
   if (filters.season_id) query = query.eq('season_id', filters.season_id)
+  if (filters.assigned === true) query = query.not('product_id', 'is', null)
+  if (filters.assigned === false) query = query.is('product_id', null)
 
   const { data, error } = await query
   if (error) throw error
@@ -106,6 +111,7 @@ export async function listAssets(
 export async function uploadAsset(
   file: File,
   opts: UploadOptions,
+  meta?: AssetFileMeta,
 ): Promise<Asset> {
   const org_id = await getMyOrgId()
   const size = await readImageSize(file)
@@ -134,6 +140,13 @@ export async function uploadAsset(
       asset_type: opts.asset_type,
       season_id: opts.season_id,
       status: 'done',
+      // Aus dem Dateinamen vorbefüllte, im UI korrigierbare Metadaten.
+      model: meta?.model ?? null,
+      color_code: meta?.color_code ?? null,
+      color_name: meta?.color_name ?? null,
+      color_code_2: meta?.color_code_2 ?? null,
+      color_name_2: meta?.color_name_2 ?? null,
+      is_social_media: meta?.is_social_media ?? false,
     })
     .select()
     .single()
@@ -153,6 +166,36 @@ export async function updateAsset(
   patch: { asset_type?: AssetType; season_id?: string | null },
 ): Promise<void> {
   const { error } = await supabase.from('assets').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Bild einem Artikel zuordnen (oder Zuordnung aufheben mit null).
+ * Schreibt nur assets.product_id; org-Scoping/RLS greifen über die Policy.
+ */
+export async function setAssetProduct(
+  assetId: string,
+  productId: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('assets')
+    .update({ product_id: productId })
+    .eq('id', assetId)
+  if (error) throw error
+}
+
+/**
+ * Bild als "bewusst kein Artikel" markieren (oder Markierung aufheben).
+ * Schreibt nur assets.no_product_match; org-Scoping/RLS greifen über die Policy.
+ */
+export async function setAssetNoProductMatch(
+  assetId: string,
+  value: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from('assets')
+    .update({ no_product_match: value })
+    .eq('id', assetId)
   if (error) throw error
 }
 
