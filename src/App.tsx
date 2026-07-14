@@ -16,6 +16,7 @@ import ProductionOrderEdit from './pages/ProductionOrderEdit'
 import Deliveries from './pages/Deliveries'
 import DeliveryEdit from './pages/DeliveryEdit'
 import Invoices from './pages/Invoices'
+import InvoiceNew from './pages/InvoiceNew'
 import InvoiceEdit from './pages/InvoiceEdit'
 import OpenPayments from './pages/OpenPayments'
 import Analytics from './pages/Analytics'
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/deliveries" element={<Deliveries />} />
             <Route path="/deliveries/:id" element={<DeliveryEdit />} />
             <Route path="/invoices" element={<Invoices />} />
+            <Route path="/invoices/new" element={<InvoiceNew />} />
             <Route path="/invoices/:id" element={<InvoiceEdit />} />
             <Route path="/open-payments" element={<OpenPayments />} />
             <Route path="/analytics" element={<Analytics />} />

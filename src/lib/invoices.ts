@@ -12,6 +12,7 @@ import {
 import type {
   DeliveryNote,
   Dealerish,
+  FreeInvoiceInput,
   Invoice,
   InvoiceListRow,
   InvoiceStatus,
@@ -367,6 +368,134 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(invoice.invoice_date, total, terms),
     notes: null,
+  })
+  const path = await uploadPdf(
+    org_id,
+    `rechnung-${safeName(invoice.invoice_number)}.pdf`,
+    blob,
+  )
+  const { data: updated, error: upErr } = await supabase
+    .from('invoices')
+    .update({ pdf_path: path, due_date: dueDate })
+    .eq('id', invoice.id)
+    .select()
+    .single()
+  if (upErr) throw upErr
+  return updated as Invoice
+}
+
+/**
+ * Freie Rechnung erstellen: ohne zugrundeliegende Lieferung (delivery_id = null),
+ * mit manuell erfassten Positionen. Verwendet DENSELBEN Nummernkreis wie
+ * order-basierte Rechnungen (RPC next_invoice_number) und dieselbe
+ * 20-%-USt-/Skonto-Automatik. Zahlungskonditionen kommen aus dem gewählten
+ * Händler (effectivePaymentTerms), sonst WARM-ME-Standard. Die Nummer wird mit
+ * dem Datensatz sofort committet — auch bei späterem PDF-Fehler keine Lücke.
+ */
+export async function createFreeInvoice(
+  input: FreeInvoiceInput,
+): Promise<Invoice> {
+  const org_id = await getMyOrgId()
+  const created_by = await getMyUserId()
+
+  const items = input.items
+    .map((i) => ({
+      description: i.description.trim(),
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+    }))
+    .filter((i) => i.description !== '' && i.quantity > 0)
+  if (items.length === 0) {
+    throw new Error('Bitte mindestens eine Position mit Menge erfassen.')
+  }
+
+  // Händlerdaten (für Beleg und Konditionen) laden – RLS scoped auf die Org.
+  const { data: dealer, error: dealerErr } = await supabase
+    .from('dealers')
+    .select(
+      'name, contact_name, email, city, country, skonto_prozent, skonto_tage, zahlungsziel_tage',
+    )
+    .eq('id', input.dealer_id)
+    .single()
+  if (dealerErr) throw dealerErr
+
+  const dealerish: Dealerish = {
+    name: dealer.name,
+    contact_name: dealer.contact_name,
+    email: dealer.email,
+    city: dealer.city,
+    country: dealer.country,
+  }
+
+  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  // Regelbesteuerung: 20 % USt auf den Nettobetrag (wie order-basierte Rechnung).
+  const tax_rate = VAT_RATE
+  const { tax: tax_amount, gross: total } = applyVat(subtotal)
+
+  const { data: number, error: numErr } = await supabase.rpc(
+    'next_invoice_number',
+    { p_org_id: org_id },
+  )
+  if (numErr) throw numErr
+
+  const { data: invoice, error: insErr } = await supabase
+    .from('invoices')
+    .insert({
+      org_id,
+      delivery_id: null, // freie Rechnung ohne Lieferung
+      dealer_id: input.dealer_id,
+      invoice_number: number as string,
+      subtotal,
+      tax_rate,
+      tax_amount,
+      total,
+      status: 'draft',
+      notes: input.notes,
+      created_by,
+    })
+    .select()
+    .single()
+  if (insErr) throw insErr
+
+  const itemRows = items.map((i) => ({
+    invoice_id: invoice.id,
+    product_id: null,
+    description: i.description,
+    color: null,
+    size: null,
+    quantity: i.quantity,
+    unit_price: i.unit_price,
+    line_total: i.quantity * i.unit_price,
+  }))
+  const { error: itemErr } = await supabase
+    .from('invoice_items')
+    .insert(itemRows)
+  if (itemErr) throw itemErr
+
+  // Konditionen aus dem Händler, sonst WARM-ME-Standard.
+  const terms = effectivePaymentTerms(dealer)
+  const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
+
+  const { buildInvoicePdf } = await import('./pdf')
+  const blob = buildInvoicePdf({
+    number: invoice.invoice_number,
+    date: invoice.invoice_date,
+    dueDate,
+    dealer: dealerish,
+    items: items.map((i) => ({
+      description: i.description,
+      color: null,
+      size: null,
+      quantity: i.quantity,
+      unitPrice: i.unit_price,
+      lineTotal: i.quantity * i.unit_price,
+    })),
+    subtotal,
+    tax: tax_amount,
+    total,
+    zahlungszielTage: terms.zahlungsziel_tage,
+    skonto: skontoForPdf(invoice.invoice_date, total, terms),
+    notes: input.notes,
   })
   const path = await uploadPdf(
     org_id,

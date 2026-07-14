@@ -214,16 +214,25 @@ export default function InvoiceEdit() {
 
       {isCancelled && (
         <div className="mb-6 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-muted">
-          Diese Rechnung ist storniert und unveränderlich. Eine neue Rechnung
-          kann aus der zugehörigen{' '}
-          <button
-            type="button"
-            onClick={() => navigate(`/deliveries/${invoice.delivery_id}`)}
-            className="underline hover:text-ink"
-          >
-            Lieferung
-          </button>{' '}
-          erstellt werden.
+          {invoice.delivery_id ? (
+            <>
+              Diese Rechnung ist storniert und unveränderlich. Eine neue Rechnung
+              kann aus der zugehörigen{' '}
+              <button
+                type="button"
+                onClick={() => navigate(`/deliveries/${invoice.delivery_id}`)}
+                className="underline hover:text-ink"
+              >
+                Lieferung
+              </button>{' '}
+              erstellt werden.
+            </>
+          ) : (
+            <>
+              Diese freie Rechnung ist storniert und unveränderlich. Bei Bedarf
+              kann eine neue freie Rechnung erstellt werden.
+            </>
+          )}
         </div>
       )}
 

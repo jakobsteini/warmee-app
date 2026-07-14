@@ -22,7 +22,8 @@ export function invoiceStatusLabel(status: string): string {
 export interface Invoice {
   id: string
   org_id: string
-  delivery_id: string
+  /** Zugrundeliegende Lieferung – null bei einer freien Rechnung (#7). */
+  delivery_id: string | null
   dealer_id: string
   invoice_number: string
   invoice_date: string
@@ -68,6 +69,21 @@ export interface InvoiceListRow extends Invoice {
 export interface InvoiceWithItems extends Invoice {
   dealer: Dealerish | null
   invoice_items: InvoiceItem[]
+}
+
+/** Eine manuell erfasste Position einer freien Rechnung (#7). */
+export interface FreeInvoiceItemInput {
+  description: string
+  quantity: number
+  /** Einzelpreis netto. */
+  unit_price: number
+}
+
+/** Eingaben zum Erstellen einer freien Rechnung (ohne Lieferung). */
+export interface FreeInvoiceInput {
+  dealer_id: string
+  items: FreeInvoiceItemInput[]
+  notes: string | null
 }
 
 /** Ein Lieferschein-Kopf (snake_case wie in der DB). */

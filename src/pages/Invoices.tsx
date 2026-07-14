@@ -121,16 +121,25 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-medium text-ink">Rechnungen</h1>
           <p className="mt-1 text-sm text-muted">
-            Rechnungen werden aus einer Lieferung im Wareneingang erstellt. Die
-            Nummer wird fortlaufend und ohne Lücken vergeben.
+            Rechnungen entstehen aus einer Lieferung im Wareneingang oder als
+            freie Rechnung. Die Nummer wird fortlaufend und ohne Lücken vergeben.
           </p>
         </div>
-        <ExportButtons
-          filenameBase="rechnungen"
-          sheetName="Rechnungen"
-          columns={INVOICE_EXPORT_COLUMNS}
-          rows={invoices}
-        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/invoices/new')}
+            className="whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
+          >
+            Freie Rechnung
+          </button>
+          <ExportButtons
+            filenameBase="rechnungen"
+            sheetName="Rechnungen"
+            columns={INVOICE_EXPORT_COLUMNS}
+            rows={invoices}
+          />
+        </div>
       </div>
 
       {error && (
