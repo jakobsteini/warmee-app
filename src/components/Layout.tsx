@@ -6,6 +6,7 @@ const navItems = [
   { to: '/dashboard', label: 'Übersicht' },
   { to: '/dealers', label: 'Händler' },
   { to: '/assets', label: 'Bildarchiv' },
+  { to: '/assets/assign', label: 'Bilder zuordnen' },
   { to: '/crop', label: 'Zuschnitt' },
   { to: '/newsletter', label: 'Newsletter' },
 ]

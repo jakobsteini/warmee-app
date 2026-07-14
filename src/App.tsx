@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Dealers from './pages/Dealers'
 import Assets from './pages/Assets'
+import AssetsAssign from './pages/AssetsAssign'
 import Crop from './pages/Crop'
 import Newsletter from './pages/Newsletter'
 import Products from './pages/Products'
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dealers" element={<Dealers />} />
             <Route path="/assets" element={<Assets />} />
+            <Route path="/assets/assign" element={<AssetsAssign />} />
             <Route path="/crop" element={<Crop />} />
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/products" element={<Products />} />
