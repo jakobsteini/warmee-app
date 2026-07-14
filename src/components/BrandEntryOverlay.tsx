@@ -10,13 +10,12 @@ const WARM_ME_LOGO = '/warm_me_logo.png'
 /** Swap-ready: sobald public/rwav_logo.png existiert, ersetzt es den Platzhalter. */
 const RWAV_LOGO = '/rwav_logo.png'
 
-/** Gemeinsame Höhe der Logo-Reihe (größter Wert) – hält beide Logos auf einer Achse. */
-const LOGO_ROW = 'h-[clamp(216px,27vw,300px)]'
-/** WARM-ME-Kreis etwas größer, damit die offene Form optisch gleich groß wirkt. */
-const LOGO_WARM =
-  'h-[clamp(216px,27vw,300px)] w-[clamp(216px,27vw,300px)] object-contain'
-/** RWAV-Logo/Platzhalter (Basisgröße). Transparenter Hintergrund. */
-const LOGO_BOX = 'h-[clamp(196px,25vw,280px)] w-[clamp(196px,25vw,280px)]'
+/** Einheitliche Logo-Größe: beide Dateien haben nun dieselbe quadratische
+ *  Leinwand + denselben Rand, daher keine Sonderbehandlung mehr nötig. */
+const LOGO_SIZE =
+  'h-[clamp(200px,26vw,290px)] w-[clamp(200px,26vw,290px)] object-contain'
+/** Feste Höhe der Logo-Reihe – hält beide Logos exakt auf einer Achse. */
+const LOGO_ROW = 'h-[clamp(200px,26vw,290px)]'
 
 type Phase = 'brands' | 'employees'
 
@@ -98,7 +97,7 @@ export default function BrandEntryOverlay({
                       src={WARM_ME_LOGO}
                       alt="WARM ME"
                       onError={() => setLogoError(true)}
-                      className={`${LOGO_WARM} select-none`}
+                      className={`${LOGO_SIZE} select-none`}
                       draggable={false}
                     />
                   )}
@@ -148,7 +147,7 @@ export default function BrandEntryOverlay({
                     src={RWAV_LOGO}
                     alt="Room With A View"
                     onError={() => setRwavLogoError(true)}
-                    className={`${LOGO_BOX} object-contain select-none`}
+                    className={`${LOGO_SIZE} select-none`}
                     draggable={false}
                   />
                 )}
@@ -356,7 +355,7 @@ export default function BrandEntryOverlay({
 /** Platzhalter-Slot für ein späteres Logo (kein nachgezeichnetes Logo). */
 function LogoSlot({ label, hint }: { label: string; hint: string }) {
   return (
-    <div className="flex h-[clamp(196px,25vw,280px)] w-[clamp(196px,25vw,280px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
+    <div className="flex h-[clamp(200px,26vw,290px)] w-[clamp(200px,26vw,290px)] flex-col items-center justify-center rounded-md border border-dashed border-line text-center">
       <span className="font-mono text-[11px] text-muted">{label}</span>
       <span className="mt-0.5 text-[10px] text-muted/70">{hint}</span>
     </div>
