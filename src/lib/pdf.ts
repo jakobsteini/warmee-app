@@ -50,6 +50,15 @@ interface BelegHeader {
 const MARGIN = 18
 const PAGE_W = 210 // A4 hoch, mm
 
+/**
+ * Markenakzent Dunkelgrün (#2B3A2D = RGB 43,58,45). BEWUSST nur für feine
+ * Trennlinien — keine flächigen Hintergründe, damit die Belege druck-/
+ * scantauglich bleiben (Text bleibt schwarz auf weiß).
+ */
+const ACCENT: readonly [number, number, number] = [43, 58, 45]
+/** Standard-Linienstärke von jsPDF (mm) – zum Zurücksetzen nach Akzentlinien. */
+const DEFAULT_LINE_WIDTH = 0.2
+
 /** Kopf (Absender, Empfänger, Titel, Belegdaten) rendern, Y-Cursor zurück. */
 function drawHeader(doc: jsPDF, h: BelegHeader): number {
   // Absender.
@@ -114,7 +123,15 @@ function drawHeader(doc: jsPDF, h: BelegHeader): number {
     my += 5
   }
 
-  return Math.max(ry, 74)
+  // Dezente dunkelgrüne Akzentlinie unter dem Kopf, direkt über der
+  // Positionstabelle (markenkonform, aber druckfest — nur eine feine Linie).
+  const bottom = Math.max(ry, 74)
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, bottom, PAGE_W - MARGIN, bottom)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+
+  return bottom
 }
 
 /** Positionstabelle rendern (Preisspalten optional), Y-Cursor zurück. */
@@ -178,6 +195,12 @@ function drawItemsTable(
 
 /** Fußzeile mit Absender-Kurzinfo. */
 function drawFooter(doc: jsPDF) {
+  // Feine dunkelgrüne Akzentlinie über der Fußzeile (zweite und letzte Linie).
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.4)
+  doc.line(MARGIN, 283, PAGE_W - MARGIN, 283)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(150, 145, 138)
