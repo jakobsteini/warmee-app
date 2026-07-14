@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react'
 import { getDashboardStats, type DashboardStats } from '../lib/dashboard'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
 
 interface StatDef {
   key: keyof DashboardStats
-  label: string
+  labelKey: TranslationKey
 }
 
 const STATS: StatDef[] = [
-  { key: 'dealers', label: 'Händler' },
-  { key: 'assets', label: 'Bilder im Archiv' },
-  { key: 'openOrders', label: 'Offene Orders' },
-  { key: 'overdueInvoices', label: 'Überfällige Rechnungen' },
+  { key: 'dealers', labelKey: 'dashboard.stat.dealers' },
+  { key: 'assets', labelKey: 'dashboard.stat.assets' },
+  { key: 'openOrders', labelKey: 'dashboard.stat.openOrders' },
+  { key: 'overdueInvoices', labelKey: 'dashboard.stat.overdueInvoices' },
 ]
 
 export default function Dashboard() {
+  const t = useT()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +28,7 @@ export default function Dashboard() {
         const data = await getDashboardStats()
         if (active) setStats(data)
       } catch {
-        if (active) setError('Kennzahlen konnten nicht geladen werden.')
+        if (active) setError(t('dashboard.error'))
       } finally {
         if (active) setLoading(false)
       }
@@ -38,10 +41,10 @@ export default function Dashboard() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Übersicht</h1>
-        <p className="mt-1 text-sm text-muted">
-          Ein Blick auf die wichtigsten Kennzahlen.
-        </p>
+        <h1 className="text-2xl font-medium text-ink">
+          {t('dashboard.title')}
+        </h1>
+        <p className="mt-1 text-sm text-muted">{t('dashboard.subtitle')}</p>
       </div>
 
       {error && (
@@ -59,7 +62,7 @@ export default function Dashboard() {
             <div className="text-4xl font-medium tabular-nums text-ink">
               {loading || !stats ? '—' : stats[s.key]}
             </div>
-            <div className="mt-2 text-sm text-muted">{s.label}</div>
+            <div className="mt-2 text-sm text-muted">{t(s.labelKey)}</div>
           </div>
         ))}
       </div>

@@ -14,6 +14,7 @@ import {
 } from '../types/product'
 import type { Season } from '../types/asset'
 import EmptyState from '../components/EmptyState'
+import { useT } from '../i18n'
 
 /** Preis (number oder numeric-String aus PostgREST) deutsch formatieren. */
 function formatPrice(value: number | string | null): string {
@@ -58,6 +59,7 @@ const emptyForm: ProductForm = {
 }
 
 export default function Products() {
+  const t = useT()
   const [products, setProducts] = useState<Product[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [loading, setLoading] = useState(true)
@@ -80,7 +82,7 @@ export default function Products() {
       setProducts(prods)
       setSeasons(seas)
     } catch {
-      setError('Artikel konnten nicht geladen werden.')
+      setError(t('products.loadError'))
     } finally {
       setLoading(false)
     }
@@ -149,7 +151,7 @@ export default function Products() {
     e.preventDefault()
     const name = form.name.trim()
     if (!name) {
-      setFormError('Name ist erforderlich.')
+      setFormError(t('common.nameRequired'))
       return
     }
 
@@ -175,7 +177,7 @@ export default function Products() {
       closeForm()
       await load()
     } catch {
-      setFormError('Speichern fehlgeschlagen. Bitte erneut versuchen.')
+      setFormError(t('common.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -208,17 +210,17 @@ export default function Products() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Artikel</h1>
-          <p className="mt-1 text-sm text-muted">
-            Produktkatalog – Stammdaten, Farben, Preise und Saison.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">
+            {t('products.title')}
+          </h1>
+          <p className="mt-1 text-sm text-muted">{t('products.subtitle')}</p>
         </div>
         <button
           type="button"
           onClick={openCreate}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
         >
-          Artikel hinzufügen
+          {t('products.add')}
         </button>
       </div>
 
@@ -234,14 +236,14 @@ export default function Products() {
           {seasons.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 text-xs uppercase tracking-wider text-muted">
-                Saison
+                {t('common.season')}
               </span>
               <button
                 type="button"
                 onClick={() => setSeasonFilter(null)}
                 className={pillClass(seasonFilter === null)}
               >
-                Alle
+                {t('common.all')}
               </button>
               {seasons.map((s) => (
                 <button
@@ -258,14 +260,14 @@ export default function Products() {
           {availableCategories.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 text-xs uppercase tracking-wider text-muted">
-                Kategorie
+                {t('common.category')}
               </span>
               <button
                 type="button"
                 onClick={() => setCategoryFilter(null)}
                 className={pillClass(categoryFilter === null)}
               >
-                Alle
+                {t('common.all')}
               </button>
               {availableCategories.map((c) => (
                 <button
@@ -283,29 +285,32 @@ export default function Products() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : products.length === 0 ? (
-        <EmptyState actionLabel="Artikel anlegen" onAction={openCreate}>
-          Hier pflegst du den Artikelkatalog – Name, Farbe, Größe und Preise je
-          Saison. Lege den ersten Artikel an.
+        <EmptyState actionLabel={t('products.create')} onAction={openCreate}>
+          {t('products.empty')}
         </EmptyState>
       ) : filtered.length === 0 ? (
         <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Keine Artikel für diese Filter.
-          </p>
+          <p className="text-sm text-muted">{t('products.noFilterMatch')}</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Kategorie</th>
-                <th className="px-4 py-3 font-medium">Farben</th>
-                <th className="px-4 py-3 font-medium">Endkunde</th>
-                <th className="px-4 py-3 font-medium">Großhandel</th>
-                <th className="px-4 py-3 font-medium">Saison</th>
+                <th className="px-4 py-3 font-medium">{t('common.name')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.category')}</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('products.col.colors')}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {t('products.col.retail')}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {t('products.col.wholesale')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.season')}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -337,14 +342,14 @@ export default function Products() {
                       onClick={() => openEdit(p)}
                       className="text-muted transition-colors hover:text-ink"
                     >
-                      Bearbeiten
+                      {t('common.edit')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(p)}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -358,11 +363,13 @@ export default function Products() {
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-lg bg-cream p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-medium text-ink">
-              {editing ? 'Artikel bearbeiten' : 'Artikel hinzufügen'}
+              {editing ? t('products.edit') : t('products.add')}
             </h2>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Name *</span>
+                <span className="text-sm text-muted">
+                  {t('products.field.nameReq')}
+                </span>
                 <input
                   type="text"
                   required
@@ -374,7 +381,9 @@ export default function Products() {
 
               <div className="flex gap-4">
                 <label className="flex flex-1 flex-col gap-1.5">
-                  <span className="text-sm text-muted">Kategorie</span>
+                  <span className="text-sm text-muted">
+                    {t('common.category')}
+                  </span>
                   <select
                     value={form.category}
                     onChange={(e) =>
@@ -391,7 +400,9 @@ export default function Products() {
                   </select>
                 </label>
                 <label className="flex flex-1 flex-col gap-1.5">
-                  <span className="text-sm text-muted">Saison</span>
+                  <span className="text-sm text-muted">
+                    {t('common.season')}
+                  </span>
                   <select
                     value={form.season_id}
                     onChange={(e) =>
@@ -411,7 +422,7 @@ export default function Products() {
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">
-                  Farben (Komma-getrennt)
+                  {t('products.field.colors')}
                 </span>
                 <input
                   type="text"
@@ -419,14 +430,16 @@ export default function Products() {
                   onChange={(e) =>
                     setForm({ ...form, colorsText: e.target.value })
                   }
-                  placeholder="z. B. Camel, Anthrazit, Creme"
+                  placeholder={t('products.field.colorsPlaceholder')}
                   className={inputClass}
                 />
               </label>
 
               <div className="flex gap-4">
                 <label className="flex flex-1 flex-col gap-1.5">
-                  <span className="text-sm text-muted">Endkundenpreis (€)</span>
+                  <span className="text-sm text-muted">
+                    {t('products.field.retail')}
+                  </span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -439,7 +452,9 @@ export default function Products() {
                   />
                 </label>
                 <label className="flex flex-1 flex-col gap-1.5">
-                  <span className="text-sm text-muted">Großhandelspreis (€)</span>
+                  <span className="text-sm text-muted">
+                    {t('products.field.wholesale')}
+                  </span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -461,14 +476,14 @@ export default function Products() {
                   onClick={closeForm}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {saving ? 'Speichert…' : 'Speichern'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </form>

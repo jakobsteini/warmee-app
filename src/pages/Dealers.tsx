@@ -13,6 +13,7 @@ import { numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import CreditBadge from '../components/CreditBadge'
 import ExportButtons from '../components/ExportButtons'
+import { useT } from '../i18n'
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -487,6 +488,7 @@ const DEALER_EXPORT_COLUMNS: ExportColumn<Dealer>[] = [
 // ─── Seite ──────────────────────────────────────────────────────────────────
 
 export default function Dealers() {
+  const t = useT()
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -515,7 +517,7 @@ export default function Dealers() {
       setDealers(dealerList)
       setCredits(creditMap)
     } catch {
-      setError('Händler konnten nicht geladen werden.')
+      setError(t('dealers.loadError'))
     } finally {
       setLoading(false)
     }
@@ -581,7 +583,7 @@ export default function Dealers() {
       await deleteDealer(d.id)
       await load()
     } catch {
-      setError('Löschen fehlgeschlagen.')
+      setError(t('dealers.deleteError'))
     }
   }
 
@@ -589,10 +591,10 @@ export default function Dealers() {
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Händler</h1>
-          <p className="mt-1 text-sm text-muted">
-            Stammdaten, Konditionen und Adressen der Fachhandels-Kontakte.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">
+            {t('dealers.title')}
+          </h1>
+          <p className="mt-1 text-sm text-muted">{t('dealers.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           <ExportButtons
@@ -606,7 +608,7 @@ export default function Dealers() {
             onClick={openCreate}
             className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
           >
-            Händler hinzufügen
+            {t('dealers.add')}
           </button>
         </div>
       </div>
@@ -618,23 +620,30 @@ export default function Dealers() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : dealers.length === 0 ? (
-        <EmptyState actionLabel="Händler hinzufügen" onAction={openCreate}>
-          Hier verwaltest du deine Fachhandels-Kontakte. Lege den ersten Händler
-          an.
+        <EmptyState actionLabel={t('dealers.add')} onAction={openCreate}>
+          {t('dealers.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Kd.-Nr.</th>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Ansprechpartner</th>
-                <th className="px-4 py-3 font-medium">E-Mail</th>
-                <th className="px-4 py-3 font-medium">Ort</th>
-                <th className="px-4 py-3 font-medium">Bonität</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('dealers.col.customerNo')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.name')}</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('dealers.col.contact')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.email')}</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('dealers.col.city')}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {t('dealers.col.credit')}
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -662,14 +671,14 @@ export default function Dealers() {
                       onClick={() => openEdit(d)}
                       className="text-muted transition-colors hover:text-ink"
                     >
-                      Bearbeiten
+                      {t('common.edit')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(d)}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>

@@ -2,10 +2,17 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listInvoices } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
-import { invoiceStatusLabel, type InvoiceListRow } from '../types/invoice'
+import { type InvoiceListRow } from '../types/invoice'
 import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import ExportButtons from '../components/ExportButtons'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Rechnungs-Status → Übersetzungs-Key für das On-Screen-Badge. */
+function statusKey(status: string): TranslationKey {
+  return `invoice.status.${status}` as TranslationKey
+}
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -32,10 +39,11 @@ function formatDateShort(iso: string | null): string {
  * dem Zahlungsdialog (paid_at / paid_amount).
  */
 function PaymentCell({ inv }: { inv: InvoiceListRow }) {
+  const t = useT()
   if (inv.status === 'paid') {
     return (
       <span className="inline-block whitespace-nowrap rounded-full bg-ink px-2.5 py-0.5 text-xs text-cream">
-        bezahlt am {formatDateShort(inv.paid_at)}
+        {t('invoices.paidOn', { date: formatDateShort(inv.paid_at) })}
         {inv.paid_amount != null && <> · {formatEUR(inv.paid_amount)}</>}
       </span>
     )
@@ -45,13 +53,14 @@ function PaymentCell({ inv }: { inv: InvoiceListRow }) {
   }
   return (
     <span className="whitespace-nowrap text-xs text-muted">
-      offen: {formatEUR(inv.total)}
+      {t('invoices.open', { amount: formatEUR(inv.total) })}
     </span>
   )
 }
 
 /** Farbige Status-Badge. */
 function StatusBadge({ status }: { status: string }) {
+  const t = useT()
   const tone =
     status === 'paid'
       ? 'bg-ink text-cream'
@@ -62,7 +71,7 @@ function StatusBadge({ status }: { status: string }) {
           : 'border-[0.5px] border-line text-muted'
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-xs ${tone}`}>
-      {invoiceStatusLabel(status)}
+      {t(statusKey(status))}
     </span>
   )
 }
@@ -99,6 +108,7 @@ const INVOICE_EXPORT_COLUMNS: ExportColumn<InvoiceListRow>[] = [
 
 export default function Invoices() {
   const navigate = useNavigate()
+  const t = useT()
   const [invoices, setInvoices] = useState<InvoiceListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,7 +118,7 @@ export default function Invoices() {
       try {
         setInvoices(await listInvoices())
       } catch {
-        setError('Rechnungen konnten nicht geladen werden.')
+        setError(t('invoices.loadError'))
       } finally {
         setLoading(false)
       }
@@ -119,11 +129,10 @@ export default function Invoices() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Rechnungen</h1>
-          <p className="mt-1 text-sm text-muted">
-            Rechnungen entstehen aus einer Lieferung im Wareneingang oder als
-            freie Rechnung. Die Nummer wird fortlaufend und ohne Lücken vergeben.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">
+            {t('invoices.title')}
+          </h1>
+          <p className="mt-1 text-sm text-muted">{t('invoices.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -131,7 +140,7 @@ export default function Invoices() {
             onClick={() => navigate('/invoices/new')}
             className="whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
           >
-            Freie Rechnung
+            {t('invoices.free')}
           </button>
           <ExportButtons
             filenameBase="rechnungen"
@@ -149,23 +158,31 @@ export default function Invoices() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : invoices.length === 0 ? (
-        <EmptyState actionLabel="Zum Wareneingang" actionTo="/deliveries">
-          Rechnungen entstehen aus einer Lieferung im Wareneingang. Öffne dort
-          eine Lieferung und erstelle die erste Rechnung.
+        <EmptyState
+          actionLabel={t('invoices.emptyAction')}
+          actionTo="/deliveries"
+        >
+          {t('invoices.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Nummer</th>
-                <th className="px-4 py-3 font-medium">Händler</th>
-                <th className="px-4 py-3 font-medium">Datum</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Zahlung</th>
-                <th className="px-4 py-3 text-right font-medium">Betrag</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('invoices.col.number')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.date')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('invoices.col.payment')}
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  {t('common.amount')}
+                </th>
               </tr>
             </thead>
             <tbody>

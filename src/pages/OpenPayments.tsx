@@ -9,6 +9,7 @@ import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import MarkPaidDialog from '../components/MarkPaidDialog'
 import ExportButtons from '../components/ExportButtons'
+import { useT } from '../i18n'
 
 /** Heute als ISO-Kurzdatum (YYYY-MM-DD), für den Fälligkeitsvergleich. */
 function todayIso(): string {
@@ -75,6 +76,7 @@ const OPEN_PAYMENT_EXPORT_COLUMNS: ExportColumn<InvoiceListRow>[] = [
 type Filter = 'all' | 'overdue'
 
 export default function OpenPayments() {
+  const t = useT()
   const [rows, setRows] = useState<InvoiceListRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +89,7 @@ export default function OpenPayments() {
     try {
       setRows(await listOpenPayments())
     } catch {
-      setError('Offene Posten konnten nicht geladen werden.')
+      setError(t('openPayments.loadError'))
     } finally {
       setLoading(false)
     }
@@ -132,10 +134,11 @@ export default function OpenPayments() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Offene Posten</h1>
+          <h1 className="text-2xl font-medium text-ink">
+            {t('openPayments.title')}
+          </h1>
           <p className="mt-1 text-sm text-muted">
-            Alle versendeten, noch nicht bezahlten Rechnungen. Eine Rechnung gilt
-            als überfällig, sobald das Fälligkeitsdatum überschritten ist.
+            {t('openPayments.subtitle')}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -148,8 +151,13 @@ export default function OpenPayments() {
             rows={visible}
           />
           <p className="text-xs text-muted">
-            Export: {filter === 'overdue' ? 'nur überfällige' : 'alle offenen'}{' '}
-            ({visible.length})
+            {t('openPayments.exportNote', {
+              scope:
+                filter === 'overdue'
+                  ? t('openPayments.exportOnlyOverdue')
+                  : t('openPayments.exportAllOpen'),
+              count: visible.length,
+            })}
           </p>
         </div>
       </div>
@@ -166,35 +174,43 @@ export default function OpenPayments() {
           onClick={() => setFilter('all')}
           className={pillClass(filter === 'all')}
         >
-          Alle
+          {t('common.all')}
         </button>
         <button
           type="button"
           onClick={() => setFilter('overdue')}
           className={pillClass(filter === 'overdue')}
         >
-          Nur überfällige
+          {t('openPayments.onlyOverdue')}
         </button>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : rows.length === 0 ? (
-        <EmptyState actionLabel="Zu den Rechnungen" actionTo="/invoices">
-          Hier siehst du alle versendeten, noch nicht bezahlten Rechnungen.
-          Aktuell sind keine offen – alle versendeten Rechnungen sind bezahlt.
+        <EmptyState
+          actionLabel={t('invoices.title')}
+          actionTo="/invoices"
+        >
+          {t('openPayments.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Rechnungsnummer</th>
-                <th className="px-4 py-3 font-medium">Händler</th>
-                <th className="px-4 py-3 font-medium">Rechnungsdatum</th>
-                <th className="px-4 py-3 font-medium">Fällig am</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Betrag</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('invoices.col.number')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.date')}</th>
+                <th className="px-4 py-3 font-medium">
+                  {t('openPayments.dueOn')}
+                </th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-right font-medium">
+                  {t('common.amount')}
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -205,7 +221,7 @@ export default function OpenPayments() {
                     colSpan={7}
                     className="px-4 py-8 text-center text-sm text-muted"
                   >
-                    Keine überfälligen Rechnungen.
+                    {t('openPayments.noneOverdue')}
                   </td>
                 </tr>
               ) : (
@@ -238,7 +254,9 @@ export default function OpenPayments() {
                               : 'border-[0.5px] border-ink text-ink'
                           }`}
                         >
-                          {overdue ? 'Überfällig' : 'Offen'}
+                          {overdue
+                            ? t('openPayments.overdue')
+                            : t('openPayments.open')}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -250,7 +268,7 @@ export default function OpenPayments() {
                           onClick={() => setPayRow(r)}
                           className="text-muted transition-colors hover:text-ink"
                         >
-                          Zahlung erfassen
+                          {t('openPayments.recordPayment')}
                         </button>
                       </td>
                     </tr>
@@ -261,9 +279,11 @@ export default function OpenPayments() {
             <tfoot>
               <tr className="border-t-[0.5px] border-line bg-card text-ink">
                 <td colSpan={5} className="px-4 py-3 font-medium">
-                  Gesamtbetrag offen
+                  {t('openPayments.totalOpen')}
                   <span className="ml-2 font-normal text-muted">
-                    davon überfällig: {formatEUR(totalOverdue)}
+                    {t('openPayments.ofWhichOverdue', {
+                      amount: formatEUR(totalOverdue),
+                    })}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right font-medium whitespace-nowrap">

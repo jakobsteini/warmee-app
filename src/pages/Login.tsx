@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n'
 
 export default function Login() {
   const navigate = useNavigate()
   const { session } = useAuth()
+  const t = useT()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +33,7 @@ export default function Login() {
     setSubmitting(false)
 
     if (signInError) {
-      setError('Anmeldung fehlgeschlagen. E-Mail oder Passwort prüfen.')
+      setError(t('login.error'))
       return
     }
 
@@ -49,7 +51,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm text-muted">E-Mail</span>
+            <span className="text-sm text-muted">{t('login.email')}</span>
             <input
               type="email"
               required
@@ -61,7 +63,7 @@ export default function Login() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-sm text-muted">Passwort</span>
+            <span className="text-sm text-muted">{t('login.password')}</span>
             <input
               type="password"
               required
@@ -79,7 +81,7 @@ export default function Login() {
             disabled={submitting}
             className="mt-2 rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {submitting ? 'Anmeldung…' : 'Anmelden'}
+            {submitting ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>

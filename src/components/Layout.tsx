@@ -1,32 +1,44 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+import type { Lang } from '../i18n/dict'
+
+interface NavDef {
+  to: string
+  key: TranslationKey
+}
 
 /** Aktive Module (Baustein B – Marketing & Newsletter) */
-const navItems = [
-  { to: '/dashboard', label: 'Übersicht' },
-  { to: '/dealers', label: 'Händler' },
-  { to: '/assets', label: 'Bildarchiv' },
-  { to: '/assets/assign', label: 'Bilder zuordnen' },
-  { to: '/crop', label: 'Zuschnitt' },
-  { to: '/newsletter', label: 'Newsletter' },
+const navItems: NavDef[] = [
+  { to: '/dashboard', key: 'nav.dashboard' },
+  { to: '/dealers', key: 'nav.dealers' },
+  { to: '/assets', key: 'nav.assets' },
+  { to: '/assets/assign', key: 'nav.assign' },
+  { to: '/crop', key: 'nav.crop' },
+  { to: '/newsletter', key: 'nav.newsletter' },
 ]
 
 /** Aktive Module aus Baustein A – Warenwirtschaft */
-const warenItems = [
-  { to: '/products', label: 'Artikel' },
-  { to: '/orders', label: 'Orders' },
-  { to: '/production-orders', label: 'Produktionsbestellung' },
-  { to: '/deliveries', label: 'Wareneingang' },
-  { to: '/invoices', label: 'Rechnungen' },
-  { to: '/open-payments', label: 'Offene Posten' },
-  { to: '/analytics', label: 'Auswertungen' },
+const warenItems: NavDef[] = [
+  { to: '/products', key: 'nav.products' },
+  { to: '/orders', key: 'nav.orders' },
+  { to: '/production-orders', key: 'nav.productionOrders' },
+  { to: '/deliveries', key: 'nav.deliveries' },
+  { to: '/invoices', key: 'nav.invoices' },
+  { to: '/open-payments', key: 'nav.openPayments' },
+  { to: '/analytics', key: 'nav.analytics' },
 ]
 
-/** Zukünftige Module (Baustein A – Warenwirtschaft), noch ausgegraut */
-const futureItems: string[] = []
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  [
+    'rounded-md px-3 py-2 text-sm transition-colors',
+    isActive ? 'bg-white/[0.08] text-cream' : 'text-nav hover:text-cream',
+  ].join(' ')
 
 export default function Layout() {
   const { session, signOut } = useAuth()
+  const { t, lang, setLang } = useI18n()
 
   return (
     <div className="flex min-h-screen">
@@ -39,54 +51,41 @@ export default function Layout() {
 
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                [
-                  'rounded-md px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-white/[0.08] text-cream'
-                    : 'text-nav hover:text-cream',
-                ].join(' ')
-              }
-            >
-              {item.label}
+            <NavLink key={item.to} to={item.to} className={linkClass}>
+              {t(item.key)}
             </NavLink>
           ))}
 
           <div className="mt-6 px-3 pb-2 text-[11px] uppercase tracking-wider text-muted">
-            Warenwirtschaft
+            {t('nav.section.warehouse')}
           </div>
           {warenItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                [
-                  'rounded-md px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-white/[0.08] text-cream'
-                    : 'text-nav hover:text-cream',
-                ].join(' ')
-              }
-            >
-              {item.label}
+            <NavLink key={item.to} to={item.to} className={linkClass}>
+              {t(item.key)}
             </NavLink>
-          ))}
-          {futureItems.map((label) => (
-            <span
-              key={label}
-              aria-disabled="true"
-              title="Kommt in Baustein A"
-              className="cursor-not-allowed rounded-md px-3 py-2 text-sm text-muted/60"
-            >
-              {label}
-            </span>
           ))}
         </nav>
 
         <div className="border-t border-white/10 px-6 py-4">
+          {/* Sprachumschalter – lebt im Context, überdauert die Sitzung. */}
+          <div className="mb-3 flex gap-1" role="group" aria-label={t('lang.label')}>
+            {(['de', 'en'] as Lang[]).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLang(l)}
+                aria-pressed={lang === l}
+                className={[
+                  'rounded px-2 py-1 text-xs uppercase tracking-wider transition-colors',
+                  lang === l
+                    ? 'bg-white/[0.12] text-cream'
+                    : 'text-muted hover:text-cream',
+                ].join(' ')}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
           {session?.user?.email && (
             <p className="mb-2 truncate text-xs text-muted">
               {session.user.email}
@@ -97,7 +96,7 @@ export default function Layout() {
             onClick={signOut}
             className="text-sm text-nav transition-colors hover:text-cream"
           >
-            Abmelden
+            {t('nav.signOut')}
           </button>
         </div>
       </aside>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { formatEUR } from '../lib/money'
+import { useT } from '../i18n'
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -29,6 +30,7 @@ export default function MarkPaidDialog({
   onConfirm: (paidAt: string, paidAmount: number) => Promise<void>
   onClose: () => void
 }) {
+  const t = useT()
   const [paidAt, setPaidAt] = useState(todayIso())
   const [amount, setAmount] = useState(defaultAmount.toFixed(2))
   const [busy, setBusy] = useState(false)
@@ -37,12 +39,12 @@ export default function MarkPaidDialog({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!paidAt) {
-      setError('Bitte ein Zahlungsdatum angeben.')
+      setError(t('markPaid.dateRequired'))
       return
     }
     const amt = Number(amount.replace(',', '.'))
     if (Number.isNaN(amt) || amt <= 0) {
-      setError('Bitte einen gültigen Betrag angeben.')
+      setError(t('markPaid.amountRequired'))
       return
     }
     setBusy(true)
@@ -51,7 +53,7 @@ export default function MarkPaidDialog({
       await onConfirm(paidAt, amt)
       // Erfolg: der Aufrufer schließt den Dialog (kein setBusy(false) nötig).
     } catch {
-      setError('Speichern fehlgeschlagen. Bitte erneut versuchen.')
+      setError(t('common.saveFailed'))
       setBusy(false)
     }
   }
@@ -59,12 +61,16 @@ export default function MarkPaidDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-sm rounded-lg bg-cream p-6 shadow-xl">
-        <h2 className="mb-1 text-lg font-medium text-ink">Zahlung erfassen</h2>
-        <p className="mb-4 text-sm text-muted">Rechnung {invoiceNumber}</p>
+        <h2 className="mb-1 text-lg font-medium text-ink">
+          {t('markPaid.title')}
+        </h2>
+        <p className="mb-4 text-sm text-muted">
+          {t('markPaid.invoice', { number: invoiceNumber })}
+        </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs text-muted">Zahlungsdatum</span>
+            <span className="text-xs text-muted">{t('markPaid.date')}</span>
             <input
               type="date"
               value={paidAt}
@@ -75,7 +81,7 @@ export default function MarkPaidDialog({
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs text-muted">Betrag (brutto)</span>
+            <span className="text-xs text-muted">{t('markPaid.amount')}</span>
             <input
               type="text"
               inputMode="decimal"
@@ -84,7 +90,7 @@ export default function MarkPaidDialog({
               className={inputClass}
             />
             <span className="text-xs text-muted">
-              Offener Betrag: {formatEUR(defaultAmount)}
+              {t('markPaid.openAmount', { amount: formatEUR(defaultAmount) })}
             </span>
           </label>
 
@@ -96,14 +102,14 @@ export default function MarkPaidDialog({
               onClick={onClose}
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
             >
-              Abbrechen
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={busy}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? 'Speichert…' : 'Als bezahlt buchen'}
+              {busy ? t('common.saving') : t('markPaid.confirm')}
             </button>
           </div>
         </form>

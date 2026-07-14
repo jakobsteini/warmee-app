@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { downloadCsv, downloadXlsx, type ExportColumn } from '../lib/exportFile'
+import { useT } from '../i18n'
 
 /**
  * Zwei Download-Buttons („Als Excel" / „Als CSV") für einen Datensatz. Exportiert
@@ -17,6 +18,7 @@ export default function ExportButtons<T>({
   columns: ExportColumn<T>[]
   rows: T[]
 }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const disabled = rows.length === 0
@@ -27,7 +29,7 @@ export default function ExportButtons<T>({
     try {
       await downloadXlsx(filenameBase, sheetName, columns, rows)
     } catch {
-      setError('Excel-Export fehlgeschlagen.')
+      setError(t('export.xlsxError'))
     } finally {
       setBusy(false)
     }
@@ -38,7 +40,7 @@ export default function ExportButtons<T>({
     try {
       downloadCsv(filenameBase, columns, rows)
     } catch {
-      setError('CSV-Export fehlgeschlagen.')
+      setError(t('export.csvError'))
     }
   }
 
@@ -54,7 +56,7 @@ export default function ExportButtons<T>({
           disabled={disabled || busy}
           className={btnClass}
         >
-          {busy ? 'Exportiert…' : 'Als Excel'}
+          {busy ? t('export.busy') : t('export.xlsx')}
         </button>
         <button
           type="button"
@@ -62,7 +64,7 @@ export default function ExportButtons<T>({
           disabled={disabled}
           className={btnClass}
         >
-          Als CSV
+          {t('export.csv')}
         </button>
       </div>
       {error && <p className="text-xs text-red-700">{error}</p>}
