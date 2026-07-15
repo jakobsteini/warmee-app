@@ -7,6 +7,7 @@ import {
   updateProductionStatus,
 } from '../lib/productionOrders'
 import { listSeasons } from '../lib/seasons'
+import GoodsReceiptSection from '../components/GoodsReceiptSection'
 import {
   nextProductionStatus,
   type ProductionOrder,
@@ -192,6 +193,8 @@ export default function ProductionOrderEdit() {
           {t('common.notePrint', { notes: order.notes })}
         </p>
       )}
+
+      <GoodsReceiptSection productionOrderId={order.id} onChanged={load} />
 
       <h2 className="mb-3 text-lg font-medium text-ink">
         {t('productionOrderEdit.positions', { count: items.length })}

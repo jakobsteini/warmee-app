@@ -186,8 +186,12 @@ export default function DeliveryEdit() {
   async function saveQuantity(itemId: string, value: string) {
     try {
       await updateDeliveryItemQuantity(itemId, Number(value) || 0)
-    } catch {
-      setError(t('deliveryEdit.qtySaveError'))
+      setError(null)
+    } catch (err) {
+      // Mengenkontrolle (Verteilung > Eingang) wirft eine bezifferte Meldung —
+      // die zeigen wir wörtlich. Der abgelehnte Wert wird aus der DB zurückgeholt.
+      setError(err instanceof Error ? err.message : t('deliveryEdit.qtySaveError'))
+      await load()
     }
   }
 

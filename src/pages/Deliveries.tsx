@@ -8,9 +8,15 @@ import {
   type ReceivedProductionOrder,
 } from '../lib/deliveries'
 import { type DeliveryListRow } from '../types/delivery'
+import type { DistributionShortfall } from '../types/goodsReceipt'
 import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
+
+/** Positions-Label „Produkt · Farbe · Größe" (leere Teile weggelassen). */
+function shortfallLabel(s: DistributionShortfall): string {
+  return [s.productName, s.color, s.size].filter(Boolean).join(' · ')
+}
 
 /** Lieferungs-Status → Übersetzungs-Key. */
 function deliveryStatusKey(status: string): TranslationKey {
@@ -60,6 +66,7 @@ export default function Deliveries() {
   const [productionOrderId, setProductionOrderId] = useState('')
   const [generating, setGenerating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [shortfalls, setShortfalls] = useState<DistributionShortfall[]>([])
 
   async function load() {
     setLoading(true)
@@ -97,8 +104,9 @@ export default function Deliveries() {
     setGenerating(true)
     setFormError(null)
     try {
-      const created = await generateDeliveries(productionOrderId)
+      const { created, shortfalls: sf } = await generateDeliveries(productionOrderId)
       setFormOpen(false)
+      setShortfalls(sf)
       if (created === 0) {
         setError(t('deliveries.noneCreated'))
       }
@@ -147,6 +155,44 @@ export default function Deliveries() {
       {error && (
         <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {shortfalls.length > 0 && (
+        <div className="mb-4 rounded-md border-[0.5px] border-amber-600/60 bg-amber-50 px-4 py-3 text-sm text-ink">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-medium text-amber-800">
+              {t('deliveries.shortfall.title')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShortfalls([])}
+              className="text-muted transition-colors hover:text-ink"
+              aria-label={t('common.close')}
+            >
+              ✕
+            </button>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {shortfalls.map((s, idx) => (
+              <li key={idx} className="text-ink">
+                {t('deliveries.shortfall.row', {
+                  label: shortfallLabel(s),
+                  ordered: s.ordered.toLocaleString('de-DE'),
+                  received: s.received.toLocaleString('de-DE'),
+                  gap: s.gap.toLocaleString('de-DE'),
+                })}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 font-medium text-amber-800">
+            {t('deliveries.shortfall.total', {
+              gap: shortfalls
+                .reduce((sum, s) => sum + s.gap, 0)
+                .toLocaleString('de-DE'),
+            })}
+          </p>
+          <p className="mt-2 text-muted">{t('deliveries.shortfall.priorityHint')}</p>
         </div>
       )}
 

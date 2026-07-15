@@ -1,11 +1,18 @@
 import { supabase } from './supabase'
 import { getMyOrgId } from './org'
+import { itemKey } from './itemKey'
+import { hasGoodsReceipts, receivedByKey } from './goodsReceipts'
 import type {
   Delivery,
   DeliveryItemWithProduct,
   DeliveryListRow,
   DeliveryStatus,
 } from '../types/delivery'
+import type { DistributionShortfall } from '../types/goodsReceipt'
+
+// itemKey lebt neutral in ./itemKey (kein Zyklus mit goodsReceipts), wird hier
+// aber weiter re-exportiert, weil bestehende Importe darauf zeigen.
+export { itemKey }
 
 /**
  * Alle Lieferungen der eigenen Org (RLS scoped automatisch), neueste zuerst.
@@ -100,13 +107,15 @@ interface RawDealerItem {
   orders: { dealer_id: string } | null
 }
 
-/** Schlüssel für die Gruppierung nach Produkt + Farbe + Größe. */
-export function itemKey(
-  product_id: string,
-  color: string | null,
-  size: string | null,
-): string {
-  return `${product_id}||${color ?? ''}||${size ?? ''}`
+/**
+ * Ergebnis von `generateDeliveries`: Anzahl angelegter Lieferungen plus die
+ * Fehlmengen (Positionen, bei denen mehr verteilt werden soll als real
+ * eingegangen ist). `shortfalls` ist leer, wenn kein Wareneingang erfasst ist
+ * oder der Eingang für alle Positionen ausreicht.
+ */
+export interface GenerateDeliveriesResult {
+  created: number
+  shortfalls: DistributionShortfall[]
 }
 
 /**
@@ -123,7 +132,7 @@ export function itemKey(
  */
 export async function generateDeliveries(
   productionOrderId: string,
-): Promise<number> {
+): Promise<GenerateDeliveriesResult> {
   const org_id = await getMyOrgId()
 
   // Bestellung laden und Status prüfen.
@@ -237,7 +246,76 @@ export async function generateDeliveries(
     throw err
   }
 
-  return createdDeliveries.length
+  // Fehlmengen ermitteln (weicher Hinweis, kein Block): Ist ein Wareneingang
+  // erfasst und übersteigt die verteilte Summe je Position den Eingang, wird die
+  // Lücke beziffert zurückgegeben. Die Auflösung (wer bekommt weniger) ist die
+  // noch nicht gebaute prioritätsbasierte Zuteilung — hier nur sichtbar machen.
+  const shortfalls = await computeShortfalls(productionOrderId, byDealer)
+
+  return { created: createdDeliveries.length, shortfalls }
+}
+
+/**
+ * Fehlmengen je Position: verteilte Gesamtmenge (über alle Händler) gegen den
+ * erfassten Wareneingang. Leer, wenn kein Wareneingang erfasst ist.
+ */
+async function computeShortfalls(
+  productionOrderId: string,
+  byDealer: Map<
+    string,
+    Map<
+      string,
+      { product_id: string; color: string | null; size: string | null; total: number }
+    >
+  >,
+): Promise<DistributionShortfall[]> {
+  if (!(await hasGoodsReceipts(productionOrderId))) return []
+
+  // Verteilte Gesamtmenge je Schlüssel über alle Händler summieren.
+  const distributedByKey = new Map<
+    string,
+    { product_id: string; color: string | null; size: string | null; total: number }
+  >()
+  for (const group of byDealer.values()) {
+    for (const [key, g] of group) {
+      const acc = distributedByKey.get(key)
+      if (acc) acc.total += g.total
+      else distributedByKey.set(key, { ...g })
+    }
+  }
+
+  const received = await receivedByKey(productionOrderId)
+
+  // Produktnamen für die betroffenen Positionen nachladen (eine Abfrage).
+  const productIds = [...distributedByKey.values()].map((g) => g.product_id)
+  const nameById = new Map<string, string>()
+  if (productIds.length > 0) {
+    const { data: prods, error } = await supabase
+      .from('products')
+      .select('id, name')
+      .in('id', productIds)
+    if (error) throw error
+    for (const p of (prods ?? []) as { id: string; name: string }[]) {
+      nameById.set(p.id, p.name)
+    }
+  }
+
+  const shortfalls: DistributionShortfall[] = []
+  for (const [key, g] of distributedByKey) {
+    const recv = received.get(key) ?? 0
+    const gap = g.total - recv
+    if (gap > 0) {
+      shortfalls.push({
+        productName: nameById.get(g.product_id) ?? '—',
+        color: g.color,
+        size: g.size,
+        ordered: g.total,
+        received: recv,
+        gap,
+      })
+    }
+  }
+  return shortfalls
 }
 
 /**
@@ -266,16 +344,91 @@ export async function orderedQuantities(
   return map
 }
 
-/** Liefermenge einer Position setzen (Teillieferung). */
+/**
+ * Liefermenge einer Position setzen (Teillieferung).
+ *
+ * Mengenkontrolle: Ist für die Produktionsbestellung ein Wareneingang erfasst,
+ * darf die über ALLE Lieferungen verteilte Menge dieser Position den erfassten
+ * Eingang nicht übersteigen. Bei Überschreitung wird mit bezifferter Meldung
+ * geworfen — keine stille Falschmenge. Ohne erfassten Wareneingang gilt (wie
+ * bisher) keine Obergrenze.
+ */
 export async function updateDeliveryItemQuantity(
   itemId: string,
   quantity: number,
 ): Promise<void> {
+  await assertWithinReceived(itemId, quantity)
+
   const { error } = await supabase
     .from('delivery_items')
     .update({ quantity })
     .eq('id', itemId)
   if (error) throw error
+}
+
+/** Positions-Zeile einer Lieferung mit Produktionsbestellung + Produktname. */
+interface DeliveryItemContext {
+  product_id: string
+  color: string | null
+  size: string | null
+  product: { name: string } | null
+  deliveries: { production_order_id: string } | null
+}
+
+/**
+ * Wirft, wenn `quantity` für diese Position die verfügbare Restmenge des
+ * erfassten Wareneingangs übersteigt (Summe über alle Lieferungen der
+ * Produktionsbestellung, ohne die eigene Zeile). No-op ohne Wareneingang.
+ */
+async function assertWithinReceived(
+  itemId: string,
+  quantity: number,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('delivery_items')
+    .select(
+      'product_id, color, size, product:products(name), deliveries!inner(production_order_id)',
+    )
+    .eq('id', itemId)
+    .single()
+  if (error) throw error
+
+  const ctx = data as unknown as DeliveryItemContext
+  const productionOrderId = ctx.deliveries?.production_order_id
+  if (!productionOrderId) return
+  if (!(await hasGoodsReceipts(productionOrderId))) return
+
+  const key = itemKey(ctx.product_id, ctx.color, ctx.size)
+  const received = (await receivedByKey(productionOrderId)).get(key) ?? 0
+
+  // Bereits anderweitig verteilt (alle Lieferungen der PO, außer dieser Zeile).
+  const { data: siblings, error: sibErr } = await supabase
+    .from('delivery_items')
+    .select('id, product_id, color, size, quantity, deliveries!inner(production_order_id)')
+    .eq('deliveries.production_order_id', productionOrderId)
+  if (sibErr) throw sibErr
+
+  let others = 0
+  for (const s of (siblings ?? []) as unknown as {
+    id: string
+    product_id: string
+    color: string | null
+    size: string | null
+    quantity: number | null
+  }[]) {
+    if (s.id === itemId) continue
+    if (itemKey(s.product_id, s.color, s.size) === key) others += s.quantity ?? 0
+  }
+
+  const remaining = received - others
+  if (quantity > remaining) {
+    const label = [ctx.product?.name ?? '—', ctx.color, ctx.size]
+      .filter(Boolean)
+      .join(' · ')
+    throw new Error(
+      `${label}: nur ${received} Stück eingegangen, ${others} bereits anderweitig verteilt — höchstens ${Math.max(remaining, 0)} möglich.`,
+    )
+  }
 }
 
 /** Status einer Lieferung ändern (Ausstehend → Verpackt → Versendet → Geliefert). */

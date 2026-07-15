@@ -643,6 +643,34 @@ export const de = {
   'dunning.settings.addError': 'Die Stufe konnte nicht angelegt werden.',
   'dunning.settings.add': 'Stufe hinzufügen',
   'dunning.settings.adding': 'Fügt hinzu…',
+
+  // ─── Wareneingang (Produktionsbestellung) ─────────────────────────────────
+  'goodsReceipt.heading': 'Wareneingang',
+  'goodsReceipt.desc': 'Erfasse, was tatsächlich aus Nepal angekommen ist. Teillieferungen sind möglich — es kann mehrere Wareneingänge geben.',
+  'goodsReceipt.record': 'Wareneingang erfassen',
+  'goodsReceipt.date': 'Eingangsdatum',
+  'goodsReceipt.loadError': 'Wareneingang konnte nicht geladen werden.',
+  'goodsReceipt.nothingEntered': 'Bitte mindestens eine Eingangsmenge größer als 0 erfassen.',
+  'goodsReceipt.saveError': 'Wareneingang konnte nicht gespeichert werden.',
+  'goodsReceipt.deleteConfirm': 'Diesen Wareneingang wirklich löschen?',
+  'goodsReceipt.deleteError': 'Wareneingang konnte nicht gelöscht werden.',
+  'goodsReceipt.receiptLabel': 'Wareneingang vom {date}',
+  'goodsReceipt.receiptPieces': '{pieces} Stück',
+  'goodsReceipt.reconcileHeading': 'Abgleich Wareneingang ↔ Verteilung',
+  'goodsReceipt.reconcileHint': 'Bestellt (bei Nepal) → eingegangen (real) → verteilt (an Händler). Rest = eingegangen − verteilt; negativ (rot) heißt: mehr verteilt als eingegangen.',
+  'goodsReceipt.col.position': 'Position',
+  'goodsReceipt.col.ordered': 'Bestellt',
+  'goodsReceipt.col.alreadyReceived': 'Bisher eingegangen',
+  'goodsReceipt.col.receiveNow': 'Jetzt eingegangen',
+  'goodsReceipt.col.received': 'Eingegangen',
+  'goodsReceipt.col.distributed': 'Verteilt',
+  'goodsReceipt.col.rest': 'Rest',
+
+  // ─── Fehlmengen-Warnung beim Verteilen ────────────────────────────────────
+  'deliveries.shortfall.title': 'Achtung: Es kam weniger an, als bestellt wurde.',
+  'deliveries.shortfall.row': '{label}: bestellt {ordered}, eingegangen {received}, Fehlmenge {gap}',
+  'deliveries.shortfall.total': 'Gesamt-Fehlmenge: {gap} Stück',
+  'deliveries.shortfall.priorityHint': 'Die automatische prioritätsbasierte Zuteilung ist noch nicht gebaut — bitte die Verteilung von Hand anpassen (wer bekommt weniger). Die hinterlegte Priorität je Händler/Saison wird dabei noch nicht automatisch berücksichtigt.',
 } as const
 
 export type TranslationKey = keyof typeof de
@@ -1267,6 +1295,34 @@ export const en: Record<TranslationKey, string> = {
   'dunning.settings.addError': 'Could not create the level.',
   'dunning.settings.add': 'Add level',
   'dunning.settings.adding': 'Adding…',
+
+  // ─── Goods receipt (production order) ──────────────────────────────────────
+  'goodsReceipt.heading': 'Goods receipt',
+  'goodsReceipt.desc': 'Record what actually arrived from Nepal. Partial deliveries are supported — there can be several goods receipts.',
+  'goodsReceipt.record': 'Record goods receipt',
+  'goodsReceipt.date': 'Receipt date',
+  'goodsReceipt.loadError': 'Could not load the goods receipt.',
+  'goodsReceipt.nothingEntered': 'Please enter at least one received quantity greater than 0.',
+  'goodsReceipt.saveError': 'Could not save the goods receipt.',
+  'goodsReceipt.deleteConfirm': 'Really delete this goods receipt?',
+  'goodsReceipt.deleteError': 'Could not delete the goods receipt.',
+  'goodsReceipt.receiptLabel': 'Goods receipt of {date}',
+  'goodsReceipt.receiptPieces': '{pieces} pcs',
+  'goodsReceipt.reconcileHeading': 'Reconciliation goods receipt ↔ distribution',
+  'goodsReceipt.reconcileHint': 'Ordered (from Nepal) → received (actual) → distributed (to dealers). Remainder = received − distributed; negative (red) means more distributed than received.',
+  'goodsReceipt.col.position': 'Item',
+  'goodsReceipt.col.ordered': 'Ordered',
+  'goodsReceipt.col.alreadyReceived': 'Received so far',
+  'goodsReceipt.col.receiveNow': 'Received now',
+  'goodsReceipt.col.received': 'Received',
+  'goodsReceipt.col.distributed': 'Distributed',
+  'goodsReceipt.col.rest': 'Remainder',
+
+  // ─── Shortfall warning when distributing ───────────────────────────────────
+  'deliveries.shortfall.title': 'Note: less arrived than was ordered.',
+  'deliveries.shortfall.row': '{label}: ordered {ordered}, received {received}, shortfall {gap}',
+  'deliveries.shortfall.total': 'Total shortfall: {gap} pcs',
+  'deliveries.shortfall.priorityHint': 'Automatic priority-based allocation is not built yet — please adjust the distribution by hand (who gets less). The per-dealer/season priority on file is not yet applied automatically.',
 }
 
 export const translations: Record<Lang, Record<TranslationKey, string>> = {
