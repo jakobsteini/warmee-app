@@ -4,7 +4,12 @@ import { createOrder, deleteOrder, listOrders } from '../lib/orders'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
 import { formatEUR } from '../lib/money'
-import { lineTotal, type OrderListRow } from '../types/order'
+import {
+  lineTotal,
+  ORDER_ASSIGNMENTS,
+  type OrderAssignment,
+  type OrderListRow,
+} from '../types/order'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
 import EmptyState from '../components/EmptyState'
@@ -14,6 +19,11 @@ import type { TranslationKey } from '../i18n/dict'
 /** Order-Status → Übersetzungs-Key für das Status-Badge. */
 function orderStatusKey(status: string): TranslationKey {
   return `order.status.${status}` as TranslationKey
+}
+
+/** Zuteilung → Übersetzungs-Key. */
+function assignmentKey(assignment: string): TranslationKey {
+  return `order.assignment.${assignment}` as TranslationKey
 }
 
 /** Gesamtsumme einer Order aus ihren Zeilen. */
@@ -50,7 +60,12 @@ export default function Orders() {
   const [error, setError] = useState<string | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState({ dealer_id: '', season_id: '', notes: '' })
+  const [form, setForm] = useState<{
+    dealer_id: string
+    season_id: string
+    assignment: '' | OrderAssignment
+    notes: string
+  }>({ dealer_id: '', season_id: '', assignment: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -86,6 +101,7 @@ export default function Orders() {
     setForm({
       dealer_id: '',
       season_id: seasons.find((s) => s.is_active)?.id ?? '',
+      assignment: '',
       notes: '',
     })
     setFormError(null)
@@ -98,12 +114,17 @@ export default function Orders() {
       setFormError(t('orders.chooseError'))
       return
     }
+    if (form.assignment === '') {
+      setFormError(t('orders.assignmentRequired'))
+      return
+    }
     setSaving(true)
     setFormError(null)
     try {
       const order = await createOrder({
         dealer_id: form.dealer_id,
         season_id: form.season_id,
+        assignment: form.assignment,
         notes: form.notes.trim() || null,
       })
       setFormOpen(false)
@@ -170,6 +191,7 @@ export default function Orders() {
                 <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.season')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 font-medium">{t('order.assignmentLabel')}</th>
                 <th className="px-4 py-3 text-right font-medium">{t('common.lineSum')}</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -189,6 +211,9 @@ export default function Orders() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {t(assignmentKey(o.assignment))}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     {formatEUR(orderTotal(o))}
@@ -220,7 +245,7 @@ export default function Orders() {
             </tbody>
             <tfoot>
               <tr className="border-t-[0.5px] border-line bg-card text-ink">
-                <td className="px-4 py-3 font-medium" colSpan={3}>
+                <td className="px-4 py-3 font-medium" colSpan={4}>
                   {t('common.total')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
@@ -271,6 +296,30 @@ export default function Orders() {
                   {seasons.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('order.assignmentReq')}
+                </span>
+                <select
+                  required
+                  value={form.assignment}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      assignment: e.target.value as '' | OrderAssignment,
+                    })
+                  }
+                  className={inputClass}
+                >
+                  <option value="">{t('common.select')}</option>
+                  {ORDER_ASSIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {t(assignmentKey(a))}
                     </option>
                   ))}
                 </select>

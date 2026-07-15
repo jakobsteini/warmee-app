@@ -29,6 +29,7 @@ const warenItems: NavDef[] = [
   { to: '/deliveries', key: 'nav.deliveries' },
   { to: '/invoices', key: 'nav.invoices' },
   { to: '/open-payments', key: 'nav.openPayments' },
+  { to: '/commission', key: 'nav.commission' },
   { to: '/analytics', key: 'nav.analytics' },
 ]
 

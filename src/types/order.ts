@@ -2,6 +2,14 @@
 export const ORDER_STATUSES = ['draft', 'submitted', 'confirmed'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
 
+/**
+ * Zuteilung einer Order (Grundlage der Provision): der deutschen Agentin
+ * (provisionsrelevant) oder WARM ME intern (keine Provision). Englisch/snake_case
+ * wie die DB-Check-Constraint.
+ */
+export const ORDER_ASSIGNMENTS = ['agent', 'internal'] as const
+export type OrderAssignment = (typeof ORDER_ASSIGNMENTS)[number]
+
 /** Deutsche UI-Labels für die Status. */
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   draft: 'Entwurf',
@@ -58,6 +66,8 @@ export interface Order {
   dealer_id: string
   season_id: string
   status: OrderStatus
+  /** Provisions-Zuteilung; NOT NULL DEFAULT 'internal' in der DB. */
+  assignment: OrderAssignment
   notes: string | null
   created_by: string | null
   created_at: string | null
@@ -78,6 +88,7 @@ export interface OrderListRow extends Order {
 export interface OrderInput {
   dealer_id: string
   season_id: string
+  assignment: OrderAssignment
   notes: string | null
 }
 

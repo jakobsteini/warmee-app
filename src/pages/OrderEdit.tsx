@@ -5,6 +5,7 @@ import {
   deleteOrderItem,
   getOrder,
   listOrderItems,
+  updateOrderAssignment,
   updateOrderItem,
   updateOrderNotes,
   updateOrderStatus,
@@ -16,7 +17,9 @@ import { formatEUR, parsePrice } from '../lib/money'
 import {
   lineTotal,
   nextStatus,
+  ORDER_ASSIGNMENTS,
   type Order,
+  type OrderAssignment,
   type OrderItemWithProduct,
 } from '../types/order'
 import type { Product } from '../types/product'
@@ -28,6 +31,11 @@ import type { TranslationKey } from '../i18n/dict'
 /** Order-Status → Übersetzungs-Key. */
 function orderStatusKey(status: string): TranslationKey {
   return `order.status.${status}` as TranslationKey
+}
+
+/** Zuteilung → Übersetzungs-Key. */
+function assignmentKey(assignment: string): TranslationKey {
+  return `order.assignment.${assignment}` as TranslationKey
 }
 
 interface AddForm {
@@ -121,6 +129,16 @@ export default function OrderEdit() {
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
       setError(t('common.notesSaveError'))
+    }
+  }
+
+  async function handleAssignment(assignment: OrderAssignment) {
+    if (!order || assignment === order.assignment) return
+    try {
+      const updated = await updateOrderAssignment(order.id, assignment)
+      setOrder(updated)
+    } catch {
+      setError(t('common.saveFailed'))
     }
   }
 
@@ -231,6 +249,20 @@ export default function OrderEdit() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-muted">
+            {t('order.assignmentLabel')}
+            <select
+              value={order.assignment}
+              onChange={(e) => handleAssignment(e.target.value as OrderAssignment)}
+              className="rounded-md border-[0.5px] border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink"
+            >
+              {ORDER_ASSIGNMENTS.map((a) => (
+                <option key={a} value={a}>
+                  {t(assignmentKey(a))}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="text-sm text-muted">
             {t('common.status')}:{' '}
             <span className="font-medium text-ink">

@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import type {
   Order,
+  OrderAssignment,
   OrderInput,
   OrderItemInput,
   OrderItemWithProduct,
@@ -63,6 +64,22 @@ export async function updateOrderStatus(
   const { data, error } = await supabase
     .from('orders')
     .update({ status })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Order
+}
+
+/** Provisions-Zuteilung einer Order aktualisieren. */
+export async function updateOrderAssignment(
+  id: string,
+  assignment: OrderAssignment,
+): Promise<Order> {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({ assignment })
     .eq('id', id)
     .select()
     .single()

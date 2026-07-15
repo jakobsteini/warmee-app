@@ -19,6 +19,7 @@ import Invoices from './pages/Invoices'
 import InvoiceNew from './pages/InvoiceNew'
 import InvoiceEdit from './pages/InvoiceEdit'
 import OpenPayments from './pages/OpenPayments'
+import Commission from './pages/Commission'
 import Analytics from './pages/Analytics'
 
 export default function App() {
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/invoices/new" element={<InvoiceNew />} />
             <Route path="/invoices/:id" element={<InvoiceEdit />} />
             <Route path="/open-payments" element={<OpenPayments />} />
+            <Route path="/commission" element={<Commission />} />
             <Route path="/analytics" element={<Analytics />} />
           </Route>
         </Route>
