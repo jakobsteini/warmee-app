@@ -440,6 +440,11 @@ export const de = {
   'credit.critical': 'Kritisch',
   'credit.noData': 'Keine Daten',
 
+  // ─── Bonitäts-Hinweis in der Ordererfassung ───────────────────────────────
+  'creditHint.limitLine': 'Offen: {open} von {limit} Kreditlimit',
+  'creditHint.limitExceeded': ' — Limit überschritten',
+  'creditHint.criticalAction': 'Vor weiterer Warenzusage prüfen.',
+
   // ─── Newsletter ──────────────────────────────────────────────────────────
   'newsletter.loadError': 'Newsletter konnten nicht geladen werden.',
   'newsletter.openError': 'Newsletter konnte nicht geöffnet werden.',
@@ -1098,6 +1103,11 @@ export const en: Record<TranslationKey, string> = {
   'credit.watch': 'Watch',
   'credit.critical': 'Critical',
   'credit.noData': 'No data',
+
+  // ─── Credit hint in order capture ─────────────────────────────────────────
+  'creditHint.limitLine': 'Outstanding: {open} of {limit} credit limit',
+  'creditHint.limitExceeded': ' — limit exceeded',
+  'creditHint.criticalAction': 'Review before committing more goods.',
 
   // ─── Newsletter ──────────────────────────────────────────────────────────
   'newsletter.loadError': 'Could not load newsletters.',

@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { createOrder, deleteOrder, listOrders } from '../lib/orders'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
+import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { formatEUR } from '../lib/money'
+import CreditHint from '../components/CreditHint'
 import {
   lineTotal,
   ORDER_ASSIGNMENTS,
@@ -56,6 +58,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<OrderListRow[]>([])
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
+  const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,14 +76,18 @@ export default function Orders() {
     setLoading(true)
     setError(null)
     try {
-      const [ords, deal, seas] = await Promise.all([
+      const [ords, deal, seas, creds] = await Promise.all([
         listOrders(),
         listDealers(),
         listSeasons(),
+        // Bonität aus der bestehenden Ampel-Lib (nie hart fehlschlagen lassen —
+        // ohne Bewertung bleibt der Hinweis neutral).
+        listDealerCredits().catch(() => new Map<string, DealerCredit>()),
       ])
       setOrders(ords)
       setDealers(deal)
       setSeasons(seas)
+      setCredits(creds)
     } catch {
       setError(t('orders.loadError'))
     } finally {
@@ -281,6 +288,15 @@ export default function Orders() {
                   ))}
                 </select>
               </label>
+
+              {form.dealer_id && (
+                <CreditHint
+                  credit={credits.get(form.dealer_id)}
+                  creditLimit={
+                    dealers.find((d) => d.id === form.dealer_id)?.credit_limit
+                  }
+                />
+              )}
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">{t('common.seasonReq')}</span>

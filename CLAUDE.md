@@ -86,6 +86,13 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
   - **Noch offen:** Einzel-Kunden-Nachdruck auf DeliveryEdit — der Builder nimmt
     schon eine Kundenliste, ist also trivial nachrüstbar. Zurückgestellt bis der
     Praxistest des Sammeldokuments zeigt, dass das Format passt.
+- **Bonitäts-Hinweis in der Ordererfassung** (Abschnitt 2.4): bei Auswahl eines
+  Händlers zeigt `CreditHint` die **bestehende** Ampel (`listDealerCredits` +
+  `buildReason`, keine zweite Berechnung) — im „Neue Order"-Modal ([Orders](src/pages/Orders.tsx))
+  und bleibend auf [OrderEdit](src/pages/OrderEdit.tsx). Bei kritischer Bonität ein
+  deutlicher roter Hinweis mit „vor Warenzusage prüfen", **kein harter Block** —
+  Theresa kann die Order trotzdem erfassen. Kreditlimit nur als Kontext (siehe
+  KONVENTIONEN → Bonität / Ampel).
 
 ### Bewusst (noch) NICHT gebaut — und warum
 
@@ -125,6 +132,19 @@ Es gibt **genau eine** Definition von Fälligkeit und Überfälligkeit, in
 Rechenwege, das war ein Bug.) Regel: Fälligkeit = gespeichertes `due_date`
 (eingefroren, verschiebt sich nicht rückwirkend); fehlt es, `invoice_date` +
 Händler-`zahlungsziel_tage`, sonst `DEFAULT_ZAHLUNGSZIEL_TAGE` (30).
+
+### Bonität / Ampel → nur `src/lib/creditRating.ts` (`rateDealer`)
+Die Bonitäts-Ampel wird **ausschließlich aus dem Zahlungsverhalten** abgeleitet
+(`rateDealer`: offene Überfälligkeit / Ø-Zahlungsverzug gegen `CREDIT_THRESHOLDS`).
+Das **Kreditlimit (`dealers.credit_limit`) fließt bewusst NICHT in die Ampel-Regel
+ein** — es wird im Bonitäts-Hinweis der Ordererfassung (`CreditHint`) nur als
+**Kontext** angezeigt („Offen: X von Y Limit"). Grund: Ob das Erreichen des Limits
+**gelb oder rot** bedeutet — und ob die **gerade erfasste, noch nicht fakturierte
+Order** mitzählt — ist eine **offene Geschäftsentscheidung der Kundin**. Solange das
+ungeklärt ist, würde eine Regeländerung in `rateDealer` die Bedeutung der Ampel
+**stillschweigend im ganzen System** verschieben (auch in der Händlerliste). Erst
+mit Theresa klären, dann ggf. **zentral** in `rateDealer` ergänzen — **keine zweite
+Bonitäts-Logik daneben**.
 
 ### Snapshot-Muster für eingefrorene Werte
 Konfigurationswerte, die sich ändern können, werden **beim Erzeugen eines Dokuments

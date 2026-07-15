@@ -13,7 +13,9 @@ import {
 import { listProducts } from '../lib/products'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
+import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { formatEUR, parsePrice } from '../lib/money'
+import CreditHint from '../components/CreditHint'
 import {
   lineTotal,
   nextStatus,
@@ -62,6 +64,7 @@ export default function OrderEdit() {
   const [items, setItems] = useState<OrderItemWithProduct[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [dealer, setDealer] = useState<Dealer | null>(null)
+  const [credit, setCredit] = useState<DealerCredit | undefined>(undefined)
   const [season, setSeason] = useState<Season | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -75,18 +78,22 @@ export default function OrderEdit() {
     setLoading(true)
     setError(null)
     try {
-      const [ord, its, prods, deals, seas] = await Promise.all([
+      const [ord, its, prods, deals, seas, creds] = await Promise.all([
         getOrder(id),
         listOrderItems(id),
         listProducts(),
         listDealers(),
         listSeasons(),
+        // Bonität aus der bestehenden Ampel-Lib; ohne Bewertung bleibt der
+        // Hinweis neutral.
+        listDealerCredits().catch(() => new Map<string, DealerCredit>()),
       ])
       setOrder(ord)
       setItems(its)
       setProducts(prods)
       setNotes(ord.notes ?? '')
       setDealer(deals.find((d) => d.id === ord.dealer_id) ?? null)
+      setCredit(creds.get(ord.dealer_id))
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
     } catch {
       setError(t('orderEdit.loadError'))
@@ -286,6 +293,10 @@ export default function OrderEdit() {
           {error}
         </div>
       )}
+
+      <div className="mb-8">
+        <CreditHint credit={credit} creditLimit={dealer?.credit_limit} />
+      </div>
 
       <label className="mb-8 flex flex-col gap-1.5">
         <span className="text-sm text-muted">{t('common.notes')}</span>
