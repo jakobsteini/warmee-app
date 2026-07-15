@@ -4,10 +4,17 @@ import { createOrder, deleteOrder, listOrders } from '../lib/orders'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
 import { formatEUR } from '../lib/money'
-import { lineTotal, statusLabel, type OrderListRow } from '../types/order'
+import { lineTotal, type OrderListRow } from '../types/order'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
 import EmptyState from '../components/EmptyState'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Order-Status → Übersetzungs-Key für das Status-Badge. */
+function orderStatusKey(status: string): TranslationKey {
+  return `order.status.${status}` as TranslationKey
+}
 
 /** Gesamtsumme einer Order aus ihren Zeilen. */
 function orderTotal(order: OrderListRow): number {
@@ -19,6 +26,7 @@ function orderTotal(order: OrderListRow): number {
 
 /** Farbige Status-Badge. */
 function StatusBadge({ status }: { status: string }) {
+  const t = useT()
   const tone =
     status === 'confirmed'
       ? 'bg-ink text-cream'
@@ -27,13 +35,14 @@ function StatusBadge({ status }: { status: string }) {
         : 'border-[0.5px] border-line text-muted'
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-xs ${tone}`}>
-      {statusLabel(status)}
+      {t(orderStatusKey(status))}
     </span>
   )
 }
 
 export default function Orders() {
   const navigate = useNavigate()
+  const t = useT()
   const [orders, setOrders] = useState<OrderListRow[]>([])
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
@@ -58,7 +67,7 @@ export default function Orders() {
       setDealers(deal)
       setSeasons(seas)
     } catch {
-      setError('Orders konnten nicht geladen werden.')
+      setError(t('orders.loadError'))
     } finally {
       setLoading(false)
     }
@@ -86,7 +95,7 @@ export default function Orders() {
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
     if (!form.dealer_id || !form.season_id) {
-      setFormError('Bitte Händler und Saison wählen.')
+      setFormError(t('orders.chooseError'))
       return
     }
     setSaving(true)
@@ -100,20 +109,20 @@ export default function Orders() {
       setFormOpen(false)
       navigate(`/orders/${order.id}`)
     } catch {
-      setFormError('Anlegen fehlgeschlagen. Bitte erneut versuchen.')
+      setFormError(t('orders.createError'))
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete(order: OrderListRow) {
-    const dealerName = order.dealer?.name ?? 'diese Order'
-    if (!window.confirm(`Order für „${dealerName}" wirklich löschen?`)) return
+    const dealerName = order.dealer?.name ?? t('orders.deleteFallbackName')
+    if (!window.confirm(t('orders.deleteConfirm', { name: dealerName }))) return
     try {
       await deleteOrder(order.id)
       await load()
     } catch {
-      setError('Order konnte nicht gelöscht werden.')
+      setError(t('orders.deleteError'))
     }
   }
 
@@ -124,10 +133,8 @@ export default function Orders() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Orders</h1>
-          <p className="mt-1 text-sm text-muted">
-            Ordererfassung – Bestellungen je Händler und Saison.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">{t('orders.title')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('orders.subtitle')}</p>
         </div>
         <button
           type="button"
@@ -135,7 +142,7 @@ export default function Orders() {
           disabled={dealers.length === 0 || seasons.length === 0}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Neue Order
+          {t('orders.new')}
         </button>
       </div>
 
@@ -146,25 +153,24 @@ export default function Orders() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : orders.length === 0 ? (
         <EmptyState
-          actionLabel="Neue Order"
+          actionLabel={t('orders.new')}
           onAction={openCreate}
           actionDisabled={dealers.length === 0 || seasons.length === 0}
         >
-          Hier erfasst du Bestellungen je Händler und Saison. Lege die erste
-          Order an.
+          {t('orders.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Händler</th>
-                <th className="px-4 py-3 font-medium">Saison</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Summe</th>
+                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.season')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-right font-medium">{t('common.lineSum')}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -196,7 +202,7 @@ export default function Orders() {
                       }}
                       className="text-muted transition-colors hover:text-ink"
                     >
-                      Öffnen
+                      {t('common.open')}
                     </button>
                     <button
                       type="button"
@@ -206,7 +212,7 @@ export default function Orders() {
                       }}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -215,7 +221,7 @@ export default function Orders() {
             <tfoot>
               <tr className="border-t-[0.5px] border-line bg-card text-ink">
                 <td className="px-4 py-3 font-medium" colSpan={3}>
-                  Gesamt
+                  {t('common.total')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                   {formatEUR(grandTotal)}
@@ -230,10 +236,10 @@ export default function Orders() {
       {formOpen && (
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-lg bg-cream p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-medium text-ink">Neue Order</h2>
+            <h2 className="mb-4 text-lg font-medium text-ink">{t('orders.new')}</h2>
             <form onSubmit={handleCreate} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Händler *</span>
+                <span className="text-sm text-muted">{t('orders.dealerReq')}</span>
                 <select
                   required
                   value={form.dealer_id}
@@ -242,7 +248,7 @@ export default function Orders() {
                   }
                   className={inputClass}
                 >
-                  <option value="">— wählen —</option>
+                  <option value="">{t('common.select')}</option>
                   {dealers.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
@@ -252,7 +258,7 @@ export default function Orders() {
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Saison *</span>
+                <span className="text-sm text-muted">{t('common.seasonReq')}</span>
                 <select
                   required
                   value={form.season_id}
@@ -261,7 +267,7 @@ export default function Orders() {
                   }
                   className={inputClass}
                 >
-                  <option value="">— wählen —</option>
+                  <option value="">{t('common.select')}</option>
                   {seasons.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label}
@@ -271,7 +277,7 @@ export default function Orders() {
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Notiz</span>
+                <span className="text-sm text-muted">{t('common.notes')}</span>
                 <input
                   type="text"
                   value={form.notes}
@@ -288,14 +294,14 @@ export default function Orders() {
                   onClick={() => setFormOpen(false)}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {saving ? 'Legt an…' : 'Anlegen & öffnen'}
+                  {saving ? t('orders.creating') : t('orders.createOpen')}
                 </button>
               </div>
             </form>

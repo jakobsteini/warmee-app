@@ -1,11 +1,13 @@
 import type { CreditRating, DealerCredit } from '../lib/creditRating'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
 
-/** Farbe + Kurzlabel je Ampel-Stufe. */
-const STYLES: Record<CreditRating, { dot: string; label: string }> = {
-  green: { dot: 'bg-green-700', label: 'Gut' },
-  yellow: { dot: 'bg-amber-500', label: 'Beobachten' },
-  red: { dot: 'bg-red-700', label: 'Kritisch' },
-  neutral: { dot: 'bg-line', label: 'Keine Daten' },
+/** Farbe + Übersetzungs-Key je Ampel-Stufe. */
+const STYLES: Record<CreditRating, { dot: string; labelKey: TranslationKey }> = {
+  green: { dot: 'bg-green-700', labelKey: 'credit.good' },
+  yellow: { dot: 'bg-amber-500', labelKey: 'credit.watch' },
+  red: { dot: 'bg-red-700', labelKey: 'credit.critical' },
+  neutral: { dot: 'bg-line', labelKey: 'credit.noData' },
 }
 
 /**
@@ -18,6 +20,7 @@ export default function CreditBadge({
 }: {
   credit: DealerCredit | undefined
 }) {
+  const t = useT()
   const rating: CreditRating = credit?.rating ?? 'neutral'
   const style = STYLES[rating]
   const reason = credit?.reason ?? 'Keine Rechnungen vorhanden.'
@@ -31,7 +34,7 @@ export default function CreditBadge({
         aria-hidden="true"
         className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`}
       />
-      {style.label}
+      {t(style.labelKey)}
     </span>
   )
 }

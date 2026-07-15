@@ -13,8 +13,10 @@ import {
 import type { AssetWithMeta } from '../types/asset'
 import type { Product } from '../types/product'
 import EmptyState from '../components/EmptyState'
+import { useT } from '../i18n'
 
 export default function AssetsAssign() {
+  const t = useT()
   const [assets, setAssets] = useState<AssetWithMeta[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,7 +30,7 @@ export default function AssetsAssign() {
       setAssets(a)
       setProducts(p)
     } catch {
-      setError('Bilder oder Artikel konnten nicht geladen werden.')
+      setError(t('assign.loadError'))
     } finally {
       setLoading(false)
     }
@@ -66,7 +68,7 @@ export default function AssetsAssign() {
         ),
       )
     } catch {
-      setError('Zuordnung konnte nicht gespeichert werden.')
+      setError(t('assign.assignError'))
     }
   }
 
@@ -80,7 +82,7 @@ export default function AssetsAssign() {
         ),
       )
     } catch {
-      setError('Markierung „kein Artikel" konnte nicht gespeichert werden.')
+      setError(t('assign.skipError'))
     }
   }
 
@@ -92,23 +94,22 @@ export default function AssetsAssign() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-medium text-ink">Bilder zuordnen</h1>
-        <p className="mt-1 text-sm text-muted">
-          Nicht zugeordnete Bilder einem Artikel zuweisen. Vorschläge basieren
-          auf dem aus dem Dateinamen geparsten Modell.
-        </p>
+        <h1 className="text-2xl font-medium text-ink">{t('assign.title')}</h1>
+        <p className="mt-1 text-sm text-muted">{t('assign.subtitle')}</p>
       </div>
 
       {/* Fortschritt */}
       <div className="mb-6 rounded-md border-[0.5px] border-line bg-card px-4 py-3">
         <div className="flex items-center justify-between text-sm">
           <span className="text-ink">
-            <span className="font-medium">{assignedCount}</span> von{' '}
-            <span className="font-medium">{total}</span> Bildern zugeordnet
+            <span className="font-medium">{assignedCount}</span>
+            {t('assign.progressMid')}
+            <span className="font-medium">{total}</span>
+            {t('assign.progressEnd')}
           </span>
           <span className="text-muted">
-            {unassigned.length} offen
-            {noMatchCount > 0 && ` · ${noMatchCount} ohne Artikel`}
+            {t('assign.openCount', { count: unassigned.length })}
+            {noMatchCount > 0 && t('assign.noMatchCount', { count: noMatchCount })}
           </span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface">
@@ -128,12 +129,10 @@ export default function AssetsAssign() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : unassigned.length === 0 ? (
         <EmptyState>
-          {total === 0
-            ? 'Es sind noch keine Bilder im Archiv.'
-            : 'Alle Bilder sind zugeordnet oder als „kein Artikel" markiert. Nichts mehr zu tun.'}
+          {total === 0 ? t('assign.emptyNoImages') : t('assign.emptyAllDone')}
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
@@ -166,6 +165,7 @@ function AssignCard({
   onSkip: () => void
   productById: Map<string, Product>
 }) {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -224,14 +224,15 @@ function AssignCard({
         <p className="mt-1 text-xs text-muted">
           {asset.model ? (
             <>
-              Modell <span className="text-ink">{asset.model}</span>
+              {t('common.model')} <span className="text-ink">{asset.model}</span>
             </>
           ) : (
-            <span className="italic">Kein Modell (reines Farbbild)</span>
+            <span className="italic">{t('assign.noModel')}</span>
           )}
           {colorText && (
             <>
-              {' · '}Farbe <span className="text-ink">{colorText}</span>
+              {' · '}
+              {t('common.color')} <span className="text-ink">{colorText}</span>
             </>
           )}
         </p>
@@ -239,7 +240,7 @@ function AssignCard({
         {/* Vorschläge */}
         <div className="mt-3">
           <p className="mb-1.5 text-xs text-muted">
-            {asset.model ? 'Vorschläge' : 'Kein Modell – bitte suchen'}
+            {asset.model ? t('assign.suggestions') : t('assign.noModelSearch')}
           </p>
           {suggestions.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -262,8 +263,8 @@ function AssignCard({
                       <span
                         className={active ? 'text-cream/70' : 'text-muted'}
                       >
-                        {' '}
-                        · exakt
+                        {' · '}
+                        {t('assign.exact')}
                       </span>
                     )}
                   </button>
@@ -272,9 +273,7 @@ function AssignCard({
             </div>
           ) : (
             asset.model && (
-              <p className="text-sm text-muted">
-                Keine ähnlichen Artikel gefunden – bitte über die Suche wählen.
-              </p>
+              <p className="text-sm text-muted">{t('assign.noSimilar')}</p>
             )
           )}
         </div>
@@ -285,7 +284,7 @@ function AssignCard({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Alle Artikel durchsuchen…"
+            placeholder={t('assign.searchPlaceholder')}
             className="w-full max-w-sm rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink"
           />
           {searchResults.length > 0 && (
@@ -311,19 +310,19 @@ function AssignCard({
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {selected ? (
             <span className="text-sm text-ink">
-              Gewählt: <span className="font-medium">{productLabel(selected)}</span>
+              {t('assign.chosen')} <span className="font-medium">{productLabel(selected)}</span>
             </span>
           ) : (
-            <span className="text-sm text-muted">Noch kein Artikel gewählt</span>
+            <span className="text-sm text-muted">{t('assign.noneChosen')}</span>
           )}
           <div className="ml-auto flex gap-3">
             <button
               type="button"
               onClick={onSkip}
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink"
-              title="Bild bleibt bewusst ohne Artikel und gilt als erledigt (wird gespeichert)"
+              title={t('assign.noMatchTitle')}
             >
-              Kein Artikel / nur Farbmuster
+              {t('assign.noMatchBtn')}
             </button>
             <button
               type="button"
@@ -331,7 +330,7 @@ function AssignCard({
               disabled={!selectedId || saving}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {saving ? 'Speichert…' : 'Zuordnen'}
+              {saving ? t('common.saving') : t('assign.assign')}
             </button>
           </div>
         </div>

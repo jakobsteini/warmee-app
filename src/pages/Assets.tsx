@@ -20,13 +20,19 @@ import { listDealers } from '../lib/dealers'
 import type { Dealer } from '../types/dealer'
 import {
   ASSET_TYPES,
-  ASSET_TYPE_LABELS,
   type AssetFileMeta,
   type AssetType,
   type AssetWithMeta,
   type Season,
 } from '../types/asset'
 import EmptyState from '../components/EmptyState'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Asset-Typ → Übersetzungs-Key. */
+function assetTypeKey(type: AssetType): TranslationKey {
+  return `asset.type.${type}` as TranslationKey
+}
 
 /** Nur JPEGs werden angenommen (Regel: Bildmaterial immer JPEG). */
 function isJpeg(file: File): boolean {
@@ -46,6 +52,7 @@ interface StagedFile {
 }
 
 export default function Assets() {
+  const t = useT()
   const [assets, setAssets] = useState<AssetWithMeta[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [dealers, setDealers] = useState<Dealer[]>([])
@@ -75,7 +82,7 @@ export default function Assets() {
         await listAssets({ asset_type: filterType, season_id: filterSeason }),
       )
     } catch {
-      setError('Bilder konnten nicht geladen werden.')
+      setError(t('assets.loadError'))
     } finally {
       setLoading(false)
     }
@@ -111,19 +118,11 @@ export default function Assets() {
     const skipped = files.length - jpegs.length
 
     if (jpegs.length === 0) {
-      setError(
-        skipped > 0
-          ? 'Nur JPEG-Dateien werden unterstützt.'
-          : 'Keine Dateien ausgewählt.',
-      )
+      setError(skipped > 0 ? t('assets.onlyJpeg') : t('assets.noFiles'))
       return
     }
 
-    setError(
-      skipped > 0
-        ? `${skipped} Datei(en) übersprungen – nur JPEG wird unterstützt.`
-        : null,
-    )
+    setError(skipped > 0 ? t('assets.skipped', { count: skipped }) : null)
 
     setStaged((prev) => [
       ...prev,
@@ -185,13 +184,14 @@ export default function Assets() {
   }
 
   async function handleDelete(asset: AssetWithMeta) {
-    if (!window.confirm(`Bild „${asset.filename}" wirklich löschen?`)) return
+    if (!window.confirm(t('assets.deleteConfirm', { filename: asset.filename })))
+      return
     try {
       await deleteAsset(asset)
       setSelected(null)
       await loadAssets()
     } catch {
-      setError('Löschen fehlgeschlagen.')
+      setError(t('common.deleteFailed'))
     }
   }
 
@@ -214,10 +214,8 @@ export default function Assets() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Bildarchiv</h1>
-        <p className="mt-1 text-sm text-muted">
-          JPEGs hochladen, filtern und Händlern zuordnen.
-        </p>
+        <h1 className="text-2xl font-medium text-ink">{t('assets.title')}</h1>
+        <p className="mt-1 text-sm text-muted">{t('assets.subtitle')}</p>
       </div>
 
       {error && (
@@ -230,27 +228,27 @@ export default function Assets() {
       <div className="mb-8">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-muted">
-            Typ
+            {t('common.type')}
             <select
               value={uploadType}
               onChange={(e) => setUploadType(e.target.value as AssetType)}
               className={selectClass}
             >
-              {ASSET_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {ASSET_TYPE_LABELS[t]}
+              {ASSET_TYPES.map((at) => (
+                <option key={at} value={at}>
+                  {t(assetTypeKey(at))}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-muted">
-            Saison
+            {t('common.season')}
             <select
               value={uploadSeason ?? ''}
               onChange={(e) => setUploadSeason(e.target.value || null)}
               className={selectClass}
             >
-              <option value="">Ohne Saison</option>
+              <option value="">{t('common.withoutSeason')}</option>
               {seasons.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -275,13 +273,12 @@ export default function Assets() {
               : 'border-line bg-surface hover:bg-card',
           ].join(' ')}
         >
-          <p className="text-sm text-ink">
-            JPEGs hierher ziehen oder klicken zum Auswählen
-          </p>
+          <p className="text-sm text-ink">{t('assets.dropzone')}</p>
           <p className="mt-1 text-xs text-muted">
-            Typ „{ASSET_TYPE_LABELS[uploadType]}" und Saison „
-            {uploadSeason ? seasonLabel(uploadSeason) : 'ohne'}" gelten für alle.
-            Modell/Farbe werden je Datei aus dem Namen vorbefüllt.
+            {t('assets.dropzoneHint', {
+              type: t(assetTypeKey(uploadType)),
+              season: uploadSeason ? seasonLabel(uploadSeason) : t('assets.seasonNone'),
+            })}
           </p>
           <input
             ref={fileInput}
@@ -301,8 +298,7 @@ export default function Assets() {
           <div className="mt-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-muted">
-                {staged.length} Datei(en) vorgemerkt – Werte prüfen und ggf.
-                korrigieren, dann hochladen.
+                {t('assets.stagedCount', { count: staged.length })}
               </p>
               <div className="flex gap-3">
                 <button
@@ -311,7 +307,7 @@ export default function Assets() {
                   disabled={uploading}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
                 >
-                  Liste leeren
+                  {t('assets.clearList')}
                 </button>
                 <button
                   type="button"
@@ -320,8 +316,8 @@ export default function Assets() {
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {uploading
-                    ? 'Lädt…'
-                    : `${pendingCount} Bild(er) hochladen`}
+                    ? t('common.loading')
+                    : t('assets.uploadN', { count: pendingCount })}
                 </button>
               </div>
             </div>
@@ -348,15 +344,15 @@ export default function Assets() {
             active={filterType === null}
             onClick={() => setFilterType(null)}
           >
-            Alle
+            {t('common.all')}
           </FilterPill>
-          {ASSET_TYPES.map((t) => (
+          {ASSET_TYPES.map((at) => (
             <FilterPill
-              key={t}
-              active={filterType === t}
-              onClick={() => setFilterType(t)}
+              key={at}
+              active={filterType === at}
+              onClick={() => setFilterType(at)}
             >
-              {ASSET_TYPE_LABELS[t]}
+              {t(assetTypeKey(at))}
             </FilterPill>
           ))}
         </div>
@@ -366,7 +362,7 @@ export default function Assets() {
             onChange={(e) => setFilterSeason(e.target.value || null)}
             className={selectClass}
           >
-            <option value="">Alle Saisons</option>
+            <option value="">{t('common.allSeasons')}</option>
             {seasons.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
@@ -378,23 +374,22 @@ export default function Assets() {
 
       {/* Gallery */}
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : assets.length === 0 ? (
         uploading ? (
           <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-            <p className="text-sm text-muted">Upload läuft…</p>
+            <p className="text-sm text-muted">{t('assets.uploadRunning')}</p>
           </div>
         ) : filterType !== null || filterSeason !== null ? (
           <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-            <p className="text-sm text-muted">Keine Bilder in dieser Ansicht.</p>
+            <p className="text-sm text-muted">{t('assets.noneInView')}</p>
           </div>
         ) : (
           <EmptyState
-            actionLabel="JPEGs auswählen"
+            actionLabel={t('assets.selectJpegs')}
             onAction={() => fileInput.current?.click()}
           >
-            Hier lädst du dein Bildmaterial hoch und ordnest es Kollektion,
-            Saison und Händlern zu. Lade die ersten JPEGs hoch.
+            {t('assets.empty')}
           </EmptyState>
         )
       ) : (
@@ -420,7 +415,7 @@ export default function Assets() {
               )}
               {a.dealer_ids.length > 0 && (
                 <span className="absolute right-2 top-2 rounded-full bg-ink/85 px-2 py-0.5 text-[11px] text-cream">
-                  {a.dealer_ids.length} Händler
+                  {t('assets.dealerCount', { count: a.dealer_ids.length })}
                 </span>
               )}
             </button>
@@ -454,17 +449,18 @@ function StagedCard({
   onChange: (patch: Partial<AssetFileMeta>) => void
   onRemove: () => void
 }) {
+  const t = useT()
   const { meta } = item
   const inputClass =
     'w-full rounded-md border-[0.5px] border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-ink disabled:opacity-60'
   const statusLabel =
     item.status === 'error'
-      ? 'Fehler'
+      ? t('assets.staged.error')
       : item.status === 'done'
-        ? 'Fertig'
+        ? t('assets.staged.done')
         : item.status === 'uploading'
-          ? 'Lädt…'
-          : 'Vorgemerkt'
+          ? t('common.loading')
+          : t('assets.staged.pending')
 
   return (
     <div className="rounded-md border-[0.5px] border-line bg-surface p-3">
@@ -489,7 +485,7 @@ function StagedCard({
             onClick={onRemove}
             disabled={disabled}
             className="text-sm text-muted transition-colors hover:text-red-700 disabled:opacity-50"
-            aria-label="Aus Liste entfernen"
+            aria-label={t('assets.removeFromList')}
           >
             ×
           </button>
@@ -498,7 +494,7 @@ function StagedCard({
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
-          <span className="text-xs text-muted">Modell</span>
+          <span className="text-xs text-muted">{t('common.model')}</span>
           <input
             type="text"
             value={meta.model ?? ''}
@@ -508,7 +504,7 @@ function StagedCard({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted">Farbcode</span>
+          <span className="text-xs text-muted">{t('assets.staged.colorCode')}</span>
           <input
             type="text"
             value={meta.color_code ?? ''}
@@ -518,7 +514,7 @@ function StagedCard({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted">Farbe</span>
+          <span className="text-xs text-muted">{t('common.color')}</span>
           <input
             type="text"
             value={meta.color_name ?? ''}
@@ -528,7 +524,7 @@ function StagedCard({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted">2. Farbcode</span>
+          <span className="text-xs text-muted">{t('assets.staged.colorCode2')}</span>
           <input
             type="text"
             value={meta.color_code_2 ?? ''}
@@ -538,7 +534,7 @@ function StagedCard({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted">2. Farbe</span>
+          <span className="text-xs text-muted">{t('assets.staged.color2')}</span>
           <input
             type="text"
             value={meta.color_name_2 ?? ''}
@@ -555,7 +551,7 @@ function StagedCard({
             onChange={(e) => onChange({ is_social_media: e.target.checked })}
             className="accent-ink"
           />
-          <span className="text-xs text-muted">Social Media</span>
+          <span className="text-xs text-muted">{t('assets.staged.socialMedia')}</span>
         </label>
       </div>
     </div>
@@ -602,6 +598,7 @@ function AssetDetail({
   onDelete: () => void
   onSaved: () => Promise<void>
 }) {
+  const t = useT()
   const [assetType, setAssetType] = useState<AssetType>(asset.asset_type)
   const [seasonId, setSeasonId] = useState<string | null>(asset.season_id)
   const [selectedIds, setSelectedIds] = useState<string[]>(asset.dealer_ids)
@@ -642,7 +639,7 @@ function AssetDetail({
       await onSaved()
       onClose()
     } catch {
-      setSaveError('Änderungen konnten nicht gespeichert werden.')
+      setSaveError(t('assets.saveError'))
     } finally {
       setSaving(false)
     }
@@ -676,7 +673,7 @@ function AssetDetail({
               className="max-h-[80vh] w-full object-contain"
             />
           ) : (
-            <span className="text-sm text-muted">Keine Vorschau</span>
+            <span className="text-sm text-muted">{t('assets.noPreview')}</span>
           )}
         </div>
 
@@ -685,7 +682,7 @@ function AssetDetail({
             {asset.filename}
           </h2>
           <p className="mt-3 text-sm text-muted">
-            Maße:{' '}
+            {t('assets.dimensions')}:{' '}
             <span className="text-ink">
               {asset.width && asset.height
                 ? `${asset.width} × ${asset.height} px`
@@ -696,45 +693,45 @@ function AssetDetail({
             <p className="mt-1 text-sm text-muted">
               {asset.model && (
                 <>
-                  Modell: <span className="text-ink">{asset.model}</span>
+                  {t('common.model')}: <span className="text-ink">{asset.model}</span>
                   {(colorSummary || asset.is_social_media) && ' · '}
                 </>
               )}
               {colorSummary && (
                 <>
-                  Farbe: <span className="text-ink">{colorSummary}</span>
+                  {t('common.color')}: <span className="text-ink">{colorSummary}</span>
                   {asset.is_social_media && ' · '}
                 </>
               )}
               {asset.is_social_media && (
-                <span className="text-ink">Social Media</span>
+                <span className="text-ink">{t('assets.staged.socialMedia')}</span>
               )}
             </p>
           )}
 
           <div className="mt-4 flex gap-3">
             <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-sm text-muted">Typ</span>
+              <span className="text-sm text-muted">{t('common.type')}</span>
               <select
                 value={assetType}
                 onChange={(e) => setAssetType(e.target.value as AssetType)}
                 className={fieldClass}
               >
-                {ASSET_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {ASSET_TYPE_LABELS[t]}
+                {ASSET_TYPES.map((at) => (
+                  <option key={at} value={at}>
+                    {t(assetTypeKey(at))}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex flex-1 flex-col gap-1.5">
-              <span className="text-sm text-muted">Saison</span>
+              <span className="text-sm text-muted">{t('common.season')}</span>
               <select
                 value={seasonId ?? ''}
                 onChange={(e) => setSeasonId(e.target.value || null)}
                 className={fieldClass}
               >
-                <option value="">Ohne Saison</option>
+                <option value="">{t('common.withoutSeason')}</option>
                 {seasons.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
@@ -745,13 +742,11 @@ function AssetDetail({
           </div>
 
           <div className="mt-5 flex-1">
-            <p className="mb-2 text-sm font-medium text-ink">Händler zuordnen</p>
+            <p className="mb-2 text-sm font-medium text-ink">{t('assets.assignDealers')}</p>
             {loadingDealers ? (
-              <p className="text-sm text-muted">Lädt…</p>
+              <p className="text-sm text-muted">{t('common.loading')}</p>
             ) : dealers.length === 0 ? (
-              <p className="text-sm text-muted">
-                Noch keine Händler angelegt.
-              </p>
+              <p className="text-sm text-muted">{t('assets.noDealers')}</p>
             ) : (
               <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                 {dealers.map((d) => (
@@ -782,7 +777,7 @@ function AssetDetail({
               onClick={onDelete}
               className="text-sm text-muted transition-colors hover:text-red-700"
             >
-              Löschen
+              {t('common.delete')}
             </button>
             <div className="flex gap-3">
               <button
@@ -790,7 +785,7 @@ function AssetDetail({
                 onClick={onClose}
                 className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
               >
-                Schließen
+                {t('common.close')}
               </button>
               <button
                 type="button"
@@ -798,7 +793,7 @@ function AssetDetail({
                 disabled={saving || loadingDealers}
                 className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                {saving ? 'Speichert…' : 'Speichern'}
+                {saving ? t('common.saving') : t('common.save')}
               </button>
             </div>
           </div>

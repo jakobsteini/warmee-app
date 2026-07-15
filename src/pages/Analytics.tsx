@@ -4,14 +4,23 @@ import { listSeasons } from '../lib/seasons'
 import { formatEUR } from '../lib/money'
 import type { Season } from '../types/asset'
 import BarList from '../components/BarList'
+import { useT, type TFunc } from '../i18n'
 
 /** Ø-Zahlungsverzug menschenlesbar aufbereiten. */
-function formatDelay(days: number | null): { value: string; sub: string } {
-  if (days === null) return { value: '—', sub: 'keine bezahlten Rechnungen' }
+function formatDelay(
+  days: number | null,
+  t: TFunc,
+): { value: string; sub: string } {
+  if (days === null) return { value: '—', sub: t('analytics.delay.none') }
   const d = Math.round(days)
-  if (d > 0) return { value: `${d} Tage`, sub: 'im Schnitt zu spät' }
-  if (d < 0) return { value: `${Math.abs(d)} Tage`, sub: 'im Schnitt früher' }
-  return { value: 'pünktlich', sub: 'im Schnitt fristgerecht' }
+  if (d > 0)
+    return { value: t('analytics.delay.days', { days: d }), sub: t('analytics.delay.late') }
+  if (d < 0)
+    return {
+      value: t('analytics.delay.days', { days: Math.abs(d) }),
+      sub: t('analytics.delay.early'),
+    }
+  return { value: t('analytics.delay.onTime'), sub: t('analytics.delay.onTimeSub') }
 }
 
 /** Eine Kennzahl-Kachel im Dashboard-Stil. */
@@ -33,6 +42,7 @@ const pillClass = (active: boolean) =>
   ].join(' ')
 
 export default function Analytics() {
+  const t = useT()
   const [seasons, setSeasons] = useState<Season[]>([])
   const [seasonId, setSeasonId] = useState<string | 'all'>('all')
   const [data, setData] = useState<AnalyticsData | null>(null)
@@ -58,7 +68,7 @@ export default function Analytics() {
         if (active) setData(d)
       })
       .catch(() => {
-        if (active) setError('Auswertung konnte nicht geladen werden.')
+        if (active) setError(t('analytics.loadError'))
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -69,20 +79,18 @@ export default function Analytics() {
   }, [seasonId])
 
   const money = data?.money
-  const delay = formatDelay(money?.avgPaymentDelayDays ?? null)
+  const delay = formatDelay(money?.avgPaymentDelayDays ?? null, t)
   const seasonName =
     seasonId === 'all'
-      ? 'bestätigte Orders'
-      : (seasons.find((s) => s.id === seasonId)?.label ?? 'Saison')
+      ? t('analytics.confirmedOrders')
+      : (seasons.find((s) => s.id === seasonId)?.label ??
+        t('analytics.seasonFallback'))
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-medium text-ink">Auswertungen</h1>
-        <p className="mt-1 text-sm text-muted">
-          Umsatz aus bestätigten Orders und der aktuelle Geld-Stand auf einen
-          Blick.
-        </p>
+        <h1 className="text-2xl font-medium text-ink">{t('analytics.title')}</h1>
+        <p className="mt-1 text-sm text-muted">{t('analytics.subtitle')}</p>
       </div>
 
       {/* Saison-Filter (wirkt auf den Umsatz-Teil) */}
@@ -92,7 +100,7 @@ export default function Analytics() {
           onClick={() => setSeasonId('all')}
           className={pillClass(seasonId === 'all')}
         >
-          Alle Saisons
+          {t('common.allSeasons')}
         </button>
         {seasons.map((s) => (
           <button
@@ -113,32 +121,42 @@ export default function Analytics() {
       )}
 
       {loading || !data ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : (
         <>
           {/* Kennzahlen */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat value={formatEUR(data.totalRevenue)} label={`Umsatz (${seasonName})`} />
-            <Stat value={formatEUR(data.money.openTotal)} label="Offen (unbezahlt)" />
+            <Stat
+              value={formatEUR(data.totalRevenue)}
+              label={t('analytics.revenue', { scope: seasonName })}
+            />
+            <Stat
+              value={formatEUR(data.money.openTotal)}
+              label={t('analytics.openUnpaid')}
+            />
             <Stat
               value={formatEUR(data.money.overdueTotal)}
-              label={`Überfällig · ${data.money.overdueCount} Rechnung${
-                data.money.overdueCount === 1 ? '' : 'en'
-              }`}
+              label={t('analytics.overdue', {
+                count: data.money.overdueCount,
+                label:
+                  data.money.overdueCount === 1
+                    ? t('analytics.invoiceSingular')
+                    : t('analytics.invoicePlural'),
+              })}
             />
-            <Stat value={delay.value} label={`Zahlungsmoral — ${delay.sub}`} />
+            <Stat
+              value={delay.value}
+              label={t('analytics.paymentMorale', { sub: delay.sub })}
+            />
           </div>
-          <p className="mt-2 text-xs text-muted">
-            Geld-Kennzahlen: Live-Stand über alle aktiven Rechnungen
-            (saison-unabhängig).
-          </p>
+          <p className="mt-2 text-xs text-muted">{t('analytics.moneyNote')}</p>
 
           {/* Aufschlüsselungen */}
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BarList title="Umsatz pro Saison" rows={data.bySeason} />
-            <BarList title="Top Händler nach Umsatz" rows={data.byDealer} />
-            <BarList title="Umsatz pro Land" rows={data.byRegion} />
-            <BarList title="Top Artikel nach Umsatz" rows={data.byProduct} />
+            <BarList title={t('analytics.bar.revenueBySeason')} rows={data.bySeason} />
+            <BarList title={t('analytics.bar.topDealers')} rows={data.byDealer} />
+            <BarList title={t('analytics.bar.revenueByCountry')} rows={data.byRegion} />
+            <BarList title={t('analytics.bar.topProducts')} rows={data.byProduct} />
           </div>
         </>
       )}

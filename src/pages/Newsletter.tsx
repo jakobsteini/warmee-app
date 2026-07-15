@@ -16,11 +16,12 @@ import type {
   NewsletterListItem,
   NewsletterStatus,
 } from '../types/newsletter'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
 
-const STATUS_LABELS: Record<NewsletterStatus, string> = {
-  draft: 'Entwurf',
-  ready: 'Bereit',
-  downloaded: 'Heruntergeladen',
+/** Newsletter-Status → Übersetzungs-Key. */
+function statusKey(status: NewsletterStatus): TranslationKey {
+  return `newsletter.status.${status}` as TranslationKey
 }
 
 /** Datum kurz und deutsch formatieren. */
@@ -91,6 +92,7 @@ function NewsletterList({
   onNew: () => void
   onOpen: (detail: NewsletterDetail) => void
 }) {
+  const t = useT()
   const [items, setItems] = useState<NewsletterListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ function NewsletterList({
     try {
       setItems(await listNewsletters())
     } catch {
-      setError('Newsletter konnten nicht geladen werden.')
+      setError(t('newsletter.loadError'))
     } finally {
       setLoading(false)
     }
@@ -118,18 +120,18 @@ function NewsletterList({
     try {
       onOpen(await getNewsletterDetail(id))
     } catch {
-      setError('Newsletter konnte nicht geöffnet werden.')
+      setError(t('newsletter.openError'))
       setOpeningId(null)
     }
   }
 
   async function handleDelete(item: NewsletterListItem) {
-    if (!window.confirm(`Newsletter „${item.title}" wirklich löschen?`)) return
+    if (!window.confirm(t('newsletter.deleteConfirm', { title: item.title }))) return
     try {
       await deleteNewsletter(item.id)
       await load()
     } catch {
-      setError('Löschen fehlgeschlagen.')
+      setError(t('common.deleteFailed'))
     }
   }
 
@@ -137,17 +139,15 @@ function NewsletterList({
     <div className="mx-auto max-w-4xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Newsletter</h1>
-          <p className="mt-1 text-sm text-muted">
-            Gespeicherte Newsletter – öffnen, bearbeiten, erneut herunterladen.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">{t('newsletter.title')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('newsletter.subtitle')}</p>
         </div>
         <button
           type="button"
           onClick={onNew}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
         >
-          Neuer Newsletter
+          {t('newsletter.new')}
         </button>
       </div>
 
@@ -158,23 +158,20 @@ function NewsletterList({
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : items.length === 0 ? (
         <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Noch keine Newsletter gespeichert. Lege mit „Neuer Newsletter" den
-            ersten an.
-          </p>
+          <p className="text-sm text-muted">{t('newsletter.emptyList')}</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Titel</th>
-                <th className="px-4 py-3 font-medium">Händler</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Aktualisiert</th>
+                <th className="px-4 py-3 font-medium">{t('newsletter.col.title')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 font-medium">{t('newsletter.col.updated')}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -190,7 +187,7 @@ function NewsletterList({
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-card px-2.5 py-1 text-xs text-ink">
-                      {STATUS_LABELS[item.status]}
+                      {t(statusKey(item.status))}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">
@@ -203,14 +200,14 @@ function NewsletterList({
                       disabled={openingId === item.id}
                       className="text-muted transition-colors hover:text-ink disabled:opacity-50"
                     >
-                      {openingId === item.id ? 'Öffnet…' : 'Öffnen'}
+                      {openingId === item.id ? t('newsletter.opening') : t('common.open')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(item)}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -231,6 +228,7 @@ function NewsletterEditor({
   initial: NewsletterDetail | null
   onDone: () => void
 }) {
+  const t = useT()
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [dealerId, setDealerId] = useState(initial?.dealer_id ?? '')
 
@@ -280,7 +278,7 @@ function NewsletterEditor({
       try {
         setDealers(await listDealers())
       } catch {
-        setError('Händler konnten nicht geladen werden.')
+        setError(t('dealers.loadError'))
       }
     })()
   }, [])
@@ -325,8 +323,7 @@ function NewsletterEditor({
           setProductIds(pending.productIds.filter((id) => available.has(id)))
         }
       } catch {
-        if (!cancelled)
-          setError('Bilder des Händlers konnten nicht geladen werden.')
+        if (!cancelled) setError(t('newsletter.imagesLoadError'))
       } finally {
         if (!cancelled) setImagesLoading(false)
       }
@@ -419,7 +416,7 @@ function NewsletterEditor({
       await persist('ready')
       setStatus('ready')
     } catch {
-      setError('Newsletter konnte nicht gespeichert werden.')
+      setError(t('newsletter.saveError'))
     } finally {
       setSaving(false)
     }
@@ -445,7 +442,7 @@ function NewsletterEditor({
       await markNewsletterDownloaded(id)
       setStatus('downloaded')
     } catch {
-      setError('HTML konnte nicht erzeugt werden.')
+      setError(t('newsletter.htmlError'))
     } finally {
       setDownloading(false)
     }
@@ -463,18 +460,15 @@ function NewsletterEditor({
           onClick={onDone}
           className="rounded-md border-[0.5px] border-line px-3 py-1.5 text-sm text-ink transition-colors hover:bg-card"
         >
-          ← Verlauf
+          {t('newsletter.backHistory')}
         </button>
         <span className="text-sm text-muted">
-          {initial ? 'Newsletter bearbeiten' : 'Neuer Newsletter'}
+          {initial ? t('newsletter.editTitle') : t('newsletter.new')}
         </span>
       </div>
 
       <div className="mb-8">
-        <p className="text-sm text-muted">
-          Händler wählen, drei Bilder setzen, Text erfassen – rechts die
-          Live-Vorschau. Danach als standalone HTML herunterladen.
-        </p>
+        <p className="text-sm text-muted">{t('newsletter.intro')}</p>
       </div>
 
       {error && (
@@ -489,13 +483,13 @@ function NewsletterEditor({
           {/* 1. Händler */}
           <section>
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-ink">Händler</span>
+              <span className="text-sm font-medium text-ink">{t('common.dealer')}</span>
               <select
                 value={dealerId}
                 onChange={(e) => setDealerId(e.target.value)}
                 className={selectClass}
               >
-                <option value="">Händler wählen…</option>
+                <option value="">{t('newsletter.dealerPlaceholder')}</option>
                 {dealers.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
@@ -511,20 +505,18 @@ function NewsletterEditor({
             <section>
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-sm font-medium text-ink">
-                  Bilder dieses Händlers
+                  {t('newsletter.imagesOfDealer')}
                 </span>
                 <span className="text-xs text-muted">
-                  1 Hero · {productIds.length}/2 Produkte
+                  {t('newsletter.imageCount', { count: productIds.length })}
                 </span>
               </div>
 
               {imagesLoading ? (
-                <p className="text-sm text-muted">Lädt…</p>
+                <p className="text-sm text-muted">{t('common.loading')}</p>
               ) : images.length === 0 ? (
                 <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-10 text-center text-sm text-muted">
-                  Keine Bilder mit Newsletter-Zuschnitt für diesen Händler.
-                  Ordne im Bildarchiv Bilder zu und erzeuge im Zuschnitt-Editor
-                  einen Newsletter-Zuschnitt.
+                  {t('newsletter.noImages')}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -549,12 +541,12 @@ function NewsletterEditor({
                           />
                           {isHero && (
                             <span className="absolute left-1.5 top-1.5 rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-cream">
-                              Hero
+                              {t('newsletter.hero')}
                             </span>
                           )}
                           {isProduct && (
                             <span className="absolute left-1.5 top-1.5 rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-cream">
-                              Produkt {productIndex + 1}
+                              {t('newsletter.productIndexed', { index: productIndex + 1 })}
                             </span>
                           )}
                         </div>
@@ -569,7 +561,7 @@ function NewsletterEditor({
                                 : 'text-ink hover:bg-line/30',
                             ].join(' ')}
                           >
-                            Hero
+                            {t('newsletter.hero')}
                           </button>
                           <button
                             type="button"
@@ -582,7 +574,7 @@ function NewsletterEditor({
                                 : 'text-ink hover:bg-line/30 disabled:cursor-not-allowed disabled:text-muted/50 disabled:hover:bg-transparent',
                             ].join(' ')}
                           >
-                            Produkt
+                            {t('common.product')}
                           </button>
                         </div>
                       </div>
@@ -596,9 +588,9 @@ function NewsletterEditor({
           {/* 4. Text */}
           {dealerId && (
             <section className="flex flex-col gap-4">
-              <span className="text-sm font-medium text-ink">Text</span>
+              <span className="text-sm font-medium text-ink">{t('newsletter.text')}</span>
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Titel *</span>
+                <span className="text-sm text-muted">{t('newsletter.field.titleReq')}</span>
                 <input
                   type="text"
                   value={title}
@@ -606,12 +598,12 @@ function NewsletterEditor({
                     setTitle(e.target.value)
                     markDirty()
                   }}
-                  placeholder="z. B. Neue Cashmere-Kollektion"
+                  placeholder={t('newsletter.ph.title')}
                   className={inputClass}
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Betreff</span>
+                <span className="text-sm text-muted">{t('newsletter.field.subject')}</span>
                 <input
                   type="text"
                   value={subjectLine}
@@ -619,12 +611,12 @@ function NewsletterEditor({
                     setSubjectLine(e.target.value)
                     markDirty()
                   }}
-                  placeholder="Betreffzeile der E-Mail"
+                  placeholder={t('newsletter.ph.subject')}
                   className={inputClass}
                 />
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Preheader</span>
+                <span className="text-sm text-muted">{t('newsletter.field.preheader')}</span>
                 <input
                   type="text"
                   value={preheader}
@@ -632,7 +624,7 @@ function NewsletterEditor({
                     setPreheader(e.target.value)
                     markDirty()
                   }}
-                  placeholder="Vorschautext (im Postfach neben dem Betreff)"
+                  placeholder={t('newsletter.ph.preheader')}
                   className={inputClass}
                 />
               </label>
@@ -649,7 +641,7 @@ function NewsletterEditor({
                   disabled={!complete || saving}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
                 >
-                  {saving ? 'Speichert…' : 'Speichern'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
                 <button
                   type="button"
@@ -657,20 +649,17 @@ function NewsletterEditor({
                   disabled={!complete || downloading}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {downloading ? 'Erzeugt…' : 'HTML herunterladen'}
+                  {downloading ? t('newsletter.generating') : t('newsletter.downloadHtml')}
                 </button>
                 {status && (
                   <span className="text-xs text-muted">
-                    Status: {STATUS_LABELS[status]}
-                    {dirty && ' · ungespeicherte Änderungen'}
+                    {t('common.status')}: {t(statusKey(status))}
+                    {dirty && t('newsletter.unsaved')}
                   </span>
                 )}
               </div>
               {!complete && (
-                <p className="text-xs text-muted">
-                  Zum Speichern: Hero-Bild, zwei Produktbilder und ein Titel
-                  auswählen.
-                </p>
+                <p className="text-xs text-muted">{t('newsletter.incompleteHint')}</p>
               )}
             </section>
           )}
@@ -678,10 +667,10 @@ function NewsletterEditor({
 
         {/* Live-Vorschau */}
         <div className="xl:sticky xl:top-8 xl:self-start">
-          <p className="mb-2 text-sm font-medium text-ink">Vorschau</p>
+          <p className="mb-2 text-sm font-medium text-ink">{t('newsletter.preview')}</p>
           <div className="overflow-hidden rounded-lg border-[0.5px] border-line bg-surface">
             <iframe
-              title="Newsletter-Vorschau"
+              title={t('newsletter.previewTitle')}
               srcDoc={previewHtml}
               className="h-[720px] w-full"
             />

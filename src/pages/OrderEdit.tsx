@@ -16,13 +16,19 @@ import { formatEUR, parsePrice } from '../lib/money'
 import {
   lineTotal,
   nextStatus,
-  statusLabel,
   type Order,
   type OrderItemWithProduct,
 } from '../types/order'
 import type { Product } from '../types/product'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Order-Status → Übersetzungs-Key. */
+function orderStatusKey(status: string): TranslationKey {
+  return `order.status.${status}` as TranslationKey
+}
 
 interface AddForm {
   product_id: string
@@ -42,6 +48,7 @@ const emptyAdd: AddForm = {
 
 export default function OrderEdit() {
   const { id } = useParams<{ id: string }>()
+  const t = useT()
 
   const [order, setOrder] = useState<Order | null>(null)
   const [items, setItems] = useState<OrderItemWithProduct[]>([])
@@ -74,7 +81,7 @@ export default function OrderEdit() {
       setDealer(deals.find((d) => d.id === ord.dealer_id) ?? null)
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
     } catch {
-      setError('Order konnte nicht geladen werden.')
+      setError(t('orderEdit.loadError'))
     } finally {
       setLoading(false)
     }
@@ -103,7 +110,7 @@ export default function OrderEdit() {
       const updated = await updateOrderStatus(order.id, next)
       setOrder(updated)
     } catch {
-      setError('Status konnte nicht geändert werden.')
+      setError(t('common.statusChangeError'))
     }
   }
 
@@ -113,7 +120,7 @@ export default function OrderEdit() {
       await updateOrderNotes(order.id, notes.trim() || null)
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
-      setError('Notiz konnte nicht gespeichert werden.')
+      setError(t('common.notesSaveError'))
     }
   }
 
@@ -146,7 +153,7 @@ export default function OrderEdit() {
       setAdd(emptyAdd)
       setItems(await listOrderItems(order.id))
     } catch {
-      setError('Artikel konnte nicht hinzugefügt werden.')
+      setError(t('orderEdit.addError'))
     } finally {
       setAdding(false)
     }
@@ -174,7 +181,7 @@ export default function OrderEdit() {
         await updateOrderItem(itemId, { [field]: value.trim() || null })
       }
     } catch {
-      setError('Änderung konnte nicht gespeichert werden.')
+      setError(t('orderEdit.editError'))
     }
   }
 
@@ -183,7 +190,7 @@ export default function OrderEdit() {
       await deleteOrderItem(itemId)
       setItems((prev) => prev.filter((i) => i.id !== itemId))
     } catch {
-      setError('Zeile konnte nicht gelöscht werden.')
+      setError(t('orderEdit.removeError'))
     }
   }
 
@@ -192,15 +199,15 @@ export default function OrderEdit() {
   const cellInput =
     'w-full rounded-md border-[0.5px] border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
 
-  if (loading) return <p className="text-sm text-muted">Lädt…</p>
+  if (loading) return <p className="text-sm text-muted">{t('common.loading')}</p>
   if (!order)
     return (
       <div className="mx-auto max-w-4xl">
         <Link to="/orders" className="text-sm text-muted hover:text-ink">
-          ← Zurück zu Orders
+          {t('orderEdit.back')}
         </Link>
         <p className="mt-6 text-sm text-red-700">
-          {error ?? 'Order nicht gefunden.'}
+          {error ?? t('orderEdit.notFound')}
         </p>
       </div>
     )
@@ -211,23 +218,23 @@ export default function OrderEdit() {
   return (
     <div className="mx-auto max-w-4xl">
       <Link to="/orders" className="text-sm text-muted hover:text-ink">
-        ← Zurück zu Orders
+        {t('orderEdit.back')}
       </Link>
 
       <div className="mt-4 mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            {dealer?.name ?? 'Order'}
+            {dealer?.name ?? t('orderEdit.fallbackTitle')}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Saison {season?.label ?? '—'}
+            {t('common.seasonValue', { season: season?.label ?? '—' })}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted">
-            Status:{' '}
+            {t('common.status')}:{' '}
             <span className="font-medium text-ink">
-              {statusLabel(order.status)}
+              {t(orderStatusKey(order.status))}
             </span>
           </span>
           {next && (
@@ -236,7 +243,7 @@ export default function OrderEdit() {
               onClick={handleAdvanceStatus}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
             >
-              {statusLabel(next)} setzen
+              {t('common.setStatus', { status: t(orderStatusKey(next)) })}
             </button>
           )}
         </div>
@@ -249,29 +256,29 @@ export default function OrderEdit() {
       )}
 
       <label className="mb-8 flex flex-col gap-1.5">
-        <span className="text-sm text-muted">Notiz</span>
+        <span className="text-sm text-muted">{t('common.notes')}</span>
         <input
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={handleNotesBlur}
-          placeholder="Interne Notiz zur Order"
+          placeholder={t('orderEdit.notesPlaceholder')}
           className={inputClass}
         />
       </label>
 
-      <h2 className="mb-3 text-lg font-medium text-ink">Artikel</h2>
+      <h2 className="mb-3 text-lg font-medium text-ink">{t('orderEdit.articles')}</h2>
 
       <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
         <table className="w-full text-left text-sm">
           <thead className="bg-card text-muted">
             <tr>
-              <th className="px-3 py-3 font-medium">Artikel</th>
-              <th className="px-3 py-3 font-medium">Farbe</th>
-              <th className="px-3 py-3 font-medium">Größe</th>
-              <th className="px-3 py-3 font-medium">Menge</th>
-              <th className="px-3 py-3 font-medium">Einzelpreis</th>
-              <th className="px-3 py-3 text-right font-medium">Summe</th>
+              <th className="px-3 py-3 font-medium">{t('common.article')}</th>
+              <th className="px-3 py-3 font-medium">{t('common.color')}</th>
+              <th className="px-3 py-3 font-medium">{t('common.size')}</th>
+              <th className="px-3 py-3 font-medium">{t('common.quantity')}</th>
+              <th className="px-3 py-3 font-medium">{t('common.unitPrice')}</th>
+              <th className="px-3 py-3 text-right font-medium">{t('common.lineSum')}</th>
               <th className="px-3 py-3" />
             </tr>
           </thead>
@@ -279,7 +286,7 @@ export default function OrderEdit() {
             {items.length === 0 ? (
               <tr className="border-t-[0.5px] border-line bg-surface">
                 <td colSpan={7} className="px-3 py-6 text-center text-muted">
-                  Noch keine Artikel. Unten hinzufügen.
+                  {t('orderEdit.emptyRow')}
                 </td>
               </tr>
             ) : (
@@ -363,7 +370,7 @@ export default function OrderEdit() {
                         onClick={() => handleRemove(i.id)}
                         className="text-muted transition-colors hover:text-red-700"
                       >
-                        Entfernen
+                        {t('common.remove')}
                       </button>
                     </td>
                   </tr>
@@ -374,7 +381,7 @@ export default function OrderEdit() {
           <tfoot>
             <tr className="border-t-[0.5px] border-line bg-card text-ink">
               <td colSpan={5} className="px-3 py-3 font-medium">
-                Gesamtsumme
+                {t('orderEdit.grandTotal')}
               </td>
               <td className="px-3 py-3 text-right font-medium whitespace-nowrap">
                 {formatEUR(total)}
@@ -390,17 +397,17 @@ export default function OrderEdit() {
         onSubmit={handleAdd}
         className="mt-6 rounded-md border-[0.5px] border-line bg-card p-4"
       >
-        <h3 className="mb-3 text-sm font-medium text-ink">Artikel hinzufügen</h3>
+        <h3 className="mb-3 text-sm font-medium text-ink">{t('orderEdit.addArticle')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
-            <span className="text-xs text-muted">Produkt *</span>
+            <span className="text-xs text-muted">{t('orderEdit.productReq')}</span>
             <select
               required
               value={add.product_id}
               onChange={(e) => onSelectProduct(e.target.value)}
               className={inputClass}
             >
-              <option value="">— aus Katalog wählen —</option>
+              <option value="">{t('orderEdit.productPlaceholder')}</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -409,7 +416,7 @@ export default function OrderEdit() {
             </select>
           </label>
           <label className="flex w-32 flex-col gap-1.5">
-            <span className="text-xs text-muted">Farbe</span>
+            <span className="text-xs text-muted">{t('common.color')}</span>
             <input
               type="text"
               list="add-colors"
@@ -426,7 +433,7 @@ export default function OrderEdit() {
             )}
           </label>
           <label className="flex w-24 flex-col gap-1.5">
-            <span className="text-xs text-muted">Größe</span>
+            <span className="text-xs text-muted">{t('common.size')}</span>
             <input
               type="text"
               value={add.size}
@@ -435,7 +442,7 @@ export default function OrderEdit() {
             />
           </label>
           <label className="flex w-20 flex-col gap-1.5">
-            <span className="text-xs text-muted">Menge</span>
+            <span className="text-xs text-muted">{t('common.quantity')}</span>
             <input
               type="number"
               min={0}
@@ -445,7 +452,7 @@ export default function OrderEdit() {
             />
           </label>
           <label className="flex w-28 flex-col gap-1.5">
-            <span className="text-xs text-muted">Einzelpreis (€)</span>
+            <span className="text-xs text-muted">{t('orderEdit.unitPriceEur')}</span>
             <input
               type="text"
               inputMode="decimal"
@@ -460,7 +467,7 @@ export default function OrderEdit() {
             disabled={adding || !add.product_id}
             className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {adding ? 'Fügt hinzu…' : 'Hinzufügen'}
+            {adding ? t('orderEdit.adding') : t('orderEdit.add')}
           </button>
         </div>
       </form>

@@ -7,8 +7,15 @@ import {
   listReceivedProductionOrders,
   type ReceivedProductionOrder,
 } from '../lib/deliveries'
-import { deliveryStatusLabel, type DeliveryListRow } from '../types/delivery'
+import { type DeliveryListRow } from '../types/delivery'
 import EmptyState from '../components/EmptyState'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Lieferungs-Status → Übersetzungs-Key. */
+function deliveryStatusKey(status: string): TranslationKey {
+  return `delivery.status.${status}` as TranslationKey
+}
 
 /** Summe aller Liefer-Stückzahlen einer Lieferung. */
 function deliveryQuantity(d: DeliveryListRow): number {
@@ -27,6 +34,7 @@ function formatDate(iso: string | null): string {
 
 /** Farbige Status-Badge. */
 function StatusBadge({ status }: { status: string }) {
+  const t = useT()
   const tone =
     status === 'delivered'
       ? 'bg-ink text-cream'
@@ -35,13 +43,14 @@ function StatusBadge({ status }: { status: string }) {
         : 'border-[0.5px] border-ink text-ink'
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-xs ${tone}`}>
-      {deliveryStatusLabel(status)}
+      {t(deliveryStatusKey(status))}
     </span>
   )
 }
 
 export default function Deliveries() {
   const navigate = useNavigate()
+  const t = useT()
   const [deliveries, setDeliveries] = useState<DeliveryListRow[]>([])
   const [received, setReceived] = useState<ReceivedProductionOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +72,7 @@ export default function Deliveries() {
       setDeliveries(dels)
       setReceived(recv)
     } catch {
-      setError('Wareneingang konnte nicht geladen werden.')
+      setError(t('deliveries.loadError'))
     } finally {
       setLoading(false)
     }
@@ -82,7 +91,7 @@ export default function Deliveries() {
   async function handleGenerate(e: FormEvent) {
     e.preventDefault()
     if (!productionOrderId) {
-      setFormError('Bitte eine Produktionsbestellung wählen.')
+      setFormError(t('deliveries.chooseProduction'))
       return
     }
     setGenerating(true)
@@ -91,14 +100,12 @@ export default function Deliveries() {
       const created = await generateDeliveries(productionOrderId)
       setFormOpen(false)
       if (created === 0) {
-        setError('Keine Lieferungen erstellt — keine passenden Orders gefunden.')
+        setError(t('deliveries.noneCreated'))
       }
       await load()
     } catch (err) {
       setFormError(
-        err instanceof Error
-          ? err.message
-          : 'Verteilung konnte nicht generiert werden.',
+        err instanceof Error ? err.message : t('deliveries.generateError'),
       )
     } finally {
       setGenerating(false)
@@ -106,13 +113,13 @@ export default function Deliveries() {
   }
 
   async function handleDelete(d: DeliveryListRow) {
-    const name = d.dealer?.name ?? 'Händler'
-    if (!window.confirm(`Lieferung für ${name} wirklich löschen?`)) return
+    const name = d.dealer?.name ?? t('deliveries.deleteFallbackName')
+    if (!window.confirm(t('deliveries.deleteConfirm', { name }))) return
     try {
       await deleteDelivery(d.id)
       await load()
     } catch {
-      setError('Lieferung konnte nicht gelöscht werden.')
+      setError(t('deliveries.deleteError'))
     }
   }
 
@@ -123,24 +130,17 @@ export default function Deliveries() {
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-ink">Wareneingang</h1>
-          <p className="mt-1 text-sm text-muted">
-            Angekommene Produktionsbestellung anhand der Händlerorders auf die
-            einzelnen Händler verteilen.
-          </p>
+          <h1 className="text-2xl font-medium text-ink">{t('deliveries.title')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('deliveries.subtitle')}</p>
         </div>
         <button
           type="button"
           onClick={openGenerate}
           disabled={received.length === 0}
-          title={
-            received.length === 0
-              ? 'Keine Produktionsbestellung mit Status „Erhalten"'
-              : undefined
-          }
+          title={received.length === 0 ? t('deliveries.noReceivedTitle') : undefined}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Verteilung generieren
+          {t('deliveries.generate')}
         </button>
       </div>
 
@@ -151,27 +151,25 @@ export default function Deliveries() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : deliveries.length === 0 ? (
         <EmptyState
-          actionLabel="Verteilung generieren"
+          actionLabel={t('deliveries.generate')}
           onAction={openGenerate}
           actionDisabled={received.length === 0}
         >
-          Hier verteilst du die angekommene Produktionsbestellung anhand der
-          Händlerorders auf die einzelnen Händler. Sobald eine Produktionsbestellung
-          den Status „Erhalten" hat, kannst du die Verteilung erstellen.
+          {t('deliveries.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Händler</th>
-                <th className="px-4 py-3 font-medium">Saison</th>
-                <th className="px-4 py-3 font-medium">Erstellt am</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Stück</th>
+                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.season')}</th>
+                <th className="px-4 py-3 font-medium">{t('deliveries.col.createdAt')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-right font-medium">{t('deliveries.col.pieces')}</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -206,7 +204,7 @@ export default function Deliveries() {
                       }}
                       className="text-muted transition-colors hover:text-ink"
                     >
-                      Öffnen
+                      {t('common.open')}
                     </button>
                     <button
                       type="button"
@@ -216,7 +214,7 @@ export default function Deliveries() {
                       }}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -230,17 +228,13 @@ export default function Deliveries() {
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-lg bg-cream p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-medium text-ink">
-              Verteilung generieren
+              {t('deliveries.generate')}
             </h2>
-            <p className="mb-4 text-sm text-muted">
-              Die gewählte Produktionsbestellung wird anhand der bestätigten
-              Händlerorders der Saison auf die Händler aufgeteilt — je Händler
-              eine Lieferung.
-            </p>
+            <p className="mb-4 text-sm text-muted">{t('deliveries.dialog.desc')}</p>
             <form onSubmit={handleGenerate} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">
-                  Produktionsbestellung (Status: Erhalten) *
+                  {t('deliveries.dialog.field')}
                 </span>
                 <select
                   required
@@ -248,10 +242,10 @@ export default function Deliveries() {
                   onChange={(e) => setProductionOrderId(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">— wählen —</option>
+                  <option value="">{t('common.select')}</option>
                   {received.map((po) => (
                     <option key={po.id} value={po.id}>
-                      {po.season?.label ?? 'Saison ?'} ·{' '}
+                      {po.season?.label ?? t('deliveries.dialog.seasonUnknown')} ·{' '}
                       {formatDate(po.generated_at)}
                     </option>
                   ))}
@@ -266,14 +260,14 @@ export default function Deliveries() {
                   onClick={() => setFormOpen(false)}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={generating}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {generating ? 'Generiert…' : 'Generieren'}
+                  {generating ? t('common.generating') : t('common.generate')}
                 </button>
               </div>
             </form>

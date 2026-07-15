@@ -17,15 +17,25 @@ import {
   signedPdfUrl,
 } from '../lib/invoices'
 import {
-  deliveryStatusLabel,
   nextDeliveryStatus,
   type DeliveryItemWithProduct,
 } from '../types/delivery'
 import {
-  invoiceStatusLabel,
   type DeliveryNote,
   type Invoice,
 } from '../types/invoice'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Lieferungs-Status → Übersetzungs-Key. */
+function deliveryStatusKey(status: string): TranslationKey {
+  return `delivery.status.${status}` as TranslationKey
+}
+
+/** Rechnungs-Status → Übersetzungs-Key. */
+function invoiceStatusKey(status: string): TranslationKey {
+  return `invoice.status.${status}` as TranslationKey
+}
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -40,6 +50,7 @@ function formatDate(iso: string | null): string {
 export default function DeliveryEdit() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const t = useT()
 
   const [delivery, setDelivery] = useState<DeliveryDetail | null>(null)
   const [items, setItems] = useState<DeliveryItemWithProduct[]>([])
@@ -79,7 +90,7 @@ export default function DeliveryEdit() {
         seasonId ? await orderedQuantities(seasonId, del.dealer_id) : new Map(),
       )
     } catch {
-      setError('Lieferung konnte nicht geladen werden.')
+      setError(t('deliveryEdit.loadError'))
     } finally {
       setLoading(false)
     }
@@ -90,7 +101,7 @@ export default function DeliveryEdit() {
     try {
       window.open(await signedPdfUrl(path), '_blank', 'noopener')
     } catch {
-      setDocError('PDF konnte nicht geöffnet werden.')
+      setDocError(t('common.pdfOpenError'))
     }
   }
 
@@ -104,9 +115,7 @@ export default function DeliveryEdit() {
       await openPdf(note.pdf_path)
     } catch (err) {
       setDocError(
-        err instanceof Error
-          ? err.message
-          : 'Lieferschein konnte nicht erstellt werden.',
+        err instanceof Error ? err.message : t('deliveryEdit.noteError'),
       )
     } finally {
       setDocBusy(false)
@@ -122,9 +131,7 @@ export default function DeliveryEdit() {
       navigate(`/invoices/${invoice.id}`)
     } catch (err) {
       setDocError(
-        err instanceof Error
-          ? err.message
-          : 'Rechnung konnte nicht erstellt werden.',
+        err instanceof Error ? err.message : t('invoices.createError'),
       )
     } finally {
       setDocBusy(false)
@@ -154,7 +161,7 @@ export default function DeliveryEdit() {
       const updated = await updateDeliveryStatus(delivery.id, next)
       setDelivery({ ...delivery, status: updated.status })
     } catch {
-      setError('Status konnte nicht geändert werden.')
+      setError(t('common.statusChangeError'))
     }
   }
 
@@ -164,7 +171,7 @@ export default function DeliveryEdit() {
       await updateDeliveryNotes(delivery.id, notes.trim() || null)
       setDelivery({ ...delivery, notes: notes.trim() || null })
     } catch {
-      setError('Notiz konnte nicht gespeichert werden.')
+      setError(t('common.notesSaveError'))
     }
   }
 
@@ -180,7 +187,7 @@ export default function DeliveryEdit() {
     try {
       await updateDeliveryItemQuantity(itemId, Number(value) || 0)
     } catch {
-      setError('Menge konnte nicht gespeichert werden.')
+      setError(t('deliveryEdit.qtySaveError'))
     }
   }
 
@@ -189,15 +196,15 @@ export default function DeliveryEdit() {
   const cellInput =
     'w-full rounded-md border-[0.5px] border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-ink'
 
-  if (loading) return <p className="text-sm text-muted">Lädt…</p>
+  if (loading) return <p className="text-sm text-muted">{t('common.loading')}</p>
   if (!delivery)
     return (
       <div className="mx-auto max-w-4xl">
         <Link to="/deliveries" className="text-sm text-muted hover:text-ink">
-          ← Zurück zum Wareneingang
+          {t('deliveryEdit.back')}
         </Link>
         <p className="mt-6 text-sm text-red-700">
-          {error ?? 'Lieferung nicht gefunden.'}
+          {error ?? t('deliveryEdit.notFound')}
         </p>
       </div>
     )
@@ -209,25 +216,27 @@ export default function DeliveryEdit() {
     <div className="mx-auto max-w-4xl">
       <div className="print:hidden">
         <Link to="/deliveries" className="text-sm text-muted hover:text-ink">
-          ← Zurück zum Wareneingang
+          {t('deliveryEdit.back')}
         </Link>
       </div>
 
       <div className="mt-4 mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            {delivery.dealer?.name ?? 'Lieferung'}
+            {delivery.dealer?.name ?? t('deliveryEdit.fallbackTitle')}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Saison {delivery.production_order?.season?.label ?? '—'} · Erstellt am{' '}
-            {formatDate(delivery.created_at)}
+            {t('deliveryEdit.seasonCreated', {
+              season: delivery.production_order?.season?.label ?? '—',
+              date: formatDate(delivery.created_at),
+            })}
           </p>
         </div>
         <div className="flex items-center gap-3 print:hidden">
           <span className="text-sm text-muted">
-            Status:{' '}
+            {t('common.status')}:{' '}
             <span className="font-medium text-ink">
-              {deliveryStatusLabel(delivery.status)}
+              {t(deliveryStatusKey(delivery.status))}
             </span>
           </span>
           <button
@@ -235,7 +244,7 @@ export default function DeliveryEdit() {
             onClick={() => window.print()}
             className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
           >
-            Drucken / PDF
+            {t('common.printPdf')}
           </button>
           {next && (
             <button
@@ -243,7 +252,7 @@ export default function DeliveryEdit() {
               onClick={handleAdvanceStatus}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
             >
-              {deliveryStatusLabel(next)} setzen
+              {t('common.setStatus', { status: t(deliveryStatusKey(next)) })}
             </button>
           )}
         </div>
@@ -258,9 +267,11 @@ export default function DeliveryEdit() {
       <section className="mb-8 rounded-md border-[0.5px] border-line bg-surface px-5 py-4 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-medium text-ink">Belege</h2>
+            <h2 className="text-lg font-medium text-ink">{t('deliveryEdit.documents')}</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Lieferschein und Rechnung als PDF für {delivery.dealer?.name ?? 'den Händler'}.
+              {t('deliveryEdit.documentsDesc', {
+                name: delivery.dealer?.name ?? t('deliveryEdit.documentsDescFallback'),
+              })}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -270,20 +281,16 @@ export default function DeliveryEdit() {
               onClick={handleCreateDeliveryNote}
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
             >
-              Lieferschein erstellen
+              {t('deliveryEdit.createNote')}
             </button>
             <button
               type="button"
               disabled={docBusy || hasActiveInvoice}
-              title={
-                hasActiveInvoice
-                  ? 'Es existiert bereits eine aktive Rechnung. Zuerst stornieren.'
-                  : undefined
-              }
+              title={hasActiveInvoice ? t('deliveryEdit.invoiceExists') : undefined}
               onClick={handleCreateInvoice}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              Rechnung erstellen
+              {t('invoices.create')}
             </button>
           </div>
         </div>
@@ -300,7 +307,7 @@ export default function DeliveryEdit() {
                 className="flex items-center justify-between gap-3 py-2.5 text-sm"
               >
                 <span className="text-ink">
-                  Lieferschein {n.note_number}
+                  {t('deliveryEdit.deliveryNoteLabel', { number: n.note_number })}
                   <span className="ml-2 text-muted">{formatDate(n.note_date)}</span>
                 </span>
                 <button
@@ -308,7 +315,7 @@ export default function DeliveryEdit() {
                   onClick={() => openPdf(n.pdf_path)}
                   className="text-muted transition-colors hover:text-ink"
                 >
-                  PDF öffnen
+                  {t('common.openPdf')}
                 </button>
               </li>
             ))}
@@ -318,9 +325,9 @@ export default function DeliveryEdit() {
                 className="flex items-center justify-between gap-3 py-2.5 text-sm"
               >
                 <span className="text-ink">
-                  Rechnung {inv.invoice_number}
+                  {t('invoiceEdit.title', { number: inv.invoice_number })}
                   <span className="ml-2 text-muted">
-                    {formatDate(inv.invoice_date)} · {invoiceStatusLabel(inv.status)}
+                    {formatDate(inv.invoice_date)} · {t(invoiceStatusKey(inv.status))}
                   </span>
                 </span>
                 <button
@@ -328,7 +335,7 @@ export default function DeliveryEdit() {
                   onClick={() => navigate(`/invoices/${inv.id}`)}
                   className="text-muted transition-colors hover:text-ink"
                 >
-                  Öffnen
+                  {t('common.open')}
                 </button>
               </li>
             ))}
@@ -337,48 +344,47 @@ export default function DeliveryEdit() {
       </section>
 
       <label className="mb-8 flex flex-col gap-1.5 print:hidden">
-        <span className="text-sm text-muted">Notiz</span>
+        <span className="text-sm text-muted">{t('common.notes')}</span>
         <input
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={handleNotesBlur}
-          placeholder="Interne Notiz zur Lieferung"
+          placeholder={t('deliveryEdit.notesPlaceholder')}
           className={inputClass}
         />
       </label>
 
       {delivery.notes && (
         <p className="mb-8 hidden text-sm text-ink print:block">
-          Notiz: {delivery.notes}
+          {t('common.notePrint', { notes: delivery.notes })}
         </p>
       )}
 
       <h2 className="mb-1 text-lg font-medium text-ink">
-        Abgleich ({items.length} Positionen)
+        {t('deliveryEdit.reconcile', { count: items.length })}
       </h2>
       <p className="mb-3 text-sm text-muted print:hidden">
-        Bestellt zeigt die ursprüngliche Order. Geliefert ist editierbar für
-        Teillieferungen.
+        {t('deliveryEdit.reconcileHint')}
       </p>
 
       <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
         <table className="w-full text-left text-sm">
           <thead className="bg-card text-muted">
             <tr>
-              <th className="px-4 py-3 font-medium">Produkt</th>
-              <th className="px-4 py-3 font-medium">Farbe</th>
-              <th className="px-4 py-3 font-medium">Größe</th>
-              <th className="px-4 py-3 text-right font-medium">Bestellt</th>
-              <th className="px-4 py-3 text-right font-medium">Geliefert</th>
-              <th className="px-4 py-3 text-right font-medium">Differenz</th>
+              <th className="px-4 py-3 font-medium">{t('common.product')}</th>
+              <th className="px-4 py-3 font-medium">{t('common.color')}</th>
+              <th className="px-4 py-3 font-medium">{t('common.size')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.ordered')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.delivered')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.difference')}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr className="border-t-[0.5px] border-line bg-surface">
                 <td colSpan={6} className="px-4 py-6 text-center text-muted">
-                  Keine Positionen.
+                  {t('common.noPositions')}
                 </td>
               </tr>
             ) : (
@@ -430,7 +436,7 @@ export default function DeliveryEdit() {
           <tfoot>
             <tr className="border-t-[0.5px] border-line bg-card text-ink">
               <td colSpan={3} className="px-4 py-3 font-medium">
-                Gesamt
+                {t('common.total')}
               </td>
               <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                 {totals.orderedSum.toLocaleString('de-DE')}

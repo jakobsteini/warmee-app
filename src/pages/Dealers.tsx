@@ -13,7 +13,7 @@ import { numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import CreditBadge from '../components/CreditBadge'
 import ExportButtons from '../components/ExportButtons'
-import { useT } from '../i18n'
+import { useT, type TFunc } from '../i18n'
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -267,20 +267,27 @@ function dealerToForm(d: Dealer): DealerForm {
 }
 
 /** Lesbare Klartext-Zusammenfassung der Konditionen fürs Formular. */
-function readableTerms(f: DealerForm): string {
+function readableTerms(f: DealerForm, t: TFunc): string {
   const sp = decOrNull(f.skonto_prozent)
   const st = intOrNull(f.skonto_tage)
   const ziel = intOrNull(f.zahlungsziel_tage)
   if (sp === null && st === null && ziel === null) {
-    return `Keine Kondition hinterlegt → Hausstandard (netto ${DEFAULT_ZAHLUNGSZIEL_TAGE} Tage).`
+    return t('dealers.terms.none', { days: DEFAULT_ZAHLUNGSZIEL_TAGE })
   }
   const parts: string[] = []
   if (sp !== null && sp > 0) {
     parts.push(
-      `${String(sp).replace('.', ',')} % Skonto bei Zahlung in ${st ?? '—'} Tagen`,
+      t('dealers.terms.cashDiscount', {
+        pct: String(sp).replace('.', ','),
+        days: st ?? '—',
+      }),
     )
   }
-  parts.push(ziel === 0 ? 'netto sofort' : `netto ${ziel ?? DEFAULT_ZAHLUNGSZIEL_TAGE} Tage`)
+  parts.push(
+    ziel === 0
+      ? t('dealers.terms.netImmediate')
+      : t('dealers.terms.net', { days: ziel ?? DEFAULT_ZAHLUNGSZIEL_TAGE }),
+  )
   return parts.join(', ')
 }
 
@@ -368,12 +375,14 @@ function AddressBlock({
   prefix,
   form,
   set,
+  t,
   withName = false,
   withEmail2 = false,
 }: {
   prefix: 'shipping' | 'billing' | 'store'
   form: DealerForm
   set: (key: DealerFormKey, value: string) => void
+  t: TFunc
   withName?: boolean
   withEmail2?: boolean
 }) {
@@ -382,12 +391,12 @@ function AddressBlock({
   return (
     <>
       {withName && (
-        <Field label="Name" value={f('name')} onChange={(v) => set(k('name'), v)} />
+        <Field label={t('common.name')} value={f('name')} onChange={(v) => set(k('name'), v)} />
       )}
-      <Field label="Straße" value={f('street')} onChange={(v) => set(k('street'), v)} />
+      <Field label={t('dealers.addr.street')} value={f('street')} onChange={(v) => set(k('street'), v)} />
       <div className="flex gap-3">
         <label className="flex w-28 flex-col gap-1.5">
-          <span className="text-xs text-muted">PLZ</span>
+          <span className="text-xs text-muted">{t('dealers.addr.zip')}</span>
           <input
             type="text"
             value={f('zip')}
@@ -395,24 +404,24 @@ function AddressBlock({
             className={inputClass}
           />
         </label>
-        <Field label="Ort" value={f('city')} onChange={(v) => set(k('city'), v)} />
+        <Field label={t('dealers.col.city')} value={f('city')} onChange={(v) => set(k('city'), v)} />
       </div>
       <div className="flex gap-3">
         <Field
-          label="Ländercode"
+          label={t('dealers.addr.countryCode')}
           value={f('country_code')}
           onChange={(v) => set(k('country_code'), v)}
-          placeholder="z. B. CH"
+          placeholder={t('dealers.ph.countryCode')}
         />
         <Field
-          label="Land"
+          label={t('dealers.field.country')}
           value={f('country_name')}
           onChange={(v) => set(k('country_name'), v)}
         />
       </div>
-      <Field label="Telefon" value={f('phone')} onChange={(v) => set(k('phone'), v)} />
+      <Field label={t('dealers.addr.phone')} value={f('phone')} onChange={(v) => set(k('phone'), v)} />
       <Field
-        label="E-Mail"
+        label={t('common.email')}
         type="email"
         inputMode="email"
         value={f('email')}
@@ -420,7 +429,7 @@ function AddressBlock({
       />
       {withEmail2 && (
         <Field
-          label="E-Mail 2"
+          label={t('dealers.addr.email2')}
           type="email"
           inputMode="email"
           value={f('shipping_email2')}
@@ -550,12 +559,12 @@ export default function Dealers() {
     e.preventDefault()
 
     if (!form.name.trim()) {
-      setFormError('Name ist erforderlich.')
+      setFormError(t('common.nameRequired'))
       return
     }
     const badEmail = EMAIL_FIELDS.find((key) => !emailLooksValid(form[key]))
     if (badEmail) {
-      setFormError('Bitte eine gültige E-Mail-Adresse eingeben (muss ein @ enthalten).')
+      setFormError(t('dealers.emailInvalid'))
       return
     }
 
@@ -571,14 +580,14 @@ export default function Dealers() {
       closeForm()
       await load()
     } catch {
-      setFormError('Speichern fehlgeschlagen. Bitte erneut versuchen.')
+      setFormError(t('common.saveFailed'))
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete(d: Dealer) {
-    if (!window.confirm(`Händler „${d.name}" wirklich löschen?`)) return
+    if (!window.confirm(t('dealers.deleteConfirm', { name: d.name }))) return
     try {
       await deleteDealer(d.id)
       await load()
@@ -694,11 +703,11 @@ export default function Dealers() {
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
               <div className="flex items-baseline justify-between px-6 pt-6 pb-4">
                 <h2 className="text-lg font-medium text-ink">
-                  {editing ? 'Händler bearbeiten' : 'Händler hinzufügen'}
+                  {editing ? t('dealers.edit') : t('dealers.add')}
                 </h2>
                 {editing && (
                   <span className="text-xs text-muted">
-                    Kd.-Nr.{' '}
+                    {t('dealers.col.customerNo')}{' '}
                     <span className="tabular-nums text-ink">
                       {editing.kundennummer ?? '—'}
                     </span>
@@ -708,38 +717,38 @@ export default function Dealers() {
 
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6">
                 {/* Stammdaten */}
-                <Section title="Stammdaten">
+                <Section title={t('dealers.section.master')}>
                   <Field
-                    label="Name *"
+                    label={t('dealers.field.nameReq')}
                     value={form.name}
                     onChange={(v) => set('name', v)}
                   />
                   <div className="flex gap-3">
                     <Field
-                      label="Kurzname"
+                      label={t('dealers.field.shortName')}
                       value={form.short_name}
                       onChange={(v) => set('short_name', v)}
                     />
                     <Field
-                      label="Firmenname"
+                      label={t('dealers.field.companyName')}
                       value={form.company_name}
                       onChange={(v) => set('company_name', v)}
                     />
                   </div>
                   <div className="flex gap-3">
                     <Field
-                      label="Inhaber"
+                      label={t('dealers.field.owner')}
                       value={form.owner_name}
                       onChange={(v) => set('owner_name', v)}
                     />
                     <Field
-                      label="Ansprechpartner"
+                      label={t('dealers.col.contact')}
                       value={form.contact_name}
                       onChange={(v) => set('contact_name', v)}
                     />
                   </div>
                   <Field
-                    label="E-Mail"
+                    label={t('common.email')}
                     type="email"
                     inputMode="email"
                     value={form.email}
@@ -747,12 +756,12 @@ export default function Dealers() {
                   />
                   <div className="flex gap-3">
                     <Field
-                      label="Ort"
+                      label={t('dealers.col.city')}
                       value={form.city}
                       onChange={(v) => set('city', v)}
                     />
                     <label className="flex w-24 flex-col gap-1.5">
-                      <span className="text-xs text-muted">Land</span>
+                      <span className="text-xs text-muted">{t('dealers.field.country')}</span>
                       <input
                         type="text"
                         value={form.country}
@@ -763,22 +772,22 @@ export default function Dealers() {
                   </div>
                   {!editing && (
                     <p className="text-xs text-muted">
-                      Die Kundennummer wird beim Speichern automatisch vergeben.
+                      {t('dealers.field.custNoHint')}
                     </p>
                   )}
                 </Section>
 
                 {/* Steuer & Buchhaltung */}
-                <Section title="Steuer & Buchhaltung">
+                <Section title={t('dealers.section.tax')}>
                   <div className="flex gap-3">
                     <Field
-                      label="UID-Nr. (optional)"
+                      label={t('dealers.field.uid')}
                       value={form.uid}
                       onChange={(v) => set('uid', v)}
-                      placeholder="z. B. ATU61622989"
+                      placeholder={t('dealers.ph.uid')}
                     />
                     <Field
-                      label="Gegenkonto"
+                      label={t('dealers.field.contraAccount')}
                       inputMode="numeric"
                       value={form.gegenkonto}
                       onChange={(v) => set('gegenkonto', v)}
@@ -787,34 +796,34 @@ export default function Dealers() {
                 </Section>
 
                 {/* Zahlungskonditionen */}
-                <Section title="Zahlungskonditionen">
+                <Section title={t('dealers.section.terms')}>
                   <div className="flex gap-3">
                     <Field
-                      label="Skonto %"
+                      label={t('dealers.field.cashDiscountPct')}
                       inputMode="decimal"
                       value={form.skonto_prozent}
                       onChange={(v) => set('skonto_prozent', v)}
-                      placeholder="z. B. 3"
+                      placeholder={t('dealers.ph.cashDiscountPct')}
                     />
                     <Field
-                      label="Skonto-Tage"
+                      label={t('dealers.field.cashDiscountDays')}
                       inputMode="numeric"
                       value={form.skonto_tage}
                       onChange={(v) => set('skonto_tage', v)}
-                      placeholder="z. B. 10"
+                      placeholder={t('dealers.ph.cashDiscountDays')}
                     />
                     <Field
-                      label="Zahlungsziel (Tage)"
+                      label={t('dealers.field.paymentTermDays')}
                       inputMode="numeric"
                       value={form.zahlungsziel_tage}
                       onChange={(v) => set('zahlungsziel_tage', v)}
-                      placeholder="z. B. 30"
+                      placeholder={t('dealers.ph.paymentTermDays')}
                     />
                   </div>
-                  <p className="text-xs text-muted">{readableTerms(form)}</p>
+                  <p className="text-xs text-muted">{readableTerms(form, t)}</p>
                   {editing?.payment_terms_raw && (
                     <p className="text-xs text-muted">
-                      Importiert:{' '}
+                      {t('dealers.field.imported')}{' '}
                       <span className="text-ink">{editing.payment_terms_raw}</span>
                     </p>
                   )}
@@ -822,27 +831,27 @@ export default function Dealers() {
 
                 {/* Adressen (ausklappbar; beim Bearbeiten offen) */}
                 <Section
-                  title="Lieferadresse"
+                  title={t('dealers.section.shipping')}
                   collapsible
                   defaultOpen={!!editing}
                 >
-                  <AddressBlock prefix="shipping" form={form} set={set} withEmail2 />
+                  <AddressBlock prefix="shipping" form={form} set={set} t={t} withEmail2 />
                 </Section>
 
                 <Section
-                  title="Rechnungsadresse"
+                  title={t('dealers.section.billing')}
                   collapsible
                   defaultOpen={!!editing}
                 >
-                  <AddressBlock prefix="billing" form={form} set={set} withName />
+                  <AddressBlock prefix="billing" form={form} set={set} t={t} withName />
                 </Section>
 
                 <Section
-                  title="Store / POS"
+                  title={t('dealers.section.store')}
                   collapsible
                   defaultOpen={!!editing}
                 >
-                  <AddressBlock prefix="store" form={form} set={set} withName />
+                  <AddressBlock prefix="store" form={form} set={set} t={t} withName />
                 </Section>
 
                 {formError && (
@@ -856,14 +865,14 @@ export default function Dealers() {
                   onClick={closeForm}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {saving ? 'Speichert…' : 'Speichern'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </form>

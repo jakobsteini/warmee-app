@@ -16,6 +16,7 @@ import {
   type CropFormatId,
 } from '../types/crop'
 import type { AssetWithMeta } from '../types/asset'
+import { useT } from '../i18n'
 
 /** Wert auf [min, max] begrenzen. */
 function clamp(value: number, min: number, max: number): number {
@@ -23,6 +24,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export default function Crop() {
+  const t = useT()
   const [assets, setAssets] = useState<AssetWithMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +38,7 @@ export default function Crop() {
         // Nur Fotos lassen sich zuschneiden (aktuell sind alle Assets Fotos).
         setAssets((await listAssets()).filter((a) => a.asset_kind === 'photo'))
       } catch {
-        setError('Bilder konnten nicht geladen werden.')
+        setError(t('assets.loadError'))
       } finally {
         setLoading(false)
       }
@@ -46,11 +48,8 @@ export default function Crop() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-medium text-ink">Zuschnitt</h1>
-        <p className="mt-1 text-sm text-muted">
-          Bild wählen, Format setzen (4:5, 3:4, 9:16, Newsletter), Rahmen
-          anpassen und als JPEG speichern.
-        </p>
+        <h1 className="text-2xl font-medium text-ink">{t('crop.title')}</h1>
+        <p className="mt-1 text-sm text-muted">{t('crop.subtitle')}</p>
       </div>
 
       {error && (
@@ -62,12 +61,10 @@ export default function Crop() {
       {selected ? (
         <Editor asset={selected} onBack={() => setSelected(null)} />
       ) : loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : assets.length === 0 ? (
         <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
-          <p className="text-sm text-muted">
-            Noch keine Bilder im Archiv. Lade zuerst im Bildarchiv JPEGs hoch.
-          </p>
+          <p className="text-sm text-muted">{t('crop.noAssets')}</p>
         </div>
       ) : (
         <Picker assets={assets} onPick={setSelected} />
@@ -119,6 +116,7 @@ function Editor({
   asset: AssetWithMeta
   onBack: () => void
 }) {
+  const t = useT()
   const imgRef = useRef<HTMLImageElement>(null)
   const cropperRef = useRef<Cropper | null>(null)
   const bitmapRef = useRef<ImageBitmap | null>(null)
@@ -154,7 +152,7 @@ function Editor({
     setBlobUrl(null)
     ;(async () => {
       if (!asset.url) {
-        setLoadError('Für dieses Bild ist keine Quelle verfügbar.')
+        setLoadError(t('crop.noSource'))
         return
       }
       try {
@@ -172,7 +170,7 @@ function Editor({
         objectUrl = URL.createObjectURL(blob)
         setBlobUrl(objectUrl)
       } catch {
-        if (!cancelled) setLoadError('Originalbild konnte nicht geladen werden.')
+        if (!cancelled) setLoadError(t('crop.originalError'))
       }
     })()
 
@@ -258,7 +256,7 @@ function Editor({
       await saveCrop({ assetId: asset.id, format, crop, blob })
       await refreshCrops()
     } catch {
-      setSaveError('Zuschnitt konnte nicht gespeichert werden.')
+      setSaveError(t('crop.saveError'))
     } finally {
       setSaving(false)
     }
@@ -274,7 +272,7 @@ function Editor({
           onClick={onBack}
           className="rounded-md border-[0.5px] border-line px-3 py-1.5 text-sm text-ink transition-colors hover:bg-card"
         >
-          ← Anderes Bild
+          {t('crop.otherImage')}
         </button>
         <span className="truncate text-sm text-muted">{asset.filename}</span>
       </div>
@@ -288,7 +286,7 @@ function Editor({
             </div>
           ) : !blobUrl ? (
             <div className="flex h-96 items-center justify-center text-sm text-muted">
-              Bild wird geladen…
+              {t('crop.imageLoading')}
             </div>
           ) : (
             <div className="max-h-[70vh] overflow-hidden">
@@ -306,7 +304,7 @@ function Editor({
         {/* Steuerung */}
         <div className="flex flex-col gap-6">
           <div>
-            <p className="mb-2 text-sm font-medium text-ink">Format</p>
+            <p className="mb-2 text-sm font-medium text-ink">{t('crop.format')}</p>
             <div className="flex flex-wrap gap-2">
               {CROP_FORMATS.map((f) => (
                 <button
@@ -334,12 +332,14 @@ function Editor({
               ))}
             </div>
             <p className="mt-2 text-xs text-muted">
-              Rahmen frei verschiebbar und skalierbar. Ausgabe{' '}
-              {CROP_FORMAT_BY_ID[format].outputWidth}px breit
-              {CROP_FORMAT_BY_ID[format].outputHeight
-                ? ` × ${CROP_FORMAT_BY_ID[format].outputHeight}px`
-                : ''}
-              , sRGB-JPEG.
+              {t('crop.outputHint', {
+                width: CROP_FORMAT_BY_ID[format].outputWidth,
+                heightSuffix: CROP_FORMAT_BY_ID[format].outputHeight
+                  ? t('crop.heightSuffix', {
+                      height: CROP_FORMAT_BY_ID[format].outputHeight ?? '',
+                    })
+                  : '',
+              })}
             </p>
           </div>
 
@@ -352,16 +352,16 @@ function Editor({
             className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {saving
-              ? 'Speichert…'
+              ? t('common.saving')
               : cropByFormat.has(format)
-                ? 'Zuschnitt aktualisieren'
-                : 'Zuschnitt speichern'}
+                ? t('crop.updateCrop')
+                : t('crop.saveCrop')}
           </button>
 
           {/* Übersicht: welche Formate schon zugeschnitten sind */}
           <div>
             <p className="mb-2 text-sm font-medium text-ink">
-              Zugeschnitten ({doneCount}/{CROP_FORMATS.length})
+              {t('crop.doneCount', { done: doneCount, total: CROP_FORMATS.length })}
             </p>
             <div className="flex flex-col gap-2">
               {CROP_FORMATS.map((f) => {
@@ -392,7 +392,7 @@ function Editor({
                     <span className="flex flex-col">
                       <span className="text-sm text-ink">{f.label}</span>
                       <span className="text-xs text-muted">
-                        {crop ? 'zugeschnitten' : 'offen'}
+                        {crop ? t('crop.cropped') : t('crop.openState')}
                       </span>
                     </span>
                   </button>

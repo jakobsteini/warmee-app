@@ -184,15 +184,13 @@ export default function Products() {
   }
 
   async function handleDelete(p: Product) {
-    if (!window.confirm(`Artikel „${p.name}" wirklich löschen?`)) return
+    if (!window.confirm(t('products.deleteConfirm', { name: p.name }))) return
     try {
       await deleteProduct(p.id)
       await load()
     } catch {
       // Häufigster Fall: Produkt wird noch von einem Bild referenziert.
-      setError(
-        `„${p.name}" konnte nicht gelöscht werden – wird es noch von Bildern oder Newsletter verwendet?`,
-      )
+      setError(t('products.deleteError', { name: p.name }))
     }
   }
 

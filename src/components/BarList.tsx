@@ -1,5 +1,6 @@
 import { formatEUR } from '../lib/money'
 import type { RevenueRow } from '../lib/analytics'
+import { useT } from '../i18n'
 
 /**
  * Leichtgewichtige horizontale Balkenliste (reines CSS, keine Chart-Lib).
@@ -13,6 +14,7 @@ export default function BarList({
   title: string
   rows: RevenueRow[]
 }) {
+  const t = useT()
   const max = rows.reduce((m, r) => Math.max(m, r.amount), 0)
 
   return (
@@ -21,7 +23,7 @@ export default function BarList({
         {title}
       </h3>
       {rows.length === 0 ? (
-        <p className="text-sm text-muted">Keine Daten im gewählten Zeitraum.</p>
+        <p className="text-sm text-muted">{t('barList.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {rows.map((r) => (
@@ -31,7 +33,7 @@ export default function BarList({
                 <span className="shrink-0 whitespace-nowrap text-muted tabular-nums">
                   {formatEUR(r.amount)}
                   {r.qty != null && (
-                    <span className="ml-1">· {r.qty} Stk</span>
+                    <span className="ml-1">· {t('barList.pieces', { count: r.qty })}</span>
                   )}
                 </span>
               </div>

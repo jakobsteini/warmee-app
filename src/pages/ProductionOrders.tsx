@@ -6,12 +6,16 @@ import {
   listProductionOrders,
 } from '../lib/productionOrders'
 import { listSeasons } from '../lib/seasons'
-import {
-  productionStatusLabel,
-  type ProductionOrderListRow,
-} from '../types/productionOrder'
+import { type ProductionOrderListRow } from '../types/productionOrder'
 import EmptyState from '../components/EmptyState'
 import type { Season } from '../types/asset'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Produktions-Status → Übersetzungs-Key. */
+function productionStatusKey(status: string): TranslationKey {
+  return `production.status.${status}` as TranslationKey
+}
 
 /** Summe aller Stückzahlen einer Bestellung. */
 function orderQuantity(order: ProductionOrderListRow): number {
@@ -33,6 +37,7 @@ function formatDate(iso: string | null): string {
 
 /** Farbige Status-Badge. */
 function StatusBadge({ status }: { status: string }) {
+  const t = useT()
   const tone =
     status === 'received'
       ? 'bg-ink text-cream'
@@ -41,13 +46,14 @@ function StatusBadge({ status }: { status: string }) {
         : 'border-[0.5px] border-ink text-ink'
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-xs ${tone}`}>
-      {productionStatusLabel(status)}
+      {t(productionStatusKey(status))}
     </span>
   )
 }
 
 export default function ProductionOrders() {
   const navigate = useNavigate()
+  const t = useT()
   const [orders, setOrders] = useState<ProductionOrderListRow[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [loading, setLoading] = useState(true)
@@ -69,7 +75,7 @@ export default function ProductionOrders() {
       setOrders(ords)
       setSeasons(seas)
     } catch {
-      setError('Produktionsbestellungen konnten nicht geladen werden.')
+      setError(t('productionOrders.loadError'))
     } finally {
       setLoading(false)
     }
@@ -93,7 +99,7 @@ export default function ProductionOrders() {
   async function handleGenerate(e: FormEvent) {
     e.preventDefault()
     if (!seasonId) {
-      setFormError('Bitte eine Saison wählen.')
+      setFormError(t('productionOrders.chooseSeason'))
       return
     }
     setGenerating(true)
@@ -104,9 +110,7 @@ export default function ProductionOrders() {
       navigate(`/production-orders/${order.id}`)
     } catch (err) {
       setFormError(
-        err instanceof Error
-          ? err.message
-          : 'Bestellung konnte nicht generiert werden.',
+        err instanceof Error ? err.message : t('productionOrders.generateError'),
       )
     } finally {
       setGenerating(false)
@@ -117,7 +121,9 @@ export default function ProductionOrders() {
     const label = order.season?.label ?? seasonLabel.get(order.season_id) ?? ''
     if (
       !window.confirm(
-        `Produktionsbestellung${label ? ` für Saison ${label}` : ''} wirklich löschen?`,
+        label
+          ? t('productionOrders.deleteConfirmSeason', { label })
+          : t('productionOrders.deleteConfirmNoSeason'),
       )
     )
       return
@@ -125,7 +131,7 @@ export default function ProductionOrders() {
       await deleteProductionOrder(order.id)
       await load()
     } catch {
-      setError('Bestellung konnte nicht gelöscht werden.')
+      setError(t('productionOrders.deleteError'))
     }
   }
 
@@ -137,12 +143,9 @@ export default function ProductionOrders() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            Produktionsbestellung
+            {t('productionOrders.title')}
           </h1>
-          <p className="mt-1 text-sm text-muted">
-            Bestätigte Orders einer Saison zu einer Produktionsbestellung
-            zusammenführen.
-          </p>
+          <p className="mt-1 text-sm text-muted">{t('productionOrders.subtitle')}</p>
         </div>
         <button
           type="button"
@@ -150,7 +153,7 @@ export default function ProductionOrders() {
           disabled={seasons.length === 0}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          Bestellung generieren
+          {t('productionOrders.generate')}
         </button>
       </div>
 
@@ -161,27 +164,26 @@ export default function ProductionOrders() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Lädt…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : orders.length === 0 ? (
         <EmptyState
-          actionLabel="Bestellung generieren"
+          actionLabel={t('productionOrders.generate')}
           onAction={openGenerate}
           actionDisabled={seasons.length === 0}
         >
-          Hier führst du die bestätigten Orders einer Saison zu einer
-          Produktionsbestellung zusammen. Generiere die erste Bestellung.
+          {t('productionOrders.empty')}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Saison</th>
-                <th className="px-4 py-3 font-medium">Produzent</th>
-                <th className="px-4 py-3 font-medium">Generiert am</th>
-                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">{t('common.season')}</th>
+                <th className="px-4 py-3 font-medium">{t('productionOrders.col.producer')}</th>
+                <th className="px-4 py-3 font-medium">{t('productionOrders.col.generatedAt')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
                 <th className="px-4 py-3 text-right font-medium">
-                  Gesamtstück
+                  {t('productionOrders.col.totalPieces')}
                 </th>
                 <th className="px-4 py-3" />
               </tr>
@@ -217,7 +219,7 @@ export default function ProductionOrders() {
                       }}
                       className="text-muted transition-colors hover:text-ink"
                     >
-                      Öffnen
+                      {t('common.open')}
                     </button>
                     <button
                       type="button"
@@ -227,7 +229,7 @@ export default function ProductionOrders() {
                       }}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -241,22 +243,21 @@ export default function ProductionOrders() {
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-md rounded-lg bg-cream p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-medium text-ink">
-              Bestellung generieren
+              {t('productionOrders.generate')}
             </h2>
             <p className="mb-4 text-sm text-muted">
-              Alle bestätigten Orders der gewählten Saison werden nach Produkt,
-              Farbe und Größe zusammengefasst.
+              {t('productionOrders.dialog.desc')}
             </p>
             <form onSubmit={handleGenerate} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm text-muted">Saison *</span>
+                <span className="text-sm text-muted">{t('common.seasonReq')}</span>
                 <select
                   required
                   value={seasonId}
                   onChange={(e) => setSeasonId(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">— wählen —</option>
+                  <option value="">{t('common.select')}</option>
                   {seasons.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label}
@@ -273,14 +274,14 @@ export default function ProductionOrders() {
                   onClick={() => setFormOpen(false)}
                   className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={generating}
                   className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {generating ? 'Generiert…' : 'Generieren'}
+                  {generating ? t('common.generating') : t('common.generate')}
                 </button>
               </div>
             </form>

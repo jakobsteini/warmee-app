@@ -1,13 +1,15 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n'
 
 export default function ProtectedRoute() {
   const { session, loading } = useAuth()
+  const t = useT()
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted">
-        Lädt…
+        {t('common.loading')}
       </div>
     )
   }

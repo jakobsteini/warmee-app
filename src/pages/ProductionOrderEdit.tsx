@@ -9,11 +9,17 @@ import {
 import { listSeasons } from '../lib/seasons'
 import {
   nextProductionStatus,
-  productionStatusLabel,
   type ProductionOrder,
   type ProductionOrderItemWithProduct,
 } from '../types/productionOrder'
 import type { Season } from '../types/asset'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** Produktions-Status → Übersetzungs-Key. */
+function productionStatusKey(status: string): TranslationKey {
+  return `production.status.${status}` as TranslationKey
+}
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -27,6 +33,7 @@ function formatDate(iso: string | null): string {
 
 export default function ProductionOrderEdit() {
   const { id } = useParams<{ id: string }>()
+  const t = useT()
 
   const [order, setOrder] = useState<ProductionOrder | null>(null)
   const [items, setItems] = useState<ProductionOrderItemWithProduct[]>([])
@@ -51,7 +58,7 @@ export default function ProductionOrderEdit() {
       setNotes(ord.notes ?? '')
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
     } catch {
-      setError('Produktionsbestellung konnte nicht geladen werden.')
+      setError(t('productionOrderEdit.loadError'))
     } finally {
       setLoading(false)
     }
@@ -75,7 +82,7 @@ export default function ProductionOrderEdit() {
       const updated = await updateProductionStatus(order.id, next)
       setOrder(updated)
     } catch {
-      setError('Status konnte nicht geändert werden.')
+      setError(t('common.statusChangeError'))
     }
   }
 
@@ -85,14 +92,14 @@ export default function ProductionOrderEdit() {
       await updateProductionNotes(order.id, notes.trim() || null)
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
-      setError('Notiz konnte nicht gespeichert werden.')
+      setError(t('common.notesSaveError'))
     }
   }
 
   const inputClass =
     'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
-  if (loading) return <p className="text-sm text-muted">Lädt…</p>
+  if (loading) return <p className="text-sm text-muted">{t('common.loading')}</p>
   if (!order)
     return (
       <div className="mx-auto max-w-4xl">
@@ -100,10 +107,10 @@ export default function ProductionOrderEdit() {
           to="/production-orders"
           className="text-sm text-muted hover:text-ink"
         >
-          ← Zurück zur Produktionsbestellung
+          {t('productionOrderEdit.back')}
         </Link>
         <p className="mt-6 text-sm text-red-700">
-          {error ?? 'Bestellung nicht gefunden.'}
+          {error ?? t('productionOrderEdit.notFound')}
         </p>
       </div>
     )
@@ -117,26 +124,30 @@ export default function ProductionOrderEdit() {
           to="/production-orders"
           className="text-sm text-muted hover:text-ink"
         >
-          ← Zurück zur Produktionsbestellung
+          {t('productionOrderEdit.back')}
         </Link>
       </div>
 
       <div className="mt-4 mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            Produktionsbestellung
+            {t('productionOrders.title')}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Saison {season?.label ?? '—'} · Generiert am{' '}
-            {formatDate(order.generated_at)}
-            {order.sent_at ? ` · Gesendet am ${formatDate(order.sent_at)}` : ''}
+            {t('productionOrderEdit.meta', {
+              season: season?.label ?? '—',
+              date: formatDate(order.generated_at),
+            })}
+            {order.sent_at
+              ? t('productionOrderEdit.sentSuffix', { date: formatDate(order.sent_at) })
+              : ''}
           </p>
         </div>
         <div className="flex items-center gap-3 print:hidden">
           <span className="text-sm text-muted">
-            Status:{' '}
+            {t('common.status')}:{' '}
             <span className="font-medium text-ink">
-              {productionStatusLabel(order.status)}
+              {t(productionStatusKey(order.status))}
             </span>
           </span>
           <button
@@ -144,7 +155,7 @@ export default function ProductionOrderEdit() {
             onClick={() => window.print()}
             className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
           >
-            Drucken / PDF
+            {t('common.printPdf')}
           </button>
           {next && (
             <button
@@ -152,7 +163,7 @@ export default function ProductionOrderEdit() {
               onClick={handleAdvanceStatus}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
             >
-              {productionStatusLabel(next)} setzen
+              {t('common.setStatus', { status: t(productionStatusKey(next)) })}
             </button>
           )}
         </div>
@@ -165,42 +176,42 @@ export default function ProductionOrderEdit() {
       )}
 
       <label className="mb-8 flex flex-col gap-1.5 print:hidden">
-        <span className="text-sm text-muted">Notiz</span>
+        <span className="text-sm text-muted">{t('common.notes')}</span>
         <input
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={handleNotesBlur}
-          placeholder="Interne Notiz zur Bestellung"
+          placeholder={t('productionOrderEdit.notesPlaceholder')}
           className={inputClass}
         />
       </label>
 
       {order.notes && (
         <p className="mb-8 hidden text-sm text-ink print:block">
-          Notiz: {order.notes}
+          {t('common.notePrint', { notes: order.notes })}
         </p>
       )}
 
       <h2 className="mb-3 text-lg font-medium text-ink">
-        Positionen ({items.length})
+        {t('productionOrderEdit.positions', { count: items.length })}
       </h2>
 
       <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
         <table className="w-full text-left text-sm">
           <thead className="bg-card text-muted">
             <tr>
-              <th className="px-4 py-3 font-medium">Produkt</th>
-              <th className="px-4 py-3 font-medium">Farbe</th>
-              <th className="px-4 py-3 font-medium">Größe</th>
-              <th className="px-4 py-3 text-right font-medium">Gesamtstück</th>
+              <th className="px-4 py-3 font-medium">{t('common.product')}</th>
+              <th className="px-4 py-3 font-medium">{t('common.color')}</th>
+              <th className="px-4 py-3 font-medium">{t('common.size')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('productionOrders.col.totalPieces')}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr className="border-t-[0.5px] border-line bg-surface">
                 <td colSpan={4} className="px-4 py-6 text-center text-muted">
-                  Keine Positionen.
+                  {t('common.noPositions')}
                 </td>
               </tr>
             ) : (
@@ -224,7 +235,7 @@ export default function ProductionOrderEdit() {
           <tfoot>
             <tr className="border-t-[0.5px] border-line bg-card text-ink">
               <td colSpan={3} className="px-4 py-3 font-medium">
-                Gesamt
+                {t('common.total')}
               </td>
               <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                 {totalQuantity.toLocaleString('de-DE')}
