@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
-import { addDaysIso } from './dates'
 import { formatEUR } from './money'
-import { DEFAULT_ZAHLUNGSZIEL_TAGE } from './tax'
+import { faelligkeitIso, todayIso } from './dueDates'
 
 // ============================================================================
 // Bonitäts-Bewertung je Händler — rein aus den EIGENEN Zahlungsdaten abgeleitet
@@ -55,11 +54,6 @@ export interface MoneySnapshot {
 
 // ─── Hilfsfunktionen ────────────────────────────────────────────────────────
 
-/** Heute als ISO-Kurzdatum (YYYY-MM-DD). */
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 /** numeric/number/null robust zu number. */
 function num(v: number | string | null | undefined): number {
   if (v === null || v === undefined || v === '') return 0
@@ -97,16 +91,13 @@ interface RawInvoice {
 }
 
 function normalize(row: RawInvoice): NormInvoice {
-  let dueIso: string | null = row.due_date ?? null
-  if (!dueIso && row.invoice_date) {
-    const ziel = row.dealer?.zahlungsziel_tage ?? DEFAULT_ZAHLUNGSZIEL_TAGE
-    dueIso = addDaysIso(row.invoice_date, ziel)
-  }
   return {
     dealer_id: row.dealer_id,
     status: row.status,
     total: num(row.total),
-    dueIso,
+    // Fälligkeit über die gemeinsame Logik (dueDates): due_date, sonst
+    // invoice_date + Händler-Zahlungsziel. Identisch zur Offene-Posten-Liste.
+    dueIso: faelligkeitIso(row),
     paidAtIso: row.paid_at ?? null,
   }
 }

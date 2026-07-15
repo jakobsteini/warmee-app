@@ -9,7 +9,7 @@ import type { InvoiceListRow } from '../types/invoice'
 export async function listOpenPayments(): Promise<InvoiceListRow[]> {
   const { data, error } = await supabase
     .from('invoices')
-    .select('*, dealer:dealers(name)')
+    .select('*, dealer:dealers(name, zahlungsziel_tage)')
     .eq('status', 'sent')
     .order('due_date', { ascending: true, nullsFirst: false })
 

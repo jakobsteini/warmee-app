@@ -2,38 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { listOpenPayments } from '../lib/openPayments'
 import { markInvoicePaid } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
-import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
-import { addDaysIso } from '../lib/dates'
+import { faelligkeitIso, isOverdue, daysOverdue } from '../lib/dueDates'
 import type { InvoiceListRow } from '../types/invoice'
 import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import MarkPaidDialog from '../components/MarkPaidDialog'
 import ExportButtons from '../components/ExportButtons'
 import { useT } from '../i18n'
-
-/** Heute als ISO-Kurzdatum (YYYY-MM-DD), für den Fälligkeitsvergleich. */
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-/**
- * Fälligkeitsdatum einer Rechnung: das gespeicherte due_date (spiegelt die
- * Konditionen zum Rechnungszeitpunkt); fehlt es, Rechnungsdatum + Standard-
- * Zahlungsziel (30 Tage, statt der früheren 14).
- */
-function faelligkeitIso(row: InvoiceListRow): string | null {
-  if (row.due_date) return row.due_date
-  if (row.invoice_date) {
-    return addDaysIso(row.invoice_date, DEFAULT_ZAHLUNGSZIEL_TAGE)
-  }
-  return null
-}
-
-/** Eine versendete Rechnung ist überfällig, wenn ihr Fälligkeitsdatum vorbei ist. */
-function isOverdue(row: InvoiceListRow): boolean {
-  const faellig = faelligkeitIso(row)
-  return faellig !== null && faellig < todayIso()
-}
 
 /** numeric/number robust zu number. */
 function num(v: number | string | null): number {
@@ -50,16 +25,6 @@ function formatDate(iso: string | null): string {
     month: '2-digit',
     year: 'numeric',
   })
-}
-
-/** Tage überfällig (heute − Fälligkeit), oder null wenn (noch) nicht überfällig. */
-function daysOverdue(row: InvoiceListRow): number | null {
-  const faellig = faelligkeitIso(row)
-  if (!faellig) return null
-  const d = Math.round(
-    (new Date(todayIso()).getTime() - new Date(faellig).getTime()) / 86_400_000,
-  )
-  return d > 0 ? d : null
 }
 
 /** Spalten für den Offene-Posten-Export (deutsche Überschriften). */
@@ -115,12 +80,12 @@ export default function OpenPayments() {
     [rows],
   )
   const totalOverdue = useMemo(
-    () => rows.filter(isOverdue).reduce((s, r) => s + num(r.total), 0),
+    () => rows.filter((r) => isOverdue(r)).reduce((s, r) => s + num(r.total), 0),
     [rows],
   )
 
   const visible =
-    filter === 'overdue' ? rows.filter(isOverdue) : rows
+    filter === 'overdue' ? rows.filter((r) => isOverdue(r)) : rows
 
   const pillClass = (active: boolean) =>
     [

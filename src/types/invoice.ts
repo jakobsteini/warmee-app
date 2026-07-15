@@ -60,9 +60,13 @@ export interface InvoiceItem {
   created_at: string | null
 }
 
-/** Rechnung für die Übersichtsseite: mit Händlername. */
+/**
+ * Rechnung für die Übersichtsseite: mit Händlername und -Zahlungsziel.
+ * zahlungsziel_tage wird für die gemeinsame Fälligkeitslogik (dueDates)
+ * mitgeladen — Fallback, falls die Rechnung (noch) kein due_date trägt.
+ */
 export interface InvoiceListRow extends Invoice {
-  dealer: { name: string } | null
+  dealer: { name: string; zahlungsziel_tage: number | null } | null
 }
 
 /** Eine Rechnung inkl. Händlerdaten und Positionen (Detailansicht). */
