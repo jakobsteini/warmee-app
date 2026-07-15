@@ -1,0 +1,22 @@
+-- ============================================================================
+-- newsletter-assets: breite List-Policy entfernen (Least-Privilege)
+--
+-- Der Supabase-Advisor warnt: die SELECT-Policy "newsletter_assets_public_read"
+-- auf storage.objects erlaubt jedem (auch anonym) das AUFLISTEN aller Dateien im
+-- Bucket newsletter-assets. Diese List-Berechtigung wird nicht gebraucht:
+--   * Der Datei-DOWNLOAD (613 Empfänger + Generator via getPublicUrl) läuft über
+--     den public-Endpoint /storage/v1/object/public/… und hängt am public-Flag
+--     des Buckets, NICHT an dieser SELECT-Policy.
+--   * Die App listet newsletter-assets nirgends (nur getPublicUrl, kein .list()).
+-- Folglich ist das Entfernen gefahrlos: Bilder laden weiter, nur die anonyme
+-- Enumeration der Dateinamen entfällt.
+--
+-- Diese Migration MUSS ausgeführt werden (Supabase SQL Editor, Projekt
+-- wyddahfnxiilootylcwg). Voraussetzung: die Policy wurde in
+-- 20260715150000_newsletter_template.sql angelegt.
+--
+-- Betrifft AUSSCHLIESSLICH newsletter-assets. crops/invoices/assets hängen an
+-- eigenen, getrennten Policies und bleiben unberührt. Idempotent (drop if exists).
+-- ============================================================================
+
+drop policy if exists "newsletter_assets_public_read" on storage.objects;
