@@ -8,6 +8,11 @@ export interface Newsletter {
   title: string
   subject_line: string | null
   preheader: string | null
+  body_headline: string | null
+  body_text: string | null
+  link_label: string | null
+  link_url: string | null
+  accent_color: string
   dealer_id: string
   season_id: string | null
   hero_asset_id: string | null
@@ -70,6 +75,11 @@ export interface NewsletterDetail {
   title: string
   subject_line: string | null
   preheader: string | null
+  body_headline: string | null
+  body_text: string | null
+  link_label: string | null
+  link_url: string | null
+  accent_color: string
   dealer_id: string
   hero_asset_id: string | null
   status: NewsletterStatus

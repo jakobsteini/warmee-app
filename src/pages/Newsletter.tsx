@@ -9,6 +9,7 @@ import {
   saveNewsletter,
 } from '../lib/newsletters'
 import { buildNewsletterHtml } from '../lib/newsletterHtml'
+import { newsletterAssetUrls } from '../lib/newsletterAssets'
 import type { Dealer } from '../types/dealer'
 import type {
   DealerImage,
@@ -245,6 +246,18 @@ function NewsletterEditor({
   const [title, setTitle] = useState(initial?.title ?? '')
   const [subjectLine, setSubjectLine] = useState(initial?.subject_line ?? '')
   const [preheader, setPreheader] = useState(initial?.preheader ?? '')
+  const [bodyHeadline, setBodyHeadline] = useState(
+    initial?.body_headline ?? '',
+  )
+  const [bodyText, setBodyText] = useState(initial?.body_text ?? '')
+  const [linkLabel, setLinkLabel] = useState(initial?.link_label ?? '')
+  const [linkUrl, setLinkUrl] = useState(initial?.link_url ?? '')
+  const [accentColor, setAccentColor] = useState(
+    initial?.accent_color ?? '#a08d79',
+  )
+
+  // Konstante Marken-Grafiken (aus dem newsletter-assets-Bucket) – einmal je Mount.
+  const assets = useMemo(() => newsletterAssetUrls(), [])
 
   const [newsletterId, setNewsletterId] = useState<string | null>(
     initial?.id ?? null,
@@ -362,8 +375,26 @@ function NewsletterEditor({
           productImages[0]?.cropUrl ?? '',
           productImages[1]?.cropUrl ?? '',
         ],
+        bodyHeadline: bodyHeadline.trim() || null,
+        bodyText: bodyText.trim() || null,
+        linkLabel: linkLabel.trim() || null,
+        linkUrl: linkUrl.trim() || null,
+        accentColor,
+        assets,
       }),
-    [title, subjectLine, preheader, heroImage, productImages],
+    [
+      title,
+      subjectLine,
+      preheader,
+      heroImage,
+      productImages,
+      bodyHeadline,
+      bodyText,
+      linkLabel,
+      linkUrl,
+      accentColor,
+      assets,
+    ],
   )
 
   function markDirty() {
@@ -394,6 +425,11 @@ function NewsletterEditor({
       title: title.trim(),
       subject_line: subjectLine.trim() || null,
       preheader: preheader.trim() || null,
+      body_headline: bodyHeadline.trim() || null,
+      body_text: bodyText.trim() || null,
+      link_label: linkLabel.trim() || null,
+      link_url: linkUrl.trim() || null,
+      accent_color: accentColor,
       dealer_id: dealerId,
       season_id: heroImage?.season_id ?? null,
       hero_asset_id: heroImage!.asset_id,
@@ -435,6 +471,12 @@ function NewsletterEditor({
         preheader: preheader.trim() || null,
         heroUrl: heroImage!.cropUrl,
         productUrls: [productImages[0].cropUrl, productImages[1].cropUrl],
+        bodyHeadline: bodyHeadline.trim() || null,
+        bodyText: bodyText.trim() || null,
+        linkLabel: linkLabel.trim() || null,
+        linkUrl: linkUrl.trim() || null,
+        accentColor,
+        assets,
       })
       const dealer = dealers.find((d) => d.id === dealerId)
       const filename = `newsletter-${slugify(dealer?.name ?? '')}-${slugify(title)}.html`
@@ -627,6 +669,101 @@ function NewsletterEditor({
                   placeholder={t('newsletter.ph.preheader')}
                   className={inputClass}
                 />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('newsletter.field.bodyHeadline')}
+                </span>
+                <input
+                  type="text"
+                  value={bodyHeadline}
+                  onChange={(e) => {
+                    setBodyHeadline(e.target.value)
+                    markDirty()
+                  }}
+                  placeholder={t('newsletter.ph.bodyHeadline')}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('newsletter.field.bodyText')}
+                </span>
+                <textarea
+                  value={bodyText}
+                  onChange={(e) => {
+                    setBodyText(e.target.value)
+                    markDirty()
+                  }}
+                  placeholder={t('newsletter.ph.bodyText')}
+                  rows={4}
+                  className={`${inputClass} resize-y`}
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-4">
+                <label className="flex min-w-[10rem] flex-1 flex-col gap-1.5">
+                  <span className="text-sm text-muted">
+                    {t('newsletter.field.linkLabel')}
+                  </span>
+                  <input
+                    type="text"
+                    value={linkLabel}
+                    onChange={(e) => {
+                      setLinkLabel(e.target.value)
+                      markDirty()
+                    }}
+                    placeholder={t('newsletter.ph.linkLabel')}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex min-w-[10rem] flex-1 flex-col gap-1.5">
+                  <span className="text-sm text-muted">
+                    {t('newsletter.field.linkUrl')}
+                  </span>
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(e) => {
+                      setLinkUrl(e.target.value)
+                      markDirty()
+                    }}
+                    placeholder="https://…"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('newsletter.field.accentColor')}
+                </span>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={accentColor}
+                    onChange={(e) => {
+                      setAccentColor(e.target.value)
+                      markDirty()
+                    }}
+                    className="h-9 w-12 cursor-pointer rounded border-[0.5px] border-line bg-surface"
+                    aria-label={t('newsletter.field.accentColor')}
+                  />
+                  <input
+                    type="text"
+                    value={accentColor}
+                    onChange={(e) => {
+                      setAccentColor(e.target.value)
+                      markDirty()
+                    }}
+                    className={`${inputClass} w-32`}
+                  />
+                  <span className="text-xs text-muted">
+                    {t('newsletter.accentHint')}
+                  </span>
+                </div>
               </label>
             </section>
           )}

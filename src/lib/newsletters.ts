@@ -61,6 +61,11 @@ export interface SaveNewsletterInput {
   title: string
   subject_line: string | null
   preheader: string | null
+  body_headline: string | null
+  body_text: string | null
+  link_label: string | null
+  link_url: string | null
+  accent_color: string
   dealer_id: string
   season_id: string | null
   hero_asset_id: string
@@ -86,6 +91,11 @@ export async function saveNewsletter(
     title: input.title,
     subject_line: input.subject_line,
     preheader: input.preheader,
+    body_headline: input.body_headline,
+    body_text: input.body_text,
+    link_label: input.link_label,
+    link_url: input.link_url,
+    accent_color: input.accent_color,
     dealer_id: input.dealer_id,
     season_id: input.season_id,
     hero_asset_id: input.hero_asset_id,
@@ -177,7 +187,7 @@ export async function getNewsletterDetail(
   const { data, error } = await supabase
     .from('newsletters')
     .select(
-      'id, title, subject_line, preheader, dealer_id, hero_asset_id, status, newsletter_products(asset_id, position)',
+      'id, title, subject_line, preheader, body_headline, body_text, link_label, link_url, accent_color, dealer_id, hero_asset_id, status, newsletter_products(asset_id, position)',
     )
     .eq('id', id)
     .single()
@@ -199,6 +209,11 @@ export async function getNewsletterDetail(
     title: data.title,
     subject_line: data.subject_line,
     preheader: data.preheader,
+    body_headline: data.body_headline,
+    body_text: data.body_text,
+    link_label: data.link_label,
+    link_url: data.link_url,
+    accent_color: data.accent_color ?? '#a08d79',
     dealer_id: data.dealer_id,
     hero_asset_id: data.hero_asset_id,
     status: data.status,
