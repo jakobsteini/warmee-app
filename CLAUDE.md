@@ -88,7 +88,7 @@ SQL-Text geht an Jakob, der ihn im **Supabase SQL Editor** (Projekt
 zu schreiben: nur `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS` /
 `CREATE INDEX IF NOT EXISTS` / Seed-`INSERT … ON CONFLICT DO NOTHING`. Kein DROP,
 kein RENAME, kein Typwechsel an bestehenden Spalten — die Echtdaten (128 Händler,
-78 Produkte) müssen gültig bleiben. Jede neue Tabelle bekommt `org_id` + dieselben
+48 Artikel in Saison SS27) müssen gültig bleiben. Jede neue Tabelle bekommt `org_id` + dieselben
 RLS-Policies wie der Rest (`org_id = auth_org_id()`).
 
 ### Newsletter-Assets → Bucket `newsletter-assets`, nicht Mailchimp
