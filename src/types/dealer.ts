@@ -1,3 +1,6 @@
+/** Kundengruppe: B2B (Fachhandel) oder B2C (Endkunde). */
+export type CustomerGroup = 'b2b' | 'b2c'
+
 /** Ein Händler-Datensatz, wie ihn Supabase liefert (snake_case). */
 export interface Dealer {
   id: string
@@ -10,6 +13,15 @@ export interface Dealer {
   agent_id: string | null
   created_at: string | null
   updated_at: string | null
+
+  // ─── CRM-Erweiterung (Provision / Versand / Mahnwesen) ───────────────────
+  /** Kundengruppe, NOT NULL DEFAULT 'b2b' in der DB. */
+  customer_group: CustomerGroup
+  /** Individueller Rabatt in % (Vorschlagswert für die Ordererfassung).
+   *  NOT NULL DEFAULT 0; kommt als number oder numeric-String an. */
+  discount_percent: number | string
+  /** Kreditlimit in EUR; null = kein Limit hinterlegt. numeric(10,2). */
+  credit_limit: number | string | null
 
   // ─── Echtdaten-Felder (FW26-Import), alle nullable ───────────────────────
   /** Kundennummer. Import-Kunden behalten ihre echte Nummer; neue Händler
@@ -77,6 +89,11 @@ export interface DealerInput {
   email: string | null
   city: string | null
   country: string | null
+
+  // CRM-Erweiterung
+  customer_group: CustomerGroup
+  discount_percent: number
+  credit_limit: number | null
 
   // Steuer & Buchhaltung
   uid: string | null

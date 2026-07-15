@@ -1,11 +1,28 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import type { Dealer, DealerInput } from '../types/dealer'
+import type { CustomerGroup, Dealer, DealerInput } from '../types/dealer'
 import {
   listDealers,
   createDealer,
   updateDealer,
   deleteDealer,
 } from '../lib/dealers'
+import {
+  listDealerEmails,
+  createDealerEmail,
+  deleteDealerEmail,
+} from '../lib/dealerEmails'
+import {
+  listDealerPriorities,
+  setDealerPriority,
+  deleteDealerPriority,
+} from '../lib/dealerPriorities'
+import {
+  DEALER_EMAIL_ROLES,
+  type DealerEmail,
+  type DealerEmailRole,
+} from '../types/dealerEmail'
+import { listSeasons } from '../lib/seasons'
+import type { Season } from '../types/asset'
 import { parsePaymentTerms, formatPaymentTerms } from '../lib/paymentTerms'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
@@ -14,6 +31,19 @@ import EmptyState from '../components/EmptyState'
 import CreditBadge from '../components/CreditBadge'
 import ExportButtons from '../components/ExportButtons'
 import { useT, type TFunc } from '../i18n'
+import type { TranslationKey } from '../i18n/dict'
+
+/** E-Mail-Rolle → Übersetzungs-Key. */
+function emailRoleKey(role: DealerEmailRole): TranslationKey {
+  return `dealerEmail.role.${role}` as TranslationKey
+}
+
+/** Eine E-Mail-Zeile im Formular (id nur, wenn bereits persistiert). */
+interface EmailRow {
+  id?: string
+  email: string
+  role: DealerEmailRole
+}
 
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -33,6 +63,9 @@ type DealerFormKey =
   | 'email'
   | 'city'
   | 'country'
+  | 'customer_group'
+  | 'discount_percent'
+  | 'credit_limit'
   | 'uid'
   | 'gegenkonto'
   | 'skonto_prozent'
@@ -74,6 +107,9 @@ const emptyForm: DealerForm = {
   email: '',
   city: '',
   country: 'AT',
+  customer_group: 'b2b',
+  discount_percent: '',
+  credit_limit: '',
   uid: '',
   gegenkonto: '',
   skonto_prozent: '',
@@ -135,6 +171,13 @@ function numToStr(v: number | string | null): string {
   return String(v)
 }
 
+/** numeric (evtl. als "0.00"-String von Postgres) → knapper Anzeigestring. */
+function pgNumToStr(v: number | string | null): string {
+  if (v === null || v === '') return ''
+  const n = Number(v)
+  return Number.isNaN(n) ? '' : String(n)
+}
+
 /** Lockere E-Mail-Prüfung: entweder leer oder enthält ein @ (Auslandsadressen). */
 function emailLooksValid(v: string): boolean {
   const t = v.trim()
@@ -169,6 +212,10 @@ function toDealerInput(f: DealerForm): DealerInput {
     email: trimOrNull(f.email),
     city: trimOrNull(f.city),
     country: trimOrNull(f.country),
+
+    customer_group: (f.customer_group === 'b2c' ? 'b2c' : 'b2b') as CustomerGroup,
+    discount_percent: decOrNull(f.discount_percent) ?? 0,
+    credit_limit: decOrNull(f.credit_limit),
 
     uid: trimOrNull(f.uid),
     gegenkonto: intOrNull(f.gegenkonto),
@@ -234,6 +281,9 @@ function dealerToForm(d: Dealer): DealerForm {
     email: d.email ?? '',
     city: d.city ?? '',
     country: d.country ?? 'AT',
+    customer_group: d.customer_group ?? 'b2b',
+    discount_percent: pgNumToStr(d.discount_percent),
+    credit_limit: pgNumToStr(d.credit_limit),
     uid: d.uid ?? '',
     gegenkonto: numToStr(d.gegenkonto),
     skonto_prozent: numToStr(skonto_prozent),
@@ -503,15 +553,32 @@ export default function Dealers() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const [seasons, setSeasons] = useState<Season[]>([])
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Dealer | null>(null)
   const [form, setForm] = useState<DealerForm>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // ─── Relationen des gerade bearbeiteten Händlers (eigene Tabellen) ─────────
+  const [emails, setEmails] = useState<EmailRow[]>([])
+  const [originalEmails, setOriginalEmails] = useState<DealerEmail[]>([])
+  const [addEmail, setAddEmail] = useState('')
+  const [addRole, setAddRole] = useState<DealerEmailRole>('order_confirmation')
+  // Priorität je Saison: season_id → Eingabestring; original als Zahl zum Diff.
+  const [priorities, setPriorities] = useState<Record<string, string>>({})
+  const [originalPriorities, setOriginalPriorities] = useState<
+    Record<string, number>
+  >({})
+
   function set(key: DealerFormKey, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
   }
+
+  /** Saisons für den Prioritäts-Bereich (aktive zuerst). */
+  const sortedSeasons = [...seasons].sort(
+    (a, b) => Number(!!b.is_active) - Number(!!a.is_active),
+  )
 
   async function load() {
     setLoading(true)
@@ -519,12 +586,14 @@ export default function Dealers() {
     try {
       // Händler und Bonitäts-Bewertungen parallel; die Ampel ist ergänzend und
       // soll die Liste nicht blockieren, falls sie fehlschlägt.
-      const [dealerList, creditMap] = await Promise.all([
+      const [dealerList, creditMap, seasonList] = await Promise.all([
         listDealers(),
         listDealerCredits().catch(() => new Map<string, DealerCredit>()),
+        listSeasons().catch(() => [] as Season[]),
       ])
       setDealers(dealerList)
       setCredits(creditMap)
+      setSeasons(seasonList)
     } catch {
       setError(t('dealers.loadError'))
     } finally {
@@ -536,18 +605,86 @@ export default function Dealers() {
     load()
   }, [])
 
+  /** Relationen (E-Mails, Prioritäten) für das Formular zurücksetzen. */
+  function resetRelations() {
+    setEmails([])
+    setOriginalEmails([])
+    setAddEmail('')
+    setAddRole('order_confirmation')
+    setPriorities({})
+    setOriginalPriorities({})
+  }
+
   function openCreate() {
     setEditing(null)
     setForm(emptyForm)
+    resetRelations()
     setFormError(null)
     setFormOpen(true)
   }
 
-  function openEdit(d: Dealer) {
+  async function openEdit(d: Dealer) {
     setEditing(d)
     setForm(dealerToForm(d))
+    resetRelations()
     setFormError(null)
     setFormOpen(true)
+    try {
+      // E-Mail-Verteiler und Saison-Prioritäten des Händlers nachladen. Sind
+      // ergänzend — schlägt es fehl, bleibt das Formular trotzdem nutzbar.
+      const [em, pr] = await Promise.all([
+        listDealerEmails(d.id),
+        listDealerPriorities(d.id),
+      ])
+      setOriginalEmails(em)
+      setEmails(em.map((e) => ({ id: e.id, email: e.email, role: e.role })))
+      const prMap: Record<string, number> = {}
+      for (const p of pr) prMap[p.season_id] = p.priority
+      setOriginalPriorities(prMap)
+      setPriorities(
+        Object.fromEntries(
+          Object.entries(prMap).map(([k, v]) => [k, String(v)]),
+        ),
+      )
+    } catch {
+      /* Relationen sind ergänzend */
+    }
+  }
+
+  function addEmailRow() {
+    const value = addEmail.trim()
+    if (value === '' || !value.includes('@')) return
+    setEmails((prev) => [...prev, { email: value, role: addRole }])
+    setAddEmail('')
+  }
+
+  function removeEmailRow(index: number) {
+    setEmails((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  /** E-Mails und Prioritäten des gespeicherten Händlers abgleichen. */
+  async function saveRelations(dealerId: string) {
+    // E-Mails: entfernte (persistierte, jetzt nicht mehr in der Liste) löschen,
+    // neue (ohne id) anlegen. Bestehende Zeilen werden nicht editiert.
+    const removed = originalEmails.filter(
+      (o) => !emails.some((e) => e.id === o.id),
+    )
+    const added = emails.filter((e) => !e.id && e.email.trim() !== '')
+    await Promise.all(removed.map((o) => deleteDealerEmail(o.id)))
+    await Promise.all(
+      added.map((e) => createDealerEmail(dealerId, { email: e.email, role: e.role })),
+    )
+
+    // Prioritäten je Saison: gesetzte upserten, geleerte (vorher vorhanden) löschen.
+    for (const s of seasons) {
+      const parsed = intOrNull(priorities[s.id] ?? '')
+      const orig = originalPriorities[s.id]
+      if (parsed !== null && parsed !== orig) {
+        await setDealerPriority(dealerId, s.id, parsed)
+      } else if (parsed === null && orig !== undefined) {
+        await deleteDealerPriority(dealerId, s.id)
+      }
+    }
   }
 
   function closeForm() {
@@ -563,7 +700,7 @@ export default function Dealers() {
       return
     }
     const badEmail = EMAIL_FIELDS.find((key) => !emailLooksValid(form[key]))
-    if (badEmail) {
+    if (badEmail || emails.some((e) => !emailLooksValid(e.email))) {
       setFormError(t('dealers.emailInvalid'))
       return
     }
@@ -572,11 +709,10 @@ export default function Dealers() {
     setFormError(null)
     try {
       const payload = toDealerInput(form)
-      if (editing) {
-        await updateDealer(editing.id, payload)
-      } else {
-        await createDealer(payload)
-      }
+      const saved = editing
+        ? await updateDealer(editing.id, payload)
+        : await createDealer(payload)
+      await saveRelations(saved.id)
       closeForm()
       await load()
     } catch {
@@ -777,6 +913,40 @@ export default function Dealers() {
                   )}
                 </Section>
 
+                {/* Kundengruppe & Konditionen */}
+                <Section title={t('dealers.section.classification')}>
+                  <div className="flex gap-3">
+                    <label className="flex flex-1 flex-col gap-1.5">
+                      <span className="text-xs text-muted">
+                        {t('dealers.field.customerGroup')}
+                      </span>
+                      <select
+                        value={form.customer_group}
+                        onChange={(e) => set('customer_group', e.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="b2b">{t('dealers.group.b2b')}</option>
+                        <option value="b2c">{t('dealers.group.b2c')}</option>
+                      </select>
+                    </label>
+                    <Field
+                      label={t('dealers.field.discount')}
+                      inputMode="decimal"
+                      value={form.discount_percent}
+                      onChange={(v) => set('discount_percent', v)}
+                      placeholder={t('dealers.ph.discount')}
+                    />
+                    <Field
+                      label={t('dealers.field.creditLimit')}
+                      inputMode="decimal"
+                      value={form.credit_limit}
+                      onChange={(v) => set('credit_limit', v)}
+                      placeholder={t('dealers.ph.creditLimit')}
+                    />
+                  </div>
+                  <p className="text-xs text-muted">{t('dealers.discountHint')}</p>
+                </Section>
+
                 {/* Steuer & Buchhaltung */}
                 <Section title={t('dealers.section.tax')}>
                   <div className="flex gap-3">
@@ -826,6 +996,125 @@ export default function Dealers() {
                       {t('dealers.field.imported')}{' '}
                       <span className="text-ink">{editing.payment_terms_raw}</span>
                     </p>
+                  )}
+                </Section>
+
+                {/* E-Mail-Verteiler (Rollen) */}
+                <Section
+                  title={t('dealers.section.emails')}
+                  collapsible
+                  defaultOpen={!!editing}
+                >
+                  {emails.length === 0 ? (
+                    <p className="text-xs text-muted">{t('dealers.emails.empty')}</p>
+                  ) : (
+                    <ul className="flex flex-col gap-1.5">
+                      {emails.map((row, idx) => (
+                        <li
+                          key={row.id ?? `new-${idx}`}
+                          className="flex items-center justify-between gap-3 rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 truncate text-ink">
+                            {row.email}
+                            <span className="ml-2 text-xs text-muted">
+                              {t(emailRoleKey(row.role))}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeEmailRow(idx)}
+                            aria-label={t('common.remove')}
+                            className="shrink-0 text-muted transition-colors hover:text-red-700"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+                      <span className="text-xs text-muted">{t('common.email')}</span>
+                      <input
+                        type="email"
+                        inputMode="email"
+                        value={addEmail}
+                        onChange={(e) => setAddEmail(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            addEmailRow()
+                          }
+                        }}
+                        placeholder={t('dealers.emails.emailPlaceholder')}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs text-muted">{t('dealers.emails.role')}</span>
+                      <select
+                        value={addRole}
+                        onChange={(e) => setAddRole(e.target.value as DealerEmailRole)}
+                        className={inputClass}
+                      >
+                        {DEALER_EMAIL_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {t(emailRoleKey(r))}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addEmailRow}
+                      disabled={!addEmail.includes('@')}
+                      className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+                    >
+                      {t('dealers.emails.add')}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted">{t('dealers.emails.hint')}</p>
+                </Section>
+
+                {/* Priorität je Saison */}
+                <Section
+                  title={t('dealers.section.priority')}
+                  collapsible
+                  defaultOpen={!!editing}
+                >
+                  {sortedSeasons.length === 0 ? (
+                    <p className="text-xs text-muted">{t('dealers.priority.noSeasons')}</p>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        {sortedSeasons.map((s) => (
+                          <div key={s.id} className="flex items-center gap-3">
+                            <span className="flex-1 text-sm text-ink">
+                              {s.label}
+                              {s.is_active && (
+                                <span className="ml-2 rounded-full bg-card px-2 py-0.5 text-[11px] text-muted">
+                                  {t('dealers.priority.current')}
+                                </span>
+                              )}
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={priorities[s.id] ?? ''}
+                              onChange={(e) =>
+                                setPriorities((prev) => ({
+                                  ...prev,
+                                  [s.id]: e.target.value,
+                                }))
+                              }
+                              placeholder={t('dealers.priority.placeholder')}
+                              className={`${inputClass} w-24 text-right`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted">{t('dealers.priority.hint')}</p>
+                    </>
                   )}
                 </Section>
 
