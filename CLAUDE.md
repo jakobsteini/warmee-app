@@ -47,6 +47,49 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
   Fälligkeit, Gebühr, Inkasso-Flag) und `dunning_history` (welche Stufe wann je
   Rechnung gesetzt wurde). Scope aktuell: nur Konfiguration + Historie, **kein**
   Mailversand/PDF (E-Mail/DNS für warm-me.com noch ungeklärt).
+- **Wareneingang** (Abschnitt 4): `goods_receipts` (Kopf, **mehrere je
+  Produktionsbestellung** → Teillieferungen) + `goods_receipt_items` (reale
+  Eingangsmenge je Nepal-Position, Anker `production_order_item_id`). Erfassen +
+  Abgleich sitzen in `GoodsReceiptSection` auf der ProductionOrderEdit-Seite; die
+  Lib ist `src/lib/goodsReceipts.ts`.
+  - **Ersetzt das reine `received`-Flag:** vorher war „Ware da" nur ein Status,
+    jetzt werden die tatsächlich eingegangenen Stück erfasst. Der erste
+    Wareneingang hebt `production_orders.status` automatisch auf `received`.
+  - **Abgleich** (`getReconciliation`): je Position **Bestellt (Nepal) →
+    Eingegangen (real) → Verteilt (an Händler) → Rest**. „Verteilt" wird über den
+    Positions-Schlüssel (`itemKey`, Produkt/Farbe/Größe) aus allen `delivery_items`
+    der Produktionsbestellung summiert.
+  - **Mengenkontrolle:** `generateDeliveries` liefert `{ created, shortfalls }` —
+    eine **weiche, bezifferte** Fehlmengen-Warnung (nur wenn ein Wareneingang
+    erfasst ist). `updateDeliveryItemQuantity` **blockt hart**, wenn die über alle
+    Lieferungen verteilte Summe je Position den Eingang übersteigt. Ohne erfassten
+    Wareneingang gilt (wie bisher) keine Obergrenze.
+  - `src/lib/itemKey.ts` hält den Positions-Schlüssel neutral, damit sich
+    `deliveries` und `goodsReceipts` nicht gegenseitig importieren müssen (kein
+    Zyklus); `deliveries.ts` re-exportiert ihn für Altimporte.
+
+### Bewusst (noch) NICHT gebaut — und warum
+
+Diese Lücken sind **Absicht, keine Vergessenheit**. Nicht nach Gefühl nachbauen —
+erst die offene fachliche Frage mit der Kundin klären.
+
+- **Prioritätsbasierte Zuteilung.** `dealer_season_priority` (Priorität je
+  Händler/Saison) ist als Tabelle da und wird in [Dealers](src/pages/Dealers.tsx)
+  gepflegt, hat aber **absichtlich noch keinen Verbraucher** in der Verteilung.
+  Grund: Bei Warenknappheit ist die Verteil-Semantik bei der Kundin **offen** —
+  strikt nach Priorität voll bedienen (höhere Prio zuerst, Rest geht leer aus) vs.
+  anteilig kürzen, plus Behandlung von Gleichstand. Das sind verschiedene
+  Algorithmen; das wird nicht geraten. Bis dahin: `generateDeliveries` befüllt mit
+  den Bestellmengen und **warnt** nur bei Überschreitung; Theresa passt die
+  Verteilung von Hand an. Die Fehlmengen-Warnung sagt das dem Nutzer auch explizit.
+- **Liefertyp Kommission / Ansichtssendung.** Ein Lieferschein **ohne** Rechnung
+  ist technisch möglich (`createDeliveryNote` ist unabhängig von `createInvoice`),
+  aber es gibt **keinen Liefertyp** und keine Folgelogik (Kommission = Rechnung
+  erst bei Verkauf). Grund: hängt an der **offenen Retouren-/Gutschriften-Klärung**
+  (vgl. `deductions` in `commission_settlements`, aktuell immer 0). Erst wenn
+  Retouren modelliert sind, ergibt der Liefertyp Sinn.
+- **Kommissionierschein als PDF.** Der Abgleich ist als Bildschirm-Tabelle da; das
+  benannte PDF-Dokument kommt erst, wenn der Abgleich sich im Betrieb bewährt hat.
 
 ### Baustein C — Room with a View (viel später)
 Schwesteragentur, Modevertrieb, ~15 Marken. Ablöse von GH Order (Deniba Wien).
