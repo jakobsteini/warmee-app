@@ -8,6 +8,7 @@ import {
   computeSkonto,
   effectivePaymentTerms,
   type PaymentTerms,
+  type PartialPaymentTerms,
 } from './tax'
 import type {
   DeliveryNote,
@@ -108,6 +109,8 @@ export async function signedPdfUrl(pdfPath: string): Promise<string> {
 interface DeliveryContext {
   dealer_id: string
   dealer: Dealerish
+  /** Zahlungskonditionen des Händlers (roh, nullable) – Grundlage der Fälligkeit. */
+  terms: PartialPaymentTerms
   seasonLabel: string | null
   items: {
     product_id: string
@@ -126,7 +129,7 @@ async function loadDeliveryContext(
   const { data: del, error: delErr } = await supabase
     .from('deliveries')
     .select(
-      'dealer_id, dealer:dealers(name, contact_name, email, city, country), production_order:production_orders(season:seasons(label))',
+      'dealer_id, dealer:dealers(name, contact_name, email, city, country, skonto_prozent, skonto_tage, zahlungsziel_tage), production_order:production_orders(season:seasons(label))',
     )
     .eq('id', deliveryId)
     .single()
@@ -141,7 +144,7 @@ async function loadDeliveryContext(
 
   const d = del as unknown as {
     dealer_id: string
-    dealer: Dealerish | null
+    dealer: (Dealerish & PartialPaymentTerms) | null
     production_order: { season: { label: string } | null } | null
   }
 
@@ -165,12 +168,19 @@ async function loadDeliveryContext(
 
   return {
     dealer_id: d.dealer_id,
-    dealer: d.dealer ?? {
-      name: 'Unbekannt',
-      contact_name: null,
-      email: null,
-      city: null,
-      country: null,
+    // Nur die Belegfelder in die (PDF-)Dealerish; die Konditionsfelder werden
+    // separat als terms geführt, damit die PDF-Signatur schlank bleibt.
+    dealer: {
+      name: d.dealer?.name ?? 'Unbekannt',
+      contact_name: d.dealer?.contact_name ?? null,
+      email: d.dealer?.email ?? null,
+      city: d.dealer?.city ?? null,
+      country: d.dealer?.country ?? null,
+    },
+    terms: {
+      skonto_prozent: d.dealer?.skonto_prozent ?? null,
+      skonto_tage: d.dealer?.skonto_tage ?? null,
+      zahlungsziel_tage: d.dealer?.zahlungsziel_tage ?? null,
     },
     seasonLabel: d.production_order?.season?.label ?? null,
     items,
@@ -320,10 +330,12 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     .single()
   if (insErr) throw insErr
 
-  // Zahlungskonditionen: bis der Händler-Import die Felder befüllt (Migration
-  // noch nicht live), gilt der WARM-ME-Standard (30 Tage netto, 3 %/10 Skonto).
-  // Später kommen hier die Händlerwerte hinein: effectivePaymentTerms(dealer).
-  const terms = effectivePaymentTerms(null)
+  // Zahlungskonditionen aus dem Händler (zahlungsziel_tage/skonto_*), sonst
+  // WARM-ME-Standard (30 Tage netto, 3 %/10 Skonto). Die daraus berechnete
+  // Fälligkeit wird als konkretes due_date auf der Rechnung EINGEFROREN (unten im
+  // update) — eine spätere Änderung des Händler-Zahlungsziels verschiebt bereits
+  // gestellte Rechnungen dadurch NICHT rückwirkend.
+  const terms = effectivePaymentTerms(ctx.terms)
   const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
 
   const itemRows = ctx.items.map((i) => ({
