@@ -666,6 +666,13 @@ export const de = {
   'goodsReceipt.col.distributed': 'Verteilt',
   'goodsReceipt.col.rest': 'Rest',
 
+  // ─── Kommissionierschein (internes Lagerdokument, PDF) ─────────────────────
+  'pickingList.download': 'Kommissionierschein',
+  'pickingList.generating': 'Wird erstellt …',
+  'pickingList.empty':
+    'Noch keine Verteilung erstellt — der Kommissionierschein ist erst verfügbar, wenn die Lieferungen generiert sind.',
+  'pickingList.error': 'Kommissionierschein konnte nicht erstellt werden.',
+
   // ─── Fehlmengen-Warnung beim Verteilen ────────────────────────────────────
   'deliveries.shortfall.title': 'Achtung: Es kam weniger an, als bestellt wurde.',
   'deliveries.shortfall.row': '{label}: bestellt {ordered}, eingegangen {received}, Fehlmenge {gap}',
@@ -1317,6 +1324,13 @@ export const en: Record<TranslationKey, string> = {
   'goodsReceipt.col.received': 'Received',
   'goodsReceipt.col.distributed': 'Distributed',
   'goodsReceipt.col.rest': 'Remainder',
+
+  // ─── Picking list (internal warehouse document, PDF) ───────────────────────
+  'pickingList.download': 'Picking list',
+  'pickingList.generating': 'Generating …',
+  'pickingList.empty':
+    'No distribution yet — the picking list is available once the deliveries have been generated.',
+  'pickingList.error': 'Could not generate the picking list.',
 
   // ─── Shortfall warning when distributing ───────────────────────────────────
   'deliveries.shortfall.title': 'Note: less arrived than was ordered.',

@@ -16,6 +16,11 @@ function eur(value: number): string {
   return value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 }
 
+/** Ganzzahl mit Tausenderpunkt (de-DE) fürs PDF — wie die Bildschirm-Tabellen. */
+function num(value: number): string {
+  return value.toLocaleString('de-DE')
+}
+
 /** ISO-Datum als deutsches Kurzdatum. */
 function deDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', {
@@ -320,6 +325,344 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   }
 
   drawFooter(doc)
+  return doc.output('blob')
+}
+
+// ─── Kommissionierschein (intern, Lager) ─────────────────────────────────────
+
+/**
+ * Eine Position auf einer Kunden-Seite des Kommissionierscheins.
+ *
+ * ACHTUNG zur Datenhöhe: `ordered` und `pick` sind KUNDENGRÖSSEN (was dieser
+ * Kunde bestellt hat bzw. für ihn zu kommissionieren ist). `received` ist dagegen
+ * die GESAMT-Eingangsmenge dieser Position über den ganzen Wareneingang (ein
+ * Pool, nicht je Kunde) — deshalb auf dem Beleg als „Eingang (ges.)" ausgewiesen.
+ */
+export interface PickingItem {
+  productName: string
+  color: string | null
+  size: string | null
+  /** Zu kommissionieren = an diesen Kunden verteilte Menge. */
+  pick: number
+  /** Von diesem Kunden bestellt. */
+  ordered: number
+  /** Gesamt eingegangen je Position (Pool über alle Kunden). */
+  received: number
+}
+
+/** Ein Kunde (= eine Lieferung) mit seinen zu kommissionierenden Positionen. */
+export interface PickingCustomer {
+  dealerName: string
+  /** Ort/Land, klein unter dem Namen. */
+  place: string | null
+  items: PickingItem[]
+}
+
+/** Eine Zeile der Abgleich-Zusammenfassung (Deckblatt), über alle Kunden. */
+export interface PickingSummaryRow {
+  /** „Produkt · Farbe · Größe". */
+  label: string
+  ordered: number
+  received: number
+  distributed: number
+}
+
+/** Daten für den Kommissionierschein (Sammeldokument je Produktionsbestellung). */
+export interface PickingListPdfData {
+  seasonLabel: string | null
+  /** Erzeugungsdatum als ISO (nur Anzeige, nicht persistiert). */
+  date: string
+  /** Abgleich Wareneingang ↔ Verteilung über alle Kunden (Deckblatt). */
+  summary: PickingSummaryRow[]
+  /** Je Kunde eine Seite. */
+  customers: PickingCustomer[]
+}
+
+/**
+ * Kopf des (internen) Kommissionierscheins. Kein „Rechnungsempfänger"-Block wie
+ * bei Kundenbelegen: links steht je nach Seite entweder „Zusammenfassung" oder
+ * der Kunde. Gibt den Y-Cursor unter der Akzentlinie zurück.
+ */
+function drawPickingHeader(
+  doc: jsPDF,
+  left: { kind: 'summary' } | { kind: 'customer'; name: string; place: string | null },
+  meta: { label: string; value: string }[],
+): number {
+  // Absender.
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(26, 26, 26)
+  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(120, 115, 108)
+  SENDER.lines.forEach((line, i) => doc.text(line, MARGIN, 28 + i * 4.5))
+
+  // Titel + Meta (rechtsbündig).
+  const right = PAGE_W - MARGIN
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.setTextColor(26, 26, 26)
+  doc.text('Kommissionierschein', right, 22, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  let my = 30
+  for (const row of meta) {
+    doc.setTextColor(120, 115, 108)
+    doc.text(row.label, right - 42, my)
+    doc.setTextColor(26, 26, 26)
+    doc.text(row.value, right, my, { align: 'right' })
+    my += 5
+  }
+
+  // Linker Block: Zusammenfassung (Deckblatt) oder Kunde (Kunden-Seite).
+  let ry = 48
+  if (left.kind === 'summary') {
+    doc.setTextColor(120, 115, 108)
+    doc.setFontSize(8)
+    doc.text('Deckblatt', MARGIN, ry)
+    ry += 6
+    doc.setTextColor(26, 26, 26)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    // Kein Unicode-Pfeil — die Standard-Schrift (WinAnsi) kann ihn nicht.
+    doc.text('Abgleich Wareneingang / Verteilung', MARGIN, ry)
+    ry += 4.5
+  } else {
+    doc.setTextColor(120, 115, 108)
+    doc.setFontSize(8)
+    doc.text('Kunde', MARGIN, ry)
+    ry += 6
+    doc.setTextColor(26, 26, 26)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text(left.name, MARGIN, ry)
+    ry += 5
+    if (left.place) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(90, 85, 80)
+      doc.text(left.place, MARGIN, ry)
+      ry += 4.5
+    }
+  }
+
+  // Dezente dunkelgrüne Akzentlinie unter dem Kopf (wie Rechnung/Lieferschein).
+  const bottom = Math.max(ry, 56)
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, bottom, PAGE_W - MARGIN, bottom)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+  return bottom
+}
+
+/** Deckblatt-Tabelle: Abgleich bestellt → eingegangen → verteilt → Rest. */
+function drawPickingSummaryTable(
+  doc: jsPDF,
+  rows: PickingSummaryRow[],
+  startY: number,
+): number {
+  const right = PAGE_W - MARGIN
+  const cols = { pos: MARGIN, ordered: 116, received: 143, distributed: 168, rest: right }
+
+  let y = startY + 10
+  const drawHead = () => {
+    doc.setFillColor(241, 239, 234)
+    doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90, 85, 80)
+    doc.text('Position', cols.pos + 1, y)
+    doc.text('Bestellt', cols.ordered, y, { align: 'right' })
+    doc.text('Eingegangen', cols.received, y, { align: 'right' })
+    doc.text('Verteilt', cols.distributed, y, { align: 'right' })
+    doc.text('Rest', cols.rest, y, { align: 'right' })
+    y += 4
+  }
+  drawHead()
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  let tOrd = 0
+  let tRec = 0
+  let tDist = 0
+  for (const r of rows) {
+    y += 6
+    if (y > 262) {
+      doc.addPage()
+      y = 26
+      drawHead()
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+    }
+    const rest = r.received - r.distributed
+    tOrd += r.ordered
+    tRec += r.received
+    tDist += r.distributed
+    doc.setTextColor(26, 26, 26)
+    doc.text(r.label, cols.pos + 1, y, { maxWidth: 90 })
+    doc.setTextColor(90, 85, 80)
+    doc.text(num(r.ordered), cols.ordered, y, { align: 'right' })
+    doc.setTextColor(26, 26, 26)
+    doc.text(num(r.received), cols.received, y, { align: 'right' })
+    doc.text(num(r.distributed), cols.distributed, y, { align: 'right' })
+    // Rest < 0 (mehr verteilt als eingegangen) rot markieren — wie am Bildschirm.
+    if (rest < 0) doc.setTextColor(176, 0, 32)
+    else doc.setTextColor(90, 85, 80)
+    doc.text(`${rest > 0 ? '+' : ''}${num(rest)}`, cols.rest, y, { align: 'right' })
+    doc.setTextColor(26, 26, 26)
+    doc.setDrawColor(230, 227, 222)
+    doc.line(MARGIN, y + 2.5, right, y + 2.5)
+  }
+
+  // Summen-Zeile.
+  y += 8
+  doc.setFillColor(241, 239, 234)
+  doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(26, 26, 26)
+  doc.text('Gesamt', cols.pos + 1, y)
+  doc.text(num(tOrd), cols.ordered, y, { align: 'right' })
+  doc.text(num(tRec), cols.received, y, { align: 'right' })
+  doc.text(num(tDist), cols.distributed, y, { align: 'right' })
+  const totRest = tRec - tDist
+  if (totRest < 0) doc.setTextColor(176, 0, 32)
+  else doc.setTextColor(26, 26, 26)
+  doc.text(`${totRest > 0 ? '+' : ''}${num(totRest)}`, cols.rest, y, { align: 'right' })
+  doc.setTextColor(26, 26, 26)
+  return y + 8
+}
+
+/** Kunden-Tabelle: Positionen zum Kommissionieren mit Abhak-Kästchen. */
+function drawPickingCustomerTable(
+  doc: jsPDF,
+  items: PickingItem[],
+  startY: number,
+): number {
+  const right = PAGE_W - MARGIN
+  const cols = {
+    art: MARGIN,
+    color: 62,
+    size: 84,
+    ordered: 112,
+    received: 138,
+    pick: 165,
+    check: 178,
+  }
+
+  // Legende: klärt, dass „Eingang" die Gesamt-Poolmenge ist, nicht je Kunde.
+  let y = startY + 5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(120, 115, 108)
+  doc.text(
+    'Bestellt = von diesem Kunden bestellt · Eingang (ges.) = gesamt eingegangen je Position (nicht je Kunde) · Komm. = zu kommissionieren',
+    MARGIN,
+    y,
+    { maxWidth: PAGE_W - MARGIN * 2 },
+  )
+  y += 8
+
+  const drawHead = () => {
+    doc.setFillColor(241, 239, 234)
+    doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90, 85, 80)
+    doc.text('Artikel', cols.art + 1, y)
+    doc.text('Farbe', cols.color, y)
+    doc.text('Größe', cols.size, y)
+    doc.text('Bestellt', cols.ordered, y, { align: 'right' })
+    doc.text('Eingang (ges.)', cols.received, y, { align: 'right' })
+    doc.text('Komm.', cols.pick, y, { align: 'right' })
+    // Kein Unicode-Häkchen (WinAnsi) — schlichtes Kürzel über dem Abhak-Kästchen.
+    doc.text('Erl.', cols.check, y, { align: 'center' })
+    y += 4
+  }
+  drawHead()
+
+  doc.setFontSize(9)
+  let tOrd = 0
+  let tPick = 0
+  for (const it of items) {
+    y += 7
+    if (y > 262) {
+      doc.addPage()
+      y = 26
+      drawHead()
+      y += 3
+    }
+    tOrd += it.ordered
+    tPick += it.pick
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(26, 26, 26)
+    doc.text(String(it.productName), cols.art + 1, y, { maxWidth: 42 })
+    doc.setTextColor(90, 85, 80)
+    doc.text(it.color ?? '—', cols.color, y)
+    doc.text(it.size ?? '—', cols.size, y)
+    doc.text(num(it.ordered), cols.ordered, y, { align: 'right' })
+    doc.text(num(it.received), cols.received, y, { align: 'right' })
+    // Kommissioniermenge fett — das ist die eigentliche Handlungszahl.
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(26, 26, 26)
+    doc.text(num(it.pick), cols.pick, y, { align: 'right' })
+    // Abhak-Kästchen.
+    doc.setDrawColor(120, 115, 108)
+    doc.setLineWidth(0.3)
+    doc.rect(cols.check - 2, y - 3, 4, 4)
+    doc.setLineWidth(DEFAULT_LINE_WIDTH)
+    doc.setDrawColor(230, 227, 222)
+    doc.line(MARGIN, y + 3, right, y + 3)
+  }
+
+  // Summen-Zeile.
+  y += 9
+  doc.setFillColor(241, 239, 234)
+  doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(26, 26, 26)
+  doc.text('Gesamt', cols.art + 1, y)
+  doc.text(num(tOrd), cols.ordered, y, { align: 'right' })
+  doc.text(num(tPick), cols.pick, y, { align: 'right' })
+  return y + 8
+}
+
+/**
+ * Kommissionierschein als PDF-Blob (internes Lagerdokument, nicht persistiert):
+ * Deckblatt mit dem Abgleich über alle Kunden, danach je Kunde eine Seite mit den
+ * zu kommissionierenden Positionen und Abhak-Kästchen. Deutsch, Stil wie
+ * Rechnung/Lieferschein (dunkelgrüne Akzentlinien).
+ */
+export function buildPickingListPdf(data: PickingListPdfData): Blob {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+
+  const seasonMeta = data.seasonLabel
+    ? [{ label: 'Saison', value: data.seasonLabel }]
+    : []
+
+  // Deckblatt: Abgleich-Zusammenfassung.
+  const summaryBottom = drawPickingHeader(doc, { kind: 'summary' }, [
+    ...seasonMeta,
+    { label: 'Datum', value: deDate(data.date) },
+    { label: 'Kunden', value: num(data.customers.length) },
+  ])
+  drawPickingSummaryTable(doc, data.summary, summaryBottom)
+  drawFooter(doc)
+
+  // Je Kunde eine Seite.
+  for (const c of data.customers) {
+    doc.addPage()
+    const bottom = drawPickingHeader(
+      doc,
+      { kind: 'customer', name: c.dealerName, place: c.place },
+      [...seasonMeta, { label: 'Datum', value: deDate(data.date) }],
+    )
+    drawPickingCustomerTable(doc, c.items, bottom)
+    drawFooter(doc)
+  }
+
   return doc.output('blob')
 }
 

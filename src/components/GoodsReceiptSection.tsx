@@ -5,6 +5,7 @@ import {
   getReconciliation,
   listGoodsReceipts,
 } from '../lib/goodsReceipts'
+import { buildPickingListData } from '../lib/pickingList'
 import type {
   GoodsReceiptWithItems,
   ReconciliationRow,
@@ -57,6 +58,9 @@ export default function GoodsReceiptSection({
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [qty, setQty] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+
+  const [pickBusy, setPickBusy] = useState(false)
+  const [pickError, setPickError] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -122,6 +126,39 @@ export default function GoodsReceiptSection({
       setError(err instanceof Error ? err.message : t('goodsReceipt.saveError'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /**
+   * Kommissionierschein (Sammel-PDF je Kunde) erzeugen und direkt herunterladen.
+   * Internes Lagerdokument — bewusst ohne Persistenz/Nummernkreis, daher nur
+   * ein Blob-Download statt Storage-Ablage (vgl. Lieferschein/Rechnung).
+   */
+  async function handleDownloadPickingList() {
+    setPickBusy(true)
+    setPickError(null)
+    try {
+      const data = await buildPickingListData(productionOrderId)
+      if (!data) {
+        setPickError(t('pickingList.empty'))
+        return
+      }
+      const { buildPickingListPdf } = await import('../lib/pdf')
+      const blob = buildPickingListPdf(data)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0, 10)
+      const season = (data.seasonLabel ?? '').replace(/[^a-zA-Z0-9-]/g, '_')
+      a.href = url
+      a.download = `kommissionierschein${season ? `-${season}` : ''}-${stamp}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setPickError(t('pickingList.error'))
+    } finally {
+      setPickBusy(false)
     }
   }
 
@@ -276,10 +313,26 @@ export default function GoodsReceiptSection({
       )}
 
       {/* ─── Abgleich Wareneingang ↔ Verteilung ──────────────────────────── */}
-      <h3 className="mb-1 text-base font-medium text-ink">
-        {t('goodsReceipt.reconcileHeading')}
-      </h3>
+      <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
+        <h3 className="text-base font-medium text-ink">
+          {t('goodsReceipt.reconcileHeading')}
+        </h3>
+        <button
+          type="button"
+          onClick={handleDownloadPickingList}
+          disabled={pickBusy || rows.length === 0}
+          className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+        >
+          {pickBusy ? t('pickingList.generating') : t('pickingList.download')}
+        </button>
+      </div>
       <p className="mb-3 text-sm text-muted">{t('goodsReceipt.reconcileHint')}</p>
+
+      {pickError && (
+        <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
+          {pickError}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted">{t('common.loading')}</p>

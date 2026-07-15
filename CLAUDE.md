@@ -67,6 +67,25 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
   - `src/lib/itemKey.ts` hält den Positions-Schlüssel neutral, damit sich
     `deliveries` und `goodsReceipts` nicht gegenseitig importieren müssen (kein
     Zyklus); `deliveries.ts` re-exportiert ihn für Altimporte.
+- **Kommissionierschein als PDF** (Abschnitt 4): internes Lagerdokument zum
+  Ausdrucken und händischen Abarbeiten. **Sammel je Produktionsbestellung** —
+  Deckblatt mit dem Abgleich über alle Kunden, danach je Kunde (= je Lieferung)
+  eine Seite mit Artikel/Farbe/Größe, **Bestellt** (dieser Kunde) / **Eingang
+  (ges.)** / **Komm.** (zu kommissionieren) und Abhak-Kästchen. „Eingang (ges.)"
+  ist bewusst als **Pool-Gesamtmenge je Position** beschriftet (nicht je Kunde) —
+  Wareneingang wird nie kundenweise zugeordnet.
+  - **Datenquelle = Komposition der Bildschirm-Quellen, keine zweite Rechnung**
+    (wie bei `dueDates`): `getReconciliation` (Deckblatt + „Eingang"),
+    `listDeliveryItems` + `orderedQuantities` (Positionen/„Bestellt" je Kunde).
+    Lib: `src/lib/pickingList.ts`; Builder `buildPickingListPdf` in
+    `src/lib/pdf.ts` (Stil wie Rechnung/Lieferschein, dunkelgrüne Akzentlinien).
+  - **Bewusst NICHT persistiert:** kein Nummernkreis, keine Storage-Ablage, keine
+    Migration — Direkt-Download des Blobs (Button im Abgleich auf
+    ProductionOrderEdit). Es ist ein Wegwerf-Arbeitspapier, kein Kundenbeleg.
+    Deutsch (internes Dokument).
+  - **Noch offen:** Einzel-Kunden-Nachdruck auf DeliveryEdit — der Builder nimmt
+    schon eine Kundenliste, ist also trivial nachrüstbar. Zurückgestellt bis der
+    Praxistest des Sammeldokuments zeigt, dass das Format passt.
 
 ### Bewusst (noch) NICHT gebaut — und warum
 
@@ -88,8 +107,6 @@ erst die offene fachliche Frage mit der Kundin klären.
   erst bei Verkauf). Grund: hängt an der **offenen Retouren-/Gutschriften-Klärung**
   (vgl. `deductions` in `commission_settlements`, aktuell immer 0). Erst wenn
   Retouren modelliert sind, ergibt der Liefertyp Sinn.
-- **Kommissionierschein als PDF.** Der Abgleich ist als Bildschirm-Tabelle da; das
-  benannte PDF-Dokument kommt erst, wenn der Abgleich sich im Betrieb bewährt hat.
 
 ### Baustein C — Room with a View (viel später)
 Schwesteragentur, Modevertrieb, ~15 Marken. Ablöse von GH Order (Deniba Wien).
