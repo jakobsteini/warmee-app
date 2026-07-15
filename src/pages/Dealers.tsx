@@ -17,6 +17,18 @@ import {
   deleteDealerPriority,
 } from '../lib/dealerPriorities'
 import {
+  listDealerDocuments,
+  countDealerDocuments,
+  uploadDealerDocument,
+  signedDocumentUrl,
+  deleteDealerDocument,
+} from '../lib/dealerDocuments'
+import {
+  DEALER_DOCUMENT_CATEGORIES,
+  type DealerDocument,
+  type DealerDocumentCategory,
+} from '../types/dealerDocument'
+import {
   DEALER_EMAIL_ROLES,
   type DealerEmail,
   type DealerEmailRole,
@@ -144,6 +156,29 @@ const emptyForm: DealerForm = {
 // ─── Umwandlungs-Helfer ─────────────────────────────────────────────────────
 
 /** Leerer String → null, sonst getrimmt. */
+/** Dokument-Kategorie → Übersetzungs-Key. */
+function docCategoryKey(category: DealerDocumentCategory): TranslationKey {
+  return `dealerDoc.category.${category}` as TranslationKey
+}
+
+/** Dateigröße menschenlesbar (kB/MB), oder leer wenn unbekannt. */
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** ISO-Datum als deutsches Kurzdatum, oder leer. */
+function docDate(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
 function trimOrNull(v: string): string | null {
   const t = v.trim()
   return t === '' ? null : t
@@ -570,6 +605,13 @@ export default function Dealers() {
   const [originalPriorities, setOriginalPriorities] = useState<
     Record<string, number>
   >({})
+  // Dokumente des Händlers (nur Bearbeiten). Anders als E-Mails/Prioritäten
+  // wirken Upload/Löschen SOFORT (echte Dateien) — nicht erst beim Speichern.
+  const [documents, setDocuments] = useState<DealerDocument[]>([])
+  const [docCategory, setDocCategory] =
+    useState<DealerDocumentCategory>('contract')
+  const [docBusy, setDocBusy] = useState(false)
+  const [docError, setDocError] = useState<string | null>(null)
 
   function set(key: DealerFormKey, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -613,6 +655,10 @@ export default function Dealers() {
     setAddRole('order_confirmation')
     setPriorities({})
     setOriginalPriorities({})
+    setDocuments([])
+    setDocCategory('contract')
+    setDocBusy(false)
+    setDocError(null)
   }
 
   function openCreate() {
@@ -630,11 +676,12 @@ export default function Dealers() {
     setFormError(null)
     setFormOpen(true)
     try {
-      // E-Mail-Verteiler und Saison-Prioritäten des Händlers nachladen. Sind
-      // ergänzend — schlägt es fehl, bleibt das Formular trotzdem nutzbar.
-      const [em, pr] = await Promise.all([
+      // E-Mail-Verteiler, Saison-Prioritäten und Dokumente des Händlers
+      // nachladen. Sind ergänzend — schlägt es fehl, bleibt das Formular nutzbar.
+      const [em, pr, docs] = await Promise.all([
         listDealerEmails(d.id),
         listDealerPriorities(d.id),
+        listDealerDocuments(d.id),
       ])
       setOriginalEmails(em)
       setEmails(em.map((e) => ({ id: e.id, email: e.email, role: e.role })))
@@ -646,8 +693,47 @@ export default function Dealers() {
           Object.entries(prMap).map(([k, v]) => [k, String(v)]),
         ),
       )
+      setDocuments(docs)
     } catch {
       /* Relationen sind ergänzend */
+    }
+  }
+
+  /** Datei sofort hochladen (nur im Bearbeiten-Modus mit bestehender dealer_id). */
+  async function handleUploadDoc(file: File) {
+    if (!editing) return
+    setDocBusy(true)
+    setDocError(null)
+    try {
+      await uploadDealerDocument(editing.id, file, docCategory)
+      setDocuments(await listDealerDocuments(editing.id))
+    } catch {
+      setDocError(t('dealerDoc.uploadError'))
+    } finally {
+      setDocBusy(false)
+    }
+  }
+
+  /** Dokument über eine Signed URL im neuen Tab öffnen. */
+  async function handleDownloadDoc(doc: DealerDocument) {
+    setDocError(null)
+    try {
+      window.open(await signedDocumentUrl(doc.storage_path), '_blank', 'noopener')
+    } catch {
+      setDocError(t('dealerDoc.downloadError'))
+    }
+  }
+
+  /** Dokument löschen (Datei + Eintrag). */
+  async function handleDeleteDoc(doc: DealerDocument) {
+    if (!window.confirm(t('dealerDoc.deleteConfirm', { name: doc.file_name })))
+      return
+    setDocError(null)
+    try {
+      await deleteDealerDocument(doc)
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
+    } catch {
+      setDocError(t('dealerDoc.deleteError'))
     }
   }
 
@@ -725,6 +811,13 @@ export default function Dealers() {
   async function handleDelete(d: Dealer) {
     if (!window.confirm(t('dealers.deleteConfirm', { name: d.name }))) return
     try {
+      // Vertrauliche Dokumente dürfen nicht verwaisen: Der FK ohne cascade würde
+      // das Löschen ohnehin blocken — hier eine klare Meldung statt DB-Fehler.
+      const docCount = await countDealerDocuments(d.id)
+      if (docCount > 0) {
+        setError(t('dealers.deleteBlockedDocs', { count: docCount }))
+        return
+      }
       await deleteDealer(d.id)
       await load()
     } catch {
@@ -1117,6 +1210,114 @@ export default function Dealers() {
                     </>
                   )}
                 </Section>
+
+                {/* Dokumente (nur Bearbeiten — Upload braucht eine dealer_id) */}
+                {editing && (
+                  <Section
+                    title={t('dealerDoc.section')}
+                    collapsible
+                    defaultOpen
+                  >
+                    <p className="text-xs text-muted">{t('dealerDoc.hint')}</p>
+
+                    {docError && (
+                      <p className="text-sm text-red-700">{docError}</p>
+                    )}
+
+                    {/* Upload: Kategorie wählen, Datei hochladen (sofort) */}
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs text-muted">
+                          {t('dealerDoc.categoryLabel')}
+                        </span>
+                        <select
+                          value={docCategory}
+                          onChange={(e) =>
+                            setDocCategory(
+                              e.target.value as DealerDocumentCategory,
+                            )
+                          }
+                          className={`${inputClass} w-44`}
+                        >
+                          {DEALER_DOCUMENT_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {t(docCategoryKey(c))}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs text-muted">
+                          {t('dealerDoc.choose')}
+                        </span>
+                        <input
+                          type="file"
+                          disabled={docBusy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) handleUploadDoc(f)
+                            e.target.value = ''
+                          }}
+                          className="text-sm text-ink file:mr-3 file:rounded-md file:border-[0.5px] file:border-line file:bg-card file:px-3 file:py-1.5 file:text-sm file:text-ink hover:file:bg-cream disabled:opacity-50"
+                        />
+                      </label>
+                      {docBusy && (
+                        <span className="text-sm text-muted">
+                          {t('dealerDoc.uploading')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Liste vorhandener Dokumente */}
+                    {documents.length === 0 ? (
+                      <p className="text-xs text-muted">{t('dealerDoc.empty')}</p>
+                    ) : (
+                      <ul className="divide-y divide-line rounded-md border-[0.5px] border-line">
+                        {documents.map((doc) => (
+                          <li
+                            key={doc.id}
+                            className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-ink">
+                                {doc.file_name}
+                              </p>
+                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                                <span className="rounded-full bg-card px-2 py-0.5 text-[11px] text-ink">
+                                  {t(docCategoryKey(doc.category))}
+                                </span>
+                                <span>
+                                  {t('dealerDoc.uploadedBy', {
+                                    date: docDate(doc.created_at),
+                                  })}
+                                  {formatBytes(doc.file_size)
+                                    ? ` · ${formatBytes(doc.file_size)}`
+                                    : ''}
+                                </span>
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadDoc(doc)}
+                                className="text-muted transition-colors hover:text-ink"
+                              >
+                                {t('dealerDoc.download')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDoc(doc)}
+                                className="text-muted transition-colors hover:text-red-700"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Section>
+                )}
 
                 {/* Adressen (ausklappbar; beim Bearbeiten offen) */}
                 <Section
