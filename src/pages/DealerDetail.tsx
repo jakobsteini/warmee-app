@@ -7,6 +7,7 @@ import type { DealerEmailRole } from '../types/dealerEmail'
 import type { Dealer } from '../types/dealer'
 import { signedDocumentUrl } from '../lib/dealerDocuments'
 import CreditBadge from '../components/CreditBadge'
+import CollectionBadge from '../components/CollectionBadge'
 import DealerEditModal from '../components/DealerEditModal'
 import { listSeasons } from '../lib/seasons'
 import type { Season } from '../types/asset'
@@ -211,6 +212,11 @@ export default function DealerDetail() {
   const overdueAmount = credit?.overdueAmount ?? 0
   const confirmedCount = data.orders.filter((o) => o.status === 'confirmed').length
   const creditLimit = dealer.credit_limit === null ? null : num(dealer.credit_limit)
+  // Rechnungsnummer je Rechnung, für die Inkasso-Historie (die Fälle halten nur
+  // invoice_id).
+  const invoiceNumberById = new Map(
+    data.invoices.map((inv) => [inv.id, inv.invoice_number]),
+  )
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -348,7 +354,11 @@ export default function DealerDetail() {
                     )}
                   </td>
                   <td className={`${tdClass} text-muted`}>
-                    {it.level?.label ?? '—'}
+                    {it.collection ? (
+                      <CollectionBadge />
+                    ) : (
+                      (it.level?.label ?? '—')
+                    )}
                   </td>
                 </tr>
               ))}
@@ -356,6 +366,54 @@ export default function DealerDetail() {
           </table>
         )}
       </Section>
+
+      {/* ── Inkasso-Historie ── */}
+      {data.collections.length > 0 && (
+        <Section
+          title={t('dealerDetail.section.collections')}
+          count={data.collections.length}
+        >
+          <ul className="divide-y divide-line">
+            {data.collections.map((c) => {
+              const invNo =
+                invoiceNumberById.get(c.invoice_id) ?? c.invoice_id.slice(0, 8)
+              return (
+                <li key={c.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2">
+                      {c.status === 'active' ? (
+                        <CollectionBadge />
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border-[0.5px] border-line px-2.5 py-0.5 text-xs text-muted">
+                          {t('collection.statusWithdrawn')}
+                        </span>
+                      )}
+                      <span className="font-medium text-ink">{invNo}</span>
+                    </span>
+                    <span className="tabular-nums text-ink">
+                      {formatEUR(c.open_amount_snapshot)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {t('collection.handedOverOn', {
+                      date: fmtDate(c.handed_over_at),
+                      level: c.label_snapshot,
+                    })}
+                  </p>
+                  {c.status === 'withdrawn' && (
+                    <p className="mt-0.5 text-xs text-muted">
+                      {t('collection.withdrawnOn', {
+                        date: fmtDate(c.withdrawn_at),
+                      })}
+                      {c.withdrawal_reason ? ` — ${c.withdrawal_reason}` : ''}
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
+      )}
 
       {/* ── Orders ── */}
       <Section title={t('dealerDetail.section.orders')} count={data.orders.length}>

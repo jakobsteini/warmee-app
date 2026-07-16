@@ -312,6 +312,7 @@ export const de = {
   'dealerDetail.noLimit': 'kein Limit',
   'dealerDetail.creditLimitOf': '{open} von {limit}',
   'dealerDetail.section.openItems': 'Offene Posten',
+  'dealerDetail.section.collections': 'Inkasso-Historie',
   'dealerDetail.section.orders': 'Orders',
   'dealerDetail.section.invoices': 'Rechnungen',
   'dealerDetail.section.deliveries': 'Lieferungen',
@@ -709,6 +710,30 @@ export const de = {
   'dunning.settings.add': 'Stufe hinzufügen',
   'dunning.settings.adding': 'Fügt hinzu…',
 
+  // ─── Inkasso ──────────────────────────────────────────────────────────────
+  'collection.badge': 'Inkasso',
+  'collection.handOver': 'An Inkasso übergeben',
+  'collection.withdraw': 'Inkasso zurückziehen',
+  'collection.openAmount': 'Offener Betrag',
+  'collection.handOverTitle': 'An Inkasso übergeben',
+  'collection.handOverHint':
+    'Der offene Betrag und die erreichte Mahnstufe werden festgeschrieben. Der Mahnlauf erzeugt für diese Rechnung keine weiteren Stufen mehr.',
+  'collection.handOverConfirm': 'Übergeben',
+  'collection.withdrawTitle': 'Inkasso zurückziehen',
+  'collection.reasonLabel': 'Grund (Pflichtfeld)',
+  'collection.reasonRequired': 'Bitte einen Grund angeben.',
+  'collection.withdrawConfirm': 'Zurückziehen',
+  'collection.statusWithdrawn': 'Zurückgezogen',
+  'collection.handedOverOn': 'Übergeben am {date} · Stufe {level}',
+  'collection.withdrawnOn': 'Zurückgezogen am {date}',
+
+  // ─── Benachrichtigungen ───────────────────────────────────────────────────
+  'notifications.title': 'Benachrichtigungen',
+  'notifications.markAllRead': 'Alle als gelesen',
+  'notifications.empty': 'Keine Benachrichtigungen.',
+  'notifications.type.collection_handover': 'Inkasso-Übergabe',
+  'notifications.type.collection_withdrawn': 'Inkasso zurückgezogen',
+
   // ─── Wareneingang (Produktionsbestellung) ─────────────────────────────────
   'goodsReceipt.heading': 'Wareneingang',
   'goodsReceipt.desc': 'Erfasse, was tatsächlich aus Nepal angekommen ist. Teillieferungen sind möglich — es kann mehrere Wareneingänge geben.',
@@ -1036,6 +1061,7 @@ export const en: Record<TranslationKey, string> = {
   'dealerDetail.noLimit': 'no limit',
   'dealerDetail.creditLimitOf': '{open} of {limit}',
   'dealerDetail.section.openItems': 'Open items',
+  'dealerDetail.section.collections': 'Collection history',
   'dealerDetail.section.orders': 'Orders',
   'dealerDetail.section.invoices': 'Invoices',
   'dealerDetail.section.deliveries': 'Deliveries',
@@ -1432,6 +1458,30 @@ export const en: Record<TranslationKey, string> = {
   'dunning.settings.addError': 'Could not create the level.',
   'dunning.settings.add': 'Add level',
   'dunning.settings.adding': 'Adding…',
+
+  // ─── Collection ────────────────────────────────────────────────────────────
+  'collection.badge': 'Collection',
+  'collection.handOver': 'Hand over to collection',
+  'collection.withdraw': 'Withdraw from collection',
+  'collection.openAmount': 'Open amount',
+  'collection.handOverTitle': 'Hand over to collection',
+  'collection.handOverHint':
+    'The open amount and reached dunning level are frozen. The dunning run will not create any further levels for this invoice.',
+  'collection.handOverConfirm': 'Hand over',
+  'collection.withdrawTitle': 'Withdraw from collection',
+  'collection.reasonLabel': 'Reason (required)',
+  'collection.reasonRequired': 'Please provide a reason.',
+  'collection.withdrawConfirm': 'Withdraw',
+  'collection.statusWithdrawn': 'Withdrawn',
+  'collection.handedOverOn': 'Handed over on {date} · level {level}',
+  'collection.withdrawnOn': 'Withdrawn on {date}',
+
+  // ─── Notifications ─────────────────────────────────────────────────────────
+  'notifications.title': 'Notifications',
+  'notifications.markAllRead': 'Mark all read',
+  'notifications.empty': 'No notifications.',
+  'notifications.type.collection_handover': 'Handed over to collection',
+  'notifications.type.collection_withdrawn': 'Collection withdrawn',
 
   // ─── Goods receipt (production order) ──────────────────────────────────────
   'goodsReceipt.heading': 'Goods receipt',

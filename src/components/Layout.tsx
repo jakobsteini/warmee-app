@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentUser } from '../context/CurrentUser'
 import BrandEntryOverlay from './BrandEntryOverlay'
+import NotificationBell from './NotificationBell'
 import { useI18n } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 import type { Lang } from '../i18n/dict'
@@ -122,8 +123,14 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-cream px-10 py-8">
-        <Outlet />
+      <main className="flex flex-1 flex-col overflow-y-auto bg-cream">
+        {/* Schlanke Kopfleiste — hält die Benachrichtigungs-Glocke. */}
+        <header className="flex items-center justify-end border-b-[0.5px] border-line px-10 py-3 print:hidden">
+          <NotificationBell />
+        </header>
+        <div className="flex-1 px-10 py-8">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

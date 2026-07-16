@@ -1,8 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listOverdueWithLevels } from '../lib/dunning'
+import {
+  handOverToCollection,
+  withdrawCollection,
+} from '../lib/dunningCollections'
+import { canHandOver } from '../lib/dunningCollectionsCalc'
 import { formatEUR } from '../lib/money'
 import type { DunningLevel, OverdueInvoiceRow } from '../types/dunning'
+import CollectionBadge from '../components/CollectionBadge'
+import {
+  HandOverDialog,
+  WithdrawDialog,
+  type CollectionCaseInfo,
+} from '../components/CollectionDialog'
 import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n'
 
@@ -22,43 +33,82 @@ function num(v: number | string): number {
   return Number.isNaN(n) ? 0 : n
 }
 
+type Dialog =
+  | { mode: 'handover'; row: OverdueInvoiceRow }
+  | { mode: 'withdraw'; row: OverdueInvoiceRow }
+  | null
+
 export default function Dunning() {
   const t = useT()
   const [levels, setLevels] = useState<DunningLevel[]>([])
   const [rows, setRows] = useState<OverdueInvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<Dialog>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const dossier = await listOverdueWithLevels()
+      setLevels(dossier.levels)
+      setRows(dossier.rows)
+    } catch {
+      setError(t('dunning.loadError'))
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const dossier = await listOverdueWithLevels()
-        setLevels(dossier.levels)
-        setRows(dossier.rows)
-      } catch {
-        setError(t('dunning.loadError'))
-      } finally {
-        setLoading(false)
-      }
-    }
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [load])
 
   const totalOverdue = useMemo(
     () => rows.reduce((s, r) => s + num(r.total), 0),
     [rows],
   )
 
+  function caseInfo(row: OverdueInvoiceRow): CollectionCaseInfo {
+    return {
+      dealerName: row.dealer_name,
+      invoiceNumber: row.invoice_number,
+      openAmount: row.open_amount,
+    }
+  }
+
+  async function confirmHandOver(row: OverdueInvoiceRow) {
+    if (!row.level) return
+    await handOverToCollection({
+      invoice_id: row.id,
+      dealer_id: row.dealer_id,
+      dealer_name: row.dealer_name,
+      invoice_number: row.invoice_number,
+      open_amount: row.open_amount,
+      level_number: row.level.level_number,
+      label: row.level.label,
+    })
+    setDialog(null)
+    await load()
+  }
+
+  async function confirmWithdraw(row: OverdueInvoiceRow, reason: string) {
+    if (!row.collection) return
+    await withdrawCollection(
+      row.collection,
+      reason,
+      row.dealer_name,
+      row.invoice_number,
+    )
+    setDialog(null)
+    await load()
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-ink">
-            {t('dunning.title')}
-          </h1>
+          <h1 className="text-2xl font-medium text-ink">{t('dunning.title')}</h1>
           <p className="mt-1 text-sm text-muted">{t('dunning.subtitle')}</p>
         </div>
         <Link
@@ -113,55 +163,76 @@ export default function Dunning() {
                 <th className="px-4 py-3 text-right font-medium">
                   {t('dunning.col.daysOverdue')}
                 </th>
-                <th className="px-4 py-3 font-medium">
-                  {t('dunning.col.stage')}
-                </th>
+                <th className="px-4 py-3 font-medium">{t('dunning.col.stage')}</th>
                 <th className="px-4 py-3 text-right font-medium">
                   {t('common.amount')}
                 </th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-t-[0.5px] border-line bg-surface text-ink"
-                >
-                  <td className="px-4 py-3 font-medium">{r.invoice_number}</td>
-                  <td className="px-4 py-3">{r.dealer_name ?? '—'}</td>
-                  <td className="px-4 py-3 font-medium text-red-700">
-                    {formatDate(r.faellig_iso)}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {t('dunning.daysValue', { days: r.days_overdue })}
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.level ? (
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs ${
-                            r.level.triggers_collection
-                              ? 'bg-red-700 text-cream'
-                              : 'border-[0.5px] border-ink text-ink'
-                          }`}
-                        >
-                          {r.level.level_number}. {r.level.label}
-                        </span>
-                        {r.level.triggers_collection && (
-                          <span className="text-xs font-medium text-red-700">
-                            {t('dunning.collection')}
+              {rows.map((r) => {
+                const inCollection = !!r.collection
+                const showHandOver = canHandOver(r.level, levels, inCollection)
+                return (
+                  <tr
+                    key={r.id}
+                    className="border-t-[0.5px] border-line bg-surface text-ink"
+                  >
+                    <td className="px-4 py-3 font-medium">{r.invoice_number}</td>
+                    <td className="px-4 py-3">{r.dealer_name ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium text-red-700">
+                      {formatDate(r.faellig_iso)}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {t('dunning.daysValue', { days: r.days_overdue })}
+                    </td>
+                    <td className="px-4 py-3">
+                      {inCollection ? (
+                        <CollectionBadge />
+                      ) : r.level ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs ${
+                              r.level.triggers_collection
+                                ? 'bg-red-700 text-cream'
+                                : 'border-[0.5px] border-ink text-ink'
+                            }`}
+                          >
+                            {r.level.level_number}. {r.level.label}
                           </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-muted">{t('dunning.stageNone')}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {formatEUR(num(r.total))}
-                  </td>
-                </tr>
-              ))}
+                        </span>
+                      ) : (
+                        <span className="text-muted">
+                          {t('dunning.stageNone')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {formatEUR(num(r.total))}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {inCollection ? (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ mode: 'withdraw', row: r })}
+                          className="text-sm text-muted transition-colors hover:text-ink"
+                        >
+                          {t('collection.withdraw')}
+                        </button>
+                      ) : showHandOver ? (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ mode: 'handover', row: r })}
+                          className="text-sm font-medium text-red-700 transition-opacity hover:opacity-80"
+                        >
+                          {t('collection.handOver')}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-[0.5px] border-line bg-card text-ink">
@@ -171,10 +242,26 @@ export default function Dunning() {
                 <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                   {formatEUR(totalOverdue)}
                 </td>
+                <td />
               </tr>
             </tfoot>
           </table>
         </div>
+      )}
+
+      {dialog?.mode === 'handover' && (
+        <HandOverDialog
+          info={caseInfo(dialog.row)}
+          onConfirm={() => confirmHandOver(dialog.row)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.mode === 'withdraw' && (
+        <WithdrawDialog
+          info={caseInfo(dialog.row)}
+          onConfirm={(reason) => confirmWithdraw(dialog.row, reason)}
+          onClose={() => setDialog(null)}
+        />
       )}
     </div>
   )

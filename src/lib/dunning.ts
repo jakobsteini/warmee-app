@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { getMyOrgId } from './org'
 import { listOpenPayments } from './openPayments'
+import { activeCollectionsByInvoice } from './dunningCollections'
 import { faelligkeitIso, isOverdue, daysOverdue, todayIso } from './dueDates'
 import type {
   DunningLevel,
@@ -119,9 +120,10 @@ export interface OverdueDossier {
  * überfällige zuerst.
  */
 export async function listOverdueWithLevels(): Promise<OverdueDossier> {
-  const [levels, invoices] = await Promise.all([
+  const [levels, invoices, activeCollections] = await Promise.all([
     listDunningLevels(),
     listOpenPayments(),
+    activeCollectionsByInvoice(),
   ])
   const today = todayIso()
 
@@ -129,14 +131,18 @@ export async function listOverdueWithLevels(): Promise<OverdueDossier> {
     .filter((inv) => isOverdue(inv, today))
     .map((inv) => {
       const days = daysOverdue(inv, today) ?? 0
+      const total = num(inv.total)
       return {
         id: inv.id,
         invoice_number: inv.invoice_number,
+        dealer_id: inv.dealer_id,
         dealer_name: inv.dealer?.name ?? null,
-        total: num(inv.total),
+        total,
+        open_amount: total - num(inv.paid_amount),
         faellig_iso: faelligkeitIso(inv),
         days_overdue: days,
         level: reachedLevel(days, levels),
+        collection: activeCollections.get(inv.id) ?? null,
       }
     })
     .sort((a, b) => b.days_overdue - a.days_overdue)

@@ -8,6 +8,7 @@ import { listDealerPriorities } from './dealerPriorities'
 import { listDealerDocuments } from './dealerDocuments'
 import { listSeasons } from './seasons'
 import { listDunningLevels, reachedLevel } from './dunning'
+import { listCollections } from './dunningCollections'
 import { listDealerCredits, type DealerCredit } from './creditRating'
 import { daysOverdue, faelligkeitIso, todayIso } from './dueDates'
 import type { Dealer } from '../types/dealer'
@@ -16,7 +17,7 @@ import type { InvoiceListRow } from '../types/invoice'
 import type { DeliveryListRow } from '../types/delivery'
 import type { DealerEmail } from '../types/dealerEmail'
 import type { DealerDocument } from '../types/dealerDocument'
-import type { DunningLevel } from '../types/dunning'
+import type { DunningLevel, DunningCollection } from '../types/dunning'
 
 // ============================================================================
 // 360°-Datenblick eines Händlers. BEWUSST reine Komposition der bestehenden
@@ -37,6 +38,8 @@ export interface DealerOpenItem {
   daysOverdue: number | null
   /** Höchste erreichte Mahnstufe, oder null. */
   level: DunningLevel | null
+  /** Aktiver Inkasso-Fall zu dieser Rechnung, sonst null. */
+  collection: DunningCollection | null
 }
 
 /** Eine Saison-Priorität des Händlers, angereichert um das Saison-Label. */
@@ -58,6 +61,8 @@ export interface DealerDetailData {
   emails: DealerEmail[]
   priorities: DealerPriorityRow[]
   documents: DealerDocument[]
+  /** Inkasso-Fälle dieses Händlers (aktiv + zurückgezogen), neueste zuerst. */
+  collections: DunningCollection[]
   /** Umsatz = Summe der nicht stornierten Rechnungsbeträge dieses Händlers. */
   revenueTotal: number
 }
@@ -88,6 +93,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     documents,
     seasons,
     levels,
+    collections,
   ] = await Promise.all([
     getDealer(id),
     listDealerCredits().catch(() => new Map<string, DealerCredit>()),
@@ -100,11 +106,18 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     listDealerDocuments(id).catch(() => []),
     listSeasons().catch(() => []),
     listDunningLevels().catch(() => []),
+    listCollections().catch(() => [] as DunningCollection[]),
   ])
 
   const dealerOrders = orders.filter((o) => o.dealer_id === id)
   const dealerInvoices = invoices.filter((inv) => inv.dealer_id === id)
   const dealerDeliveries = deliveries.filter((d) => d.dealer_id === id)
+  const dealerCollections = collections.filter((c) => c.dealer_id === id)
+  const activeCollectionByInvoice = new Map(
+    dealerCollections
+      .filter((c) => c.status === 'active')
+      .map((c) => [c.invoice_id, c]),
+  )
 
   // Offene Posten: dieselbe Quelle wie die globale Liste (versendet + Zahlungs-
   // ziel-Join), gefiltert auf den Händler. Überfälligkeit/Stufe über dueDates +
@@ -119,6 +132,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
         faelligIso: faelligkeitIso(invoice),
         daysOverdue: days,
         level: days !== null ? reachedLevel(days, levels) : null,
+        collection: activeCollectionByInvoice.get(invoice.id) ?? null,
       }
     })
 
@@ -156,6 +170,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     emails,
     priorities: priorityRows,
     documents,
+    collections: dealerCollections,
     revenueTotal,
   }
 }
