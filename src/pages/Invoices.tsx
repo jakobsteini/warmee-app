@@ -53,7 +53,7 @@ function PaymentCell({ inv }: { inv: InvoiceListRow }) {
   }
   return (
     <span className="whitespace-nowrap text-xs text-muted">
-      {t('invoices.open', { amount: formatEUR(inv.total) })}
+      {t('invoices.open', { amount: formatEUR(inv.open_amount) })}
     </span>
   )
 }

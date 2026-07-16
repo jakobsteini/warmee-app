@@ -67,6 +67,12 @@ export interface InvoiceItem {
  */
 export interface InvoiceListRow extends Invoice {
   dealer: { name: string; zahlungsziel_tage: number | null } | null
+  /**
+   * Offener Rest BRUTTO = total − Σ recorded Retouren (zentral über
+   * returnsCalc.openAfterReturns). Nur für offene Rechnungen (Entwurf/Versendet)
+   * aussagekräftig; bei bezahlten/stornierten wird er nicht gerendert.
+   */
+  open_amount: number
 }
 
 /** Eine Rechnung inkl. Händlerdaten und Positionen (Detailansicht). */

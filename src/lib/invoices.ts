@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
+import { recordedReturnsByInvoice } from './returns'
+import { openAfterReturns } from './returnsCalc'
 import type { BelegItem } from './pdf'
 import { addDaysIso } from './dates'
 import {
@@ -45,15 +47,25 @@ function num(v: number | string | null): number {
 
 // ─── Laden ────────────────────────────────────────────────────────────────
 
-/** Alle Rechnungen der eigenen Org (RLS scoped), neueste zuerst. */
+/**
+ * Alle Rechnungen der eigenen Org (RLS scoped), neueste zuerst, samt offenem Rest
+ * (total − recorded Retouren). Retouren-Quelle und Rechenweg zentral
+ * (recordedReturnsByInvoice + openAfterReturns) — keine zweite Rechenstelle.
+ */
 export async function listInvoices(): Promise<InvoiceListRow[]> {
-  const { data, error } = await supabase
-    .from('invoices')
-    .select('*, dealer:dealers(name)')
-    .order('created_at', { ascending: false })
+  const [invRes, returnsByInvoice] = await Promise.all([
+    supabase
+      .from('invoices')
+      .select('*, dealer:dealers(name)')
+      .order('created_at', { ascending: false }),
+    recordedReturnsByInvoice(),
+  ])
 
-  if (error) throw error
-  return (data ?? []) as unknown as InvoiceListRow[]
+  if (invRes.error) throw invRes.error
+  return ((invRes.data ?? []) as unknown as InvoiceListRow[]).map((r) => ({
+    ...r,
+    open_amount: openAfterReturns(r.total, returnsByInvoice.get(r.id) ?? 0),
+  }))
 }
 
 /** Eine Rechnung inkl. Händlerdaten und Positionen laden. */
