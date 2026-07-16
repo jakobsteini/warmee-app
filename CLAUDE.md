@@ -129,13 +129,23 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
   - **Noch offen:** Einzel-Kunden-Nachdruck auf DeliveryEdit — der Builder nimmt
     schon eine Kundenliste, ist also trivial nachrüstbar. Zurückgestellt bis der
     Praxistest des Sammeldokuments zeigt, dass das Format passt.
-- **Bonitäts-Hinweis in der Ordererfassung** (Abschnitt 2.4): bei Auswahl eines
-  Händlers zeigt `CreditHint` die **bestehende** Ampel (`listDealerCredits` +
-  `buildReason`, keine zweite Berechnung) — im „Neue Order"-Modal ([Orders](src/pages/Orders.tsx))
-  und bleibend auf [OrderEdit](src/pages/OrderEdit.tsx). Bei kritischer Bonität ein
-  deutlicher roter Hinweis mit „vor Warenzusage prüfen", **kein harter Block** —
-  Theresa kann die Order trotzdem erfassen. Kreditlimit nur als Kontext (siehe
-  KONVENTIONEN → Bonität / Ampel).
+- **Kreditlimit-Kontext in der Ordererfassung** (Abschnitt 2.4): bei Auswahl eines
+  Händlers zeigt `CreditHint` die reine Faktenzeile „Offen: X von Y Kreditlimit"
+  — im „Neue Order"-Modal ([Orders](src/pages/Orders.tsx)) und bleibend auf
+  [OrderEdit](src/pages/OrderEdit.tsx). Überschreitung des Limits wird rot
+  hervorgehoben (Faktum, kein harter Block). **Ohne gesetztes Kreditlimit rendert
+  die Komponente `null`** — keine leere Zeile. Der offene Betrag kommt aus
+  `listDealerCredits` (keine zweite Berechnung); siehe KONVENTIONEN → Bonität.
+
+### Bonitäts-Ampel aus der UI entfernt (Stand 1628347, 2026-07-16)
+Die Kundin macht **keine Bonitätsprüfung**. Die Bewertungs-Ampel hat damit **keine
+Anzeigestelle mehr**: Spalte „Bonität" aus der Händlerliste, Ampelpunkt aus dem
+Kundendetail und Ampel/Begründung/„vor Warenzusage prüfen" aus `CreditHint`
+entfernt; `CreditBadge` gelöscht. **`creditRating.ts` bleibt vollständig als
+Faktenquelle** — offene/überfällige Beträge und Ø-Zahlungsverzug für die
+Kundendetail-KPIs, den Kreditlimit-Kontext und das Dashboard (`getMoneySnapshot`).
+`rateDealer` bleibt technisch vorhanden, aber ohne Verbraucher (siehe KONVENTIONEN
+→ Bonität).
 
 ### Bewusst (noch) NICHT gebaut — und warum
 
@@ -176,18 +186,24 @@ Rechenwege, das war ein Bug.) Regel: Fälligkeit = gespeichertes `due_date`
 (eingefroren, verschiebt sich nicht rückwirkend); fehlt es, `invoice_date` +
 Händler-`zahlungsziel_tage`, sonst `DEFAULT_ZAHLUNGSZIEL_TAGE` (30).
 
-### Bonität / Ampel → nur `src/lib/creditRating.ts` (`rateDealer`)
-Die Bonitäts-Ampel wird **ausschließlich aus dem Zahlungsverhalten** abgeleitet
-(`rateDealer`: offene Überfälligkeit / Ø-Zahlungsverzug gegen `CREDIT_THRESHOLDS`).
-Das **Kreditlimit (`dealers.credit_limit`) fließt bewusst NICHT in die Ampel-Regel
-ein** — es wird im Bonitäts-Hinweis der Ordererfassung (`CreditHint`) nur als
-**Kontext** angezeigt („Offen: X von Y Limit"). Grund: Ob das Erreichen des Limits
-**gelb oder rot** bedeutet — und ob die **gerade erfasste, noch nicht fakturierte
-Order** mitzählt — ist eine **offene Geschäftsentscheidung der Kundin**. Solange das
-ungeklärt ist, würde eine Regeländerung in `rateDealer` die Bedeutung der Ampel
-**stillschweigend im ganzen System** verschieben (auch in der Händlerliste). Erst
-mit Theresa klären, dann ggf. **zentral** in `rateDealer` ergänzen — **keine zweite
-Bonitäts-Logik daneben**.
+### Bonität → nur `src/lib/creditRating.ts`
+**Die Bewertungs-Ampel hat seit 1628347 (2026-07-16) keine Anzeigestelle mehr** —
+die Kundin macht keine Bonitätsprüfung (Details oben im Modulstand). `creditRating.ts`
+bleibt aber die **einzige Quelle** für zwei getrennte Dinge, und diese Trennung ist
+verbindlich:
+- **Fakten (in Benutzung):** offene/überfällige Beträge und Ø-Zahlungsverzug je
+  Händler (`listDealerCredits` → `DealerCredit`) und org-weit (`getMoneySnapshot`).
+  Speist Kundendetail-KPIs, den Kreditlimit-Kontext in `CreditHint` und das
+  Dashboard. Fälligkeit kommt aus `dueDates` (keine zweite Definition).
+- **Bewertung (aktuell ohne Verbraucher):** `rateDealer` leitet die Ampel-Farbe
+  **ausschließlich aus dem Zahlungsverhalten** ab (offene Überfälligkeit /
+  Ø-Verzug gegen `CREDIT_THRESHOLDS`). Bleibt für eine evtl. spätere Nutzung
+  stehen, wird aber nirgends mehr angezeigt.
+
+Das **Kreditlimit (`dealers.credit_limit`) fließt bewusst NICHT in `rateDealer`
+ein** — es ist reine Faktenanzeige in `CreditHint` („Offen: X von Y Kreditlimit").
+Falls die Ampel je wieder gebraucht wird: erst mit Theresa klären, dann **zentral**
+in `rateDealer` — **keine zweite Bonitäts-Logik daneben**.
 
 ### Snapshot-Muster für eingefrorene Werte
 Konfigurationswerte, die sich ändern können, werden **beim Erzeugen eines Dokuments
