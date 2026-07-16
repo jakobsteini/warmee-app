@@ -1,0 +1,82 @@
+import type { ReturnStatus } from '../lib/returnsCalc'
+
+export type { ReturnStatus }
+
+/** Ein Retouren-Vorgang (snake_case wie in der DB). */
+export interface Return {
+  id: string
+  org_id: string
+  /** Verankerung an der Rechnung. */
+  invoice_id: string
+  dealer_id: string
+  return_date: string
+  reason: string | null
+  /** Eingefrorene Gutschrift-Summe; numeric(10,2). */
+  total_amount: number | string
+  status: ReturnStatus
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancellation_reason: string | null
+  /** Beleg-Schicht, vorerst ungenutzt. */
+  credit_note_number: string | null
+  pdf_path: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** Eine Retouren-Position (snake_case wie in der DB). */
+export interface ReturnItem {
+  id: string
+  return_id: string
+  invoice_item_id: string
+  product_id: string | null
+  color: string | null
+  size: string | null
+  quantity: number
+  unit_price: number | string
+  line_total: number | string
+  created_at: string | null
+}
+
+/** Ein Retouren-Vorgang inkl. Positionen. */
+export interface ReturnWithItems extends Return {
+  return_items: ReturnItem[]
+}
+
+/** Eine Rechnungsposition mit noch retournierbarer Menge (für die Erfassung). */
+export interface ReturnableLine {
+  invoice_item_id: string
+  description: string
+  product_id: string | null
+  color: string | null
+  size: string | null
+  /** Berechnete Menge auf der Rechnung. */
+  invoiced_quantity: number
+  /** Bereits (recorded) retourniert. */
+  returned_quantity: number
+  /** Noch retournierbar. */
+  remaining_quantity: number
+  unit_price: number | string
+}
+
+/** Kontext für die Retouren-Erfassung zu einer Rechnung. */
+export interface InvoiceReturnContext {
+  lines: ReturnableLine[]
+  returns: ReturnWithItems[]
+}
+
+/** Eine zu erfassende Retouren-Zeile. */
+export interface CreateReturnLine {
+  invoice_item_id: string
+  quantity: number
+}
+
+/** Eingaben zum Erfassen einer Retoure. */
+export interface CreateReturnInput {
+  invoice_id: string
+  /** Optionales Retouren-Datum (Default: heute, per DB). */
+  return_date?: string
+  reason?: string | null
+  lines: CreateReturnLine[]
+}
