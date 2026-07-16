@@ -65,7 +65,7 @@ export default function Dunning() {
   }, [load])
 
   const totalOverdue = useMemo(
-    () => rows.reduce((s, r) => s + num(r.total), 0),
+    () => rows.reduce((s, r) => s + num(r.open_amount), 0),
     [rows],
   )
 
@@ -209,7 +209,7 @@ export default function Dunning() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {formatEUR(num(r.total))}
+                      {formatEUR(num(r.open_amount))}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {inCollection ? (
