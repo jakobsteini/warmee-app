@@ -2,14 +2,15 @@ import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import { listSeasons } from './seasons'
 import {
-  agentGetsCommission,
-  buildAssignmentMap,
   computeCommissionOverview,
-  key,
+  computeSettlementBase,
+  lateReturnsBySettlement,
   num,
   type CommissionData,
   type OrderForCalc,
   type PaidInvoice,
+  type ReturnForCalc,
+  type SettlementForFlag,
 } from './commissionCalc'
 import type {
   CommissionOverview,
@@ -54,7 +55,7 @@ export async function setCommissionRate(percent: number): Promise<void> {
 // ─── Datenbeschaffung für die Berechnung ────────────────────────────────────
 
 async function loadCommissionData(): Promise<CommissionData> {
-  const [ordersRes, deliveriesRes, invoicesRes] = await Promise.all([
+  const [ordersRes, deliveriesRes, invoicesRes, returnsRes] = await Promise.all([
     supabase
       .from('orders')
       .select('dealer_id, season_id, assignment, status'),
@@ -67,11 +68,17 @@ async function loadCommissionData(): Promise<CommissionData> {
       .select('dealer_id, delivery_id, paid_amount, paid_at')
       .not('paid_at', 'is', null)
       .neq('status', 'cancelled'),
+    // Recorded Retouren mit der Lieferung der verankerten Rechnung (→ Saison).
+    supabase
+      .from('returns')
+      .select('dealer_id, total_amount, return_date, created_at, status, invoice:invoices(delivery_id)')
+      .eq('status', 'recorded'),
   ])
 
   if (ordersRes.error) throw ordersRes.error
   if (deliveriesRes.error) throw deliveriesRes.error
   if (invoicesRes.error) throw invoicesRes.error
+  if (returnsRes.error) throw returnsRes.error
 
   const deliverySeason = new Map<string, string>()
   for (const d of (deliveriesRes.data ?? []) as unknown as {
@@ -83,10 +90,29 @@ async function loadCommissionData(): Promise<CommissionData> {
     }
   }
 
+  const returns: ReturnForCalc[] = (
+    (returnsRes.data ?? []) as unknown as {
+      dealer_id: string
+      total_amount: number | string
+      return_date: string | null
+      created_at: string | null
+      status: string
+      invoice: { delivery_id: string | null } | null
+    }[]
+  ).map((r) => ({
+    dealer_id: r.dealer_id,
+    delivery_id: r.invoice?.delivery_id ?? null,
+    total_amount: r.total_amount,
+    return_date: r.return_date,
+    created_at: r.created_at,
+    status: r.status,
+  }))
+
   return {
     orders: (ordersRes.data ?? []) as unknown as OrderForCalc[],
     deliverySeason,
     paidInvoices: (invoicesRes.data ?? []) as unknown as PaidInvoice[],
+    returns,
   }
 }
 
@@ -123,8 +149,9 @@ export interface CreateSettlementInput {
 
 /**
  * Abrechnung für (Saison, Zeitraum) erstellen. Basis: der Agentin eindeutig
- * zugeordnete, im Zeitraum EINGEGANGENE Zahlungen. Rate + Beträge werden
- * eingefroren. deductions (Retouren/Gutschriften) sind aktuell immer 0.
+ * zugeordnete, im Zeitraum EINGEGANGENE Zahlungen minus die im Zeitraum (nach
+ * return_date) recorded Retouren. Rate + Beträge werden eingefroren. Die Regel
+ * lebt zentral in computeSettlementBase (dieselbe wie in der Übersicht).
  */
 export async function createSettlement(
   input: CreateSettlementInput,
@@ -136,23 +163,11 @@ export async function createSettlement(
     loadCommissionData(),
   ])
 
-  const assignmentMap = buildAssignmentMap(data.orders)
-
-  let gross = 0
-  for (const inv of data.paidInvoices) {
-    if (!inv.delivery_id || !inv.paid_at) continue
-    const seasonId = data.deliverySeason.get(inv.delivery_id)
-    if (seasonId !== input.season_id) continue
-    if (inv.paid_at < input.period_from || inv.paid_at > input.period_to) continue
-    const set = assignmentMap.get(key(inv.dealer_id, seasonId))
-    if (agentGetsCommission(set)) {
-      gross += num(inv.paid_amount)
-    }
-  }
-
-  const grossReceived = round2(gross)
-  const deductions = 0 // Retouren/Gutschriften: eigener Baustein, aktuell 0.
-  const netBase = round2(grossReceived - deductions)
+  const { grossReceived, deductions, netBase } = computeSettlementBase(data, {
+    season_id: input.season_id,
+    period_from: input.period_from,
+    period_to: input.period_to,
+  })
   const commissionAmount = round2((netBase * ratePercent) / 100)
 
   const { error } = await supabase.from('commission_settlements').insert({
@@ -171,6 +186,20 @@ export async function createSettlement(
   })
 
   if (error) throw error
+}
+
+/**
+ * Nachträgliche Retouren je Abrechnung (settlement_id → Summe brutto): recorded,
+ * agent-berechtigte Retouren mit return_date in der Periode, die ERST NACH dem
+ * Einfrieren erfasst wurden — also nicht in den eingefrorenen deductions stecken.
+ * Für den Hinweis-Badge; verändert die Abrechnung NICHT.
+ */
+export async function getLateReturnFlags(
+  settlements: SettlementForFlag[],
+): Promise<Map<string, number>> {
+  if (settlements.length === 0) return new Map()
+  const data = await loadCommissionData()
+  return lateReturnsBySettlement(settlements, data)
 }
 
 /** Abrechnung löschen. */

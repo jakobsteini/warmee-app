@@ -39,6 +39,9 @@ export interface SeasonCommission {
    *  gemischter Zuteilung (agent + internal in Händler/Saison) bekommt die
    *  Agentin die Provision. */
   actualBase: number
+  /** Agent-berechtigte recorded Retouren dieser Saison (brutto), die die
+   *  Bemessungsgrundlage mindern. Die Netto-Basis = actualBase − deductions. */
+  deductions: number
   /** Bezahlte Rechnungen ohne passende bestätigte Order in (Händler, Saison):
    *  ohne Order gibt es keine Zuteilung, deshalb nicht provisionsberechenbar.
    *  Datenlage-Hinweis, kein Fehler. */

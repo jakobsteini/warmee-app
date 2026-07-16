@@ -5,6 +5,7 @@ import {
   listSettlements,
   createSettlement,
   deleteSettlement,
+  getLateReturnFlags,
 } from '../lib/commission'
 import { listSeasons } from '../lib/seasons'
 import { formatEUR } from '../lib/money'
@@ -47,6 +48,8 @@ export default function Commission() {
   const t = useT()
   const [overview, setOverview] = useState<CommissionOverview | null>(null)
   const [settlements, setSettlements] = useState<CommissionSettlementRow[]>([])
+  // settlement_id → Summe nachträglicher Retouren (nach dem Einfrieren erfasst).
+  const [lateFlags, setLateFlags] = useState<Map<string, number>>(new Map())
   const [seasons, setSeasons] = useState<Season[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +77,18 @@ export default function Commission() {
       setRateInput(String(ov.ratePercent))
       setSettlements(st)
       setSeasons(seas)
+      // Nachträgliche Retouren je Abrechnung (Hinweis-Badge; ändert nichts).
+      setLateFlags(
+        await getLateReturnFlags(
+          st.map((s) => ({
+            id: s.id,
+            season_id: s.season_id,
+            period_from: s.period_from,
+            period_to: s.period_to,
+            created_at: s.created_at,
+          })),
+        ).catch(() => new Map<string, number>()),
+      )
     } catch {
       setError(t('commission.loadError'))
     } finally {
@@ -154,7 +169,7 @@ export default function Commission() {
         <p className="mt-1 text-sm text-muted">{t('commission.subtitle')}</p>
       </div>
 
-      {/* Retouren/Gutschriften-Hinweis: gilt für ALLE Provisionszahlen hier. */}
+      {/* Retouren-Hinweis: erklärt, wie Retouren in die Zahlen einfließen. */}
       <div className="mb-6 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-muted">
         {t('commission.returnsNotice')}
       </div>
@@ -213,6 +228,9 @@ export default function Commission() {
                       {t('commission.actualBase')}
                     </th>
                     <th className="px-4 py-3 text-right font-medium">
+                      {t('commission.deductions')}
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium">
                       {t('commission.actualCommission')}
                     </th>
                   </tr>
@@ -245,14 +263,17 @@ export default function Commission() {
                         <td className="px-4 py-3 text-right whitespace-nowrap text-muted">
                           {formatEUR(s.actualBase)}
                         </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap text-muted">
+                          {s.deductions > 0 ? `− ${formatEUR(s.deductions)}` : '—'}
+                        </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
-                          {formatEUR((s.actualBase * rate) / 100)}
+                          {formatEUR(((s.actualBase - s.deductions) * rate) / 100)}
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr className="border-t-[0.5px] border-line bg-surface">
-                      <td colSpan={3} className="px-4 py-6 text-center text-muted">
+                      <td colSpan={4} className="px-4 py-6 text-center text-muted">
                         {t('commission.noSeasons')}
                       </td>
                     </tr>
@@ -343,6 +364,9 @@ export default function Commission() {
                         {t('commission.rateColumn')}
                       </th>
                       <th className="px-4 py-3 text-right font-medium">
+                        {t('commission.deductions')}
+                      </th>
+                      <th className="px-4 py-3 text-right font-medium">
                         {t('commission.base')}
                       </th>
                       <th className="px-4 py-3 text-right font-medium">
@@ -359,12 +383,25 @@ export default function Commission() {
                       >
                         <td className="px-4 py-3 font-medium">
                           {s.season?.label ?? '—'}
+                          {lateFlags.has(s.id) && (
+                            <span
+                              className="ml-2 rounded-full border-[0.5px] border-amber-600/60 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"
+                              title={t('commission.lateReturnTitle', {
+                                amount: formatEUR(lateFlags.get(s.id) ?? 0),
+                              })}
+                            >
+                              {t('commission.lateReturn')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-muted">
                           {formatDate(s.period_from)} – {formatDate(s.period_to)}
                         </td>
                         <td className="px-4 py-3 text-right text-muted whitespace-nowrap">
                           {num(s.rate_percent)} %
+                        </td>
+                        <td className="px-4 py-3 text-right text-muted whitespace-nowrap">
+                          {num(s.deductions) > 0 ? `− ${formatEUR(num(s.deductions))}` : '—'}
                         </td>
                         <td className="px-4 py-3 text-right text-muted whitespace-nowrap">
                           {formatEUR(num(s.net_base))}
