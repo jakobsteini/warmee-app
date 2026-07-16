@@ -60,8 +60,36 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
     Übersicht zeigt nur die tatsächliche Provision aus eingegangenen Zahlungen.
 - **Mahnwesen:** `dunning_levels` (konfigurierbare Stufen: Bezeichnung, Tage nach
   Fälligkeit, Gebühr, Inkasso-Flag) und `dunning_history` (welche Stufe wann je
-  Rechnung gesetzt wurde). Scope aktuell: nur Konfiguration + Historie, **kein**
-  Mailversand/PDF (E-Mail/DNS für warm-me.com noch ungeklärt).
+  Rechnung gesetzt wurde). Scope: Konfiguration + Historie + **Inkasso-Stufe**,
+  weiterhin **kein** Mailversand/PDF (E-Mail/DNS für warm-me.com noch ungeklärt).
+  - **Stand ae7680b (2026-07-16) — Inkasso-Übergabe + Benachrichtigung:**
+  - **`dunning_collections`** (neu): Inkasso-Fall als eingefrorener Snapshot
+    (offener Betrag, erreichte Stufe, Bezeichnung, Übergabezeit/-benutzer). Libs:
+    `src/lib/dunningCollections.ts`, Rechenkern `dunningCollectionsCalc.ts`
+    (supabase-frei, `canHandOver`/`lastConfiguredLevel`, getestet).
+  - **Status „Inkasso" ist ABGELEITET**, nicht auf der Rechnung gespeichert: eine
+    Rechnung ist in Inkasso, solange ein `dunning_collections`-Fall mit
+    `status='active'` existiert (kein Eingriff in `invoices.status` — die
+    additive-only-Regel verbietet den CHECK-Constraint-Umbau). Partial-Unique
+    `uq_dunning_collections_active` sichert höchstens einen aktiven Fall je
+    Rechnung. Der Mahnlauf/die Übersicht überspringt Fälle in Inkasso.
+  - **Übergabe:** Button erst ab der **letzten konfigurierten Stufe**, Bestätigungs-
+    dialog mit Händler/Rechnung/offenem Betrag. **Rücknahme** („Inkasso zurück-
+    ziehen") mit **Pflichtfeld Grund**: **kein Löschen** — `status='withdrawn'` +
+    Grund/Benutzer, der Vorgang bleibt Historie, der Status geht (abgeleitet) auf
+    die vorherige Mahnstufe zurück. `Inkasso`-Badge (rot) in Mahnliste, Händler-
+    und Kundendetail; Inkasso-Historie im Händlerdetail.
+  - **`notifications`** (neu, org-scoped RLS): `type/title/body/link/read_at/
+    created_at` + `channel`/`sent_at` als **Vorrüstung** für späteren Mailversand
+    (aktuell nur `in_app`, `sent_at` ungenutzt → andockbar ohne Migration). Lib
+    `src/lib/notifications.ts`. Übergabe **und** Rücknahme lösen je eine
+    In-App-Benachrichtigung aus.
+  - **Kopfleiste mit Glocke:** Es gab vorher **keinen Header** — die App war reine
+    Sidebar. `NotificationBell` sitzt in einer neuen schlanken Kopfleiste oben im
+    `<main>` (Ungelesen-Zähler + Dropdown, Klick markiert gelesen + springt zum
+    Vorgang). Die Leiste liegt **im scrollenden `<main>` und ist NICHT `sticky`** —
+    sie scrollt mit dem Content weg. Auf sticky umstellen bräuchte `sticky top-0`
+    + eigenen Hintergrund + z-index (bewusst offen gelassen).
 - **Wareneingang** (Abschnitt 4): `goods_receipts` (Kopf, **mehrere je
   Produktionsbestellung** → Teillieferungen) + `goods_receipt_items` (reale
   Eingangsmenge je Nepal-Position, Anker `production_order_item_id`). Erfassen +
