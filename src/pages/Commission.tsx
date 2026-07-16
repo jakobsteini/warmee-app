@@ -210,12 +210,6 @@ export default function Commission() {
                   <tr>
                     <th className="px-4 py-3 font-medium">{t('common.season')}</th>
                     <th className="px-4 py-3 text-right font-medium">
-                      {t('commission.advanceBase')}
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium">
-                      {t('commission.advanceCommission')}
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium">
                       {t('commission.actualBase')}
                     </th>
                     <th className="px-4 py-3 text-right font-medium">
@@ -237,22 +231,16 @@ export default function Commission() {
                               {t('dealers.priority.current')}
                             </span>
                           )}
-                          {s.unattributedCount > 0 && (
+                          {s.paymentsWithoutOrder > 0 && (
                             <span
-                              className="ml-2 rounded-full border-[0.5px] border-line px-2 py-0.5 text-[11px] text-red-700"
-                              title={t('commission.unattributedTitle')}
+                              className="ml-2 rounded-full border-[0.5px] border-amber-600/60 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"
+                              title={t('commission.noOrderTitle')}
                             >
-                              {t('commission.unattributed', {
-                                count: s.unattributedCount,
+                              {t('commission.noOrder', {
+                                count: s.paymentsWithoutOrder,
                               })}
                             </span>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap text-muted">
-                          {formatEUR(s.advanceBase)}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          {formatEUR((s.advanceBase * rate) / 100)}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap text-muted">
                           {formatEUR(s.actualBase)}
@@ -264,7 +252,7 @@ export default function Commission() {
                     ))
                   ) : (
                     <tr className="border-t-[0.5px] border-line bg-surface">
-                      <td colSpan={5} className="px-4 py-6 text-center text-muted">
+                      <td colSpan={3} className="px-4 py-6 text-center text-muted">
                         {t('commission.noSeasons')}
                       </td>
                     </tr>

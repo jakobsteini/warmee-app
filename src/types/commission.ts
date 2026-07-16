@@ -35,15 +35,14 @@ export interface SeasonCommission {
   season_id: string
   season_label: string
   is_active: boolean
-  /** Ordervolumen der Agentin aus bestätigten Orders (Vorab-Basis). */
-  advanceBase: number
-  /** Tatsächlich eingegangene, eindeutig der Agentin zugeordnete Zahlungen. */
+  /** Tatsächlich eingegangene, der Agentin zugeordnete Zahlungen. Bei
+   *  gemischter Zuteilung (agent + internal in Händler/Saison) bekommt die
+   *  Agentin die Provision. */
   actualBase: number
-  /** Bezahlte Rechnungen, die nicht eindeutig zuordenbar waren (gemischte
-   *  Zuteilung in (Händler, Saison) oder keine passende Order). */
-  unattributedCount: number
-  /** True, wenn mindestens eine (Händler, Saison) gemischte Zuteilung hat. */
-  mixed: boolean
+  /** Bezahlte Rechnungen ohne passende bestätigte Order in (Händler, Saison):
+   *  ohne Order gibt es keine Zuteilung, deshalb nicht provisionsberechenbar.
+   *  Datenlage-Hinweis, kein Fehler. */
+  paymentsWithoutOrder: number
 }
 
 /** Ergebnis der Provisionsübersicht. */

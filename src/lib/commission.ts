@@ -1,21 +1,23 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
 import { listSeasons } from './seasons'
+import {
+  agentGetsCommission,
+  buildAssignmentMap,
+  computeCommissionOverview,
+  key,
+  num,
+  type CommissionData,
+  type OrderForCalc,
+  type PaidInvoice,
+} from './commissionCalc'
 import type {
   CommissionOverview,
   CommissionSettlementRow,
-  SeasonCommission,
 } from '../types/commission'
 
 /** Standardrate, falls (noch) keine commission_settings-Zeile existiert. */
 const DEFAULT_RATE = 15
-
-/** numeric/number/null robust zu number. */
-function num(v: number | string | null | undefined): number {
-  if (v === null || v === undefined || v === '') return 0
-  const n = typeof v === 'string' ? Number(v) : v
-  return Number.isNaN(n) ? 0 : n
-}
 
 /** Auf zwei Nachkommastellen runden (Geldbetrag). */
 function round2(n: number): number {
@@ -51,48 +53,11 @@ export async function setCommissionRate(percent: number): Promise<void> {
 
 // ─── Datenbeschaffung für die Berechnung ────────────────────────────────────
 
-interface OrderForCalc {
-  dealer_id: string
-  season_id: string
-  assignment: string
-  status: string
-  order_items: { quantity: number; unit_price: number | string | null }[]
-}
-
-interface PaidInvoice {
-  dealer_id: string
-  delivery_id: string | null
-  paid_amount: number | string | null
-  paid_at: string | null
-}
-
-interface CommissionData {
-  orders: OrderForCalc[]
-  /** delivery_id → season_id (über die Produktionsbestellung). */
-  deliverySeason: Map<string, string>
-  paidInvoices: PaidInvoice[]
-}
-
-/** Summe einer Order (Menge × Einzelpreis) über ihre Zeilen. */
-function orderAmount(o: OrderForCalc): number {
-  return o.order_items.reduce(
-    (sum, i) => sum + (i.quantity ?? 0) * num(i.unit_price),
-    0,
-  )
-}
-
-/** Schlüssel (Händler, Saison). */
-function key(dealerId: string, seasonId: string): string {
-  return `${dealerId}|${seasonId}`
-}
-
 async function loadCommissionData(): Promise<CommissionData> {
   const [ordersRes, deliveriesRes, invoicesRes] = await Promise.all([
     supabase
       .from('orders')
-      .select(
-        'dealer_id, season_id, assignment, status, order_items(quantity, unit_price)',
-      ),
+      .select('dealer_id, season_id, assignment, status'),
     supabase
       .from('deliveries')
       .select('id, production_order:production_orders(season_id)'),
@@ -125,24 +90,7 @@ async function loadCommissionData(): Promise<CommissionData> {
   }
 }
 
-/**
- * Zuteilung je (Händler, Saison) aus den BESTÄTIGTEN Orders. Eine Menge, damit
- * gemischte Zuteilungen (agent + internal in derselben (Händler, Saison))
- * erkennbar sind.
- */
-function buildAssignmentMap(orders: OrderForCalc[]): Map<string, Set<string>> {
-  const map = new Map<string, Set<string>>()
-  for (const o of orders) {
-    if (o.status !== 'confirmed') continue
-    const k = key(o.dealer_id, o.season_id)
-    const set = map.get(k) ?? new Set<string>()
-    set.add(o.assignment)
-    map.set(k, set)
-  }
-  return map
-}
-
-// ─── Übersicht (Vorab vs. tatsächlich eingegangen) ──────────────────────────
+// ─── Übersicht (tatsächlich eingegangene Provision) ─────────────────────────
 
 export async function getCommissionOverview(): Promise<CommissionOverview> {
   const [ratePercent, seasons, data] = await Promise.all([
@@ -150,56 +98,7 @@ export async function getCommissionOverview(): Promise<CommissionOverview> {
     listSeasons(),
     loadCommissionData(),
   ])
-
-  const assignmentMap = buildAssignmentMap(data.orders)
-
-  const byId = new Map<string, SeasonCommission>()
-  for (const s of seasons) {
-    byId.set(s.id, {
-      season_id: s.id,
-      season_label: s.label,
-      is_active: !!s.is_active,
-      advanceBase: 0,
-      actualBase: 0,
-      unattributedCount: 0,
-      mixed: false,
-    })
-  }
-
-  // Vorab-Basis: Agent-Ordervolumen aus bestätigten Orders je Saison.
-  for (const o of data.orders) {
-    if (o.status !== 'confirmed' || o.assignment !== 'agent') continue
-    const row = byId.get(o.season_id)
-    if (row) row.advanceBase += orderAmount(o)
-  }
-
-  // Ist-Basis: eingegangene Zahlungen, attribuiert über (Händler, Saison).
-  for (const inv of data.paidInvoices) {
-    const seasonId = inv.delivery_id
-      ? data.deliverySeason.get(inv.delivery_id)
-      : undefined
-    if (!seasonId) continue // freie Rechnung / kein Saison-Bezug → nicht zuordenbar
-    const row = byId.get(seasonId)
-    if (!row) continue
-    const set = assignmentMap.get(key(inv.dealer_id, seasonId))
-    const paid = num(inv.paid_amount)
-    if (!set || set.size === 0) {
-      row.unattributedCount += 1
-    } else if (set.size === 1 && set.has('agent')) {
-      row.actualBase += paid
-    } else if (set.size === 1 && set.has('internal')) {
-      // intern → keine Provision, keine Warnung
-    } else {
-      row.mixed = true
-      row.unattributedCount += 1
-    }
-  }
-
-  // Aktive Saison zuerst, dann übrige.
-  const rows = [...byId.values()].sort(
-    (a, b) => Number(b.is_active) - Number(a.is_active),
-  )
-  return { ratePercent, seasons: rows }
+  return computeCommissionOverview(data, seasons, ratePercent)
 }
 
 // ─── Abrechnungen (eingefrorenes Dokument) ──────────────────────────────────
@@ -246,7 +145,7 @@ export async function createSettlement(
     if (seasonId !== input.season_id) continue
     if (inv.paid_at < input.period_from || inv.paid_at > input.period_to) continue
     const set = assignmentMap.get(key(inv.dealer_id, seasonId))
-    if (set && set.size === 1 && set.has('agent')) {
+    if (agentGetsCommission(set)) {
       gross += num(inv.paid_amount)
     }
   }
