@@ -7,6 +7,7 @@ import {
   type ExistingReturn,
   type ReturnableItem,
 } from './returnsCalc'
+import { VAT_RATE } from './tax'
 import type { InvoiceItem } from '../types/invoice'
 import type {
   Return,
@@ -153,7 +154,9 @@ export async function createReturn(input: CreateReturnInput): Promise<Return> {
     }
   })
 
-  const total_amount = returnTotal(
+  // Netto/USt/Brutto wie die Rechnung (Satz zentral aus tax.ts), als Snapshot
+  // eingefroren. total_amount ist BRUTTO.
+  const amounts = returnTotal(
     itemRows.map((r) => ({ quantity: r.quantity, unit_price: r.unit_price })),
   )
 
@@ -165,7 +168,10 @@ export async function createReturn(input: CreateReturnInput): Promise<Return> {
       dealer_id: (invoice as { dealer_id: string }).dealer_id,
       return_date: input.return_date,
       reason: input.reason ?? null,
-      total_amount,
+      subtotal_net: amounts.net,
+      tax_rate: VAT_RATE,
+      tax_amount: amounts.tax,
+      total_amount: amounts.gross,
       status: 'recorded',
       created_by,
     })

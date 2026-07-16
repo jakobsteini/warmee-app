@@ -11,7 +11,13 @@ export interface Return {
   dealer_id: string
   return_date: string
   reason: string | null
-  /** Eingefrorene Gutschrift-Summe; numeric(10,2). */
+  /** Eingefrorene Nettosumme der Positionen; numeric(10,2). */
+  subtotal_net: number | string
+  /** Eingefrorener Steuersatz als Faktor (0.20); numeric(5,2). */
+  tax_rate: number | string
+  /** Eingefrorene ausgewiesene USt; numeric(10,2). */
+  tax_amount: number | string
+  /** Eingefrorene Gutschrift-Summe BRUTTO (Netto + USt); numeric(10,2). */
   total_amount: number | string
   status: ReturnStatus
   cancelled_at: string | null

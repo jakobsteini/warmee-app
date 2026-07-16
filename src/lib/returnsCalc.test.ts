@@ -71,16 +71,27 @@ test('remainingReturnable clampt bei 0 (kein negativer Rest)', () => {
   assert.equal(rem.get('B'), 0)
 })
 
-test('returnTotal: Menge × Preis, robust gegen numeric-Strings', () => {
-  assert.equal(returnTotal([{ quantity: 3, unit_price: '19.90' }]), 59.7)
-  assert.equal(
+test('returnTotal: Netto/USt/Brutto (20 %), robust gegen numeric-Strings', () => {
+  // 3 × 19,90 = 59,70 netto → 11,94 USt → 71,64 brutto
+  assert.deepEqual(returnTotal([{ quantity: 3, unit_price: '19.90' }]), {
+    net: 59.7,
+    tax: 11.94,
+    gross: 71.64,
+  })
+  // 2 × 10 + 1 × 5,50 = 25,50 netto → 5,10 USt → 30,60 brutto
+  assert.deepEqual(
     returnTotal([
       { quantity: 2, unit_price: 10 },
       { quantity: 1, unit_price: 5.5 },
     ]),
-    25.5,
+    { net: 25.5, tax: 5.1, gross: 30.6 },
   )
-  assert.equal(returnTotal([]), 0)
+  assert.deepEqual(returnTotal([]), { net: 0, tax: 0, gross: 0 })
+})
+
+test('returnTotal: brutto = netto + USt (Rundung auf Cent)', () => {
+  const a = returnTotal([{ quantity: 1, unit_price: '33.33' }])
+  assert.equal(a.gross, Math.round((a.net + a.tax) * 100) / 100)
 })
 
 test('openAfterReturns: offener Rest, nie unter 0', () => {

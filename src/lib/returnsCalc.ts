@@ -3,9 +3,11 @@
 // commissionCalc.ts / dunningCollectionsCalc.ts). Die datenbeschaffenden
 // Funktionen liegen in returns.ts und delegieren die Rechnung hierher.
 //
-// Variante B: Teilretouren je Rechnungsposition. Ein Storno (status='cancelled')
-// zählt nirgends mit — weder bei der noch retournierbaren Menge noch bei den
-// Gutschrift-Summen.
+// Variante B: Teilretouren je Rechnungsposition, mit Steuerausweis Netto/USt/
+// Brutto wie die Rechnung (Satz zentral aus tax.ts via applyVat, nicht
+// hartkodiert). Ein Storno (status='cancelled') zählt nirgends mit — weder bei
+// der noch retournierbaren Menge noch bei den Gutschrift-Summen.
+import { applyVat } from './tax.ts'
 
 export type ReturnStatus = 'recorded' | 'cancelled'
 
@@ -87,12 +89,26 @@ export function canReturnQuantity(remaining: number, requested: number): boolean
   return requested <= remaining
 }
 
-/** Gutschrift-Summe einer Menge Zeilen (Menge × Einzelpreis), auf 2 gerundet. */
+/** Netto/USt/Brutto einer Retoure (wie applyVat auf der Rechnung). */
+export interface ReturnAmounts {
+  /** Nettosumme der Zeilen (Menge × Nettopreis). */
+  net: number
+  /** Ausgewiesene USt auf den Nettobetrag. */
+  tax: number
+  /** Bruttobetrag (Netto + USt) = die Gutschrift-Summe. */
+  gross: number
+}
+
+/**
+ * Gutschrift-Summe einer Menge Zeilen als Netto/USt/Brutto. Die Nettosumme
+ * (Menge × Nettopreis) wird über applyVat mit dem zentralen Satz (tax.ts)
+ * versteuert — derselbe Weg wie bei der Rechnung, kein hartkodierter Satz.
+ */
 export function returnTotal(
   lines: { quantity: number; unit_price: number | string }[],
-): number {
-  const sum = lines.reduce((s, l) => s + l.quantity * num(l.unit_price), 0)
-  return round2(sum)
+): ReturnAmounts {
+  const net = lines.reduce((s, l) => s + l.quantity * num(l.unit_price), 0)
+  return applyVat(net)
 }
 
 /**
