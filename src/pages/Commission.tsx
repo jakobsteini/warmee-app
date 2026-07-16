@@ -259,6 +259,17 @@ export default function Commission() {
                               })}
                             </span>
                           )}
+                          {s.actualBase - s.deductions < 0 && (
+                            <span
+                              className="ml-2 rounded-full border-[0.5px] border-amber-600/60 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"
+                              title={t('commission.negativeBaseTitle', {
+                                received: formatEUR(s.actualBase),
+                                deductions: formatEUR(s.deductions),
+                              })}
+                            >
+                              {t('commission.negativeBase')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap text-muted">
                           {formatEUR(s.actualBase)}
@@ -391,6 +402,17 @@ export default function Commission() {
                               })}
                             >
                               {t('commission.lateReturn')}
+                            </span>
+                          )}
+                          {num(s.net_base) < 0 && (
+                            <span
+                              className="ml-2 rounded-full border-[0.5px] border-amber-600/60 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"
+                              title={t('commission.negativeBaseTitle', {
+                                received: formatEUR(num(s.gross_received)),
+                                deductions: formatEUR(num(s.deductions)),
+                              })}
+                            >
+                              {t('commission.negativeBase')}
                             </span>
                           )}
                         </td>
