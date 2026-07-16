@@ -138,7 +138,7 @@ export default function Dealers() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
@@ -176,11 +176,14 @@ export default function Dealers() {
           {t('dealers.empty')}
         </EmptyState>
       ) : (
-        <div className="overflow-hidden rounded-md border-[0.5px] border-line">
-          <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
+          {/* table-fixed: Spaltenbreiten bestimmen das Layout, nicht der Inhalt.
+              So sprengen lange (umbruchlose) E-Mail-Adressen die Tabelle nicht
+              über den Container hinaus; sie brechen stattdessen um. */}
+          <table className="w-full table-fixed text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">
+                <th className="w-20 px-4 py-3 font-medium">
                   {t('dealers.col.customerNo')}
                 </th>
                 <th className="px-4 py-3 font-medium">{t('common.name')}</th>
@@ -188,13 +191,13 @@ export default function Dealers() {
                   {t('dealers.col.contact')}
                 </th>
                 <th className="px-4 py-3 font-medium">{t('common.email')}</th>
-                <th className="px-4 py-3 font-medium">
+                <th className="w-24 px-4 py-3 font-medium">
                   {t('dealers.col.city')}
                 </th>
-                <th className="px-4 py-3 font-medium">
+                <th className="w-32 px-4 py-3 font-medium">
                   {t('dealers.col.credit')}
                 </th>
-                <th className="px-4 py-3" />
+                <th className="w-44 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -203,19 +206,25 @@ export default function Dealers() {
                   key={d.id}
                   className="border-t-[0.5px] border-line bg-surface text-ink"
                 >
-                  <td className="px-4 py-3 text-muted tabular-nums">
+                  <td className="px-4 py-3 align-top text-muted tabular-nums">
                     {d.kundennummer ?? '—'}
                   </td>
-                  <td className="px-4 py-3 font-medium">{d.name}</td>
-                  <td className="px-4 py-3 text-muted">{d.contact_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted">{d.email ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted">
+                  <td className="px-4 py-3 align-top font-medium break-words">
+                    {d.name}
+                  </td>
+                  <td className="px-4 py-3 align-top text-muted break-words">
+                    {d.contact_name ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 align-top text-muted break-words">
+                    {d.email ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 align-top text-muted break-words">
                     {[d.city, d.country].filter(Boolean).join(', ') || '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 align-top">
                     <CreditBadge credit={credits.get(d.id)} />
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <td className="px-4 py-3 text-right align-top whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => openEdit(d)}
