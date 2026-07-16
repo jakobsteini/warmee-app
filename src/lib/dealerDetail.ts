@@ -1,7 +1,7 @@
 import { getDealer } from './dealers'
 import { listOrders } from './orders'
 import { listInvoices } from './invoices'
-import { listOpenPayments } from './openPayments'
+import { listOpenPayments, type OpenPaymentRow } from './openPayments'
 import { listDeliveries } from './deliveries'
 import { listDealerEmails } from './dealerEmails'
 import { listDealerPriorities } from './dealerPriorities'
@@ -31,7 +31,7 @@ import type { DunningLevel, DunningCollection } from '../types/dunning'
 
 /** Eine offene (versendete) Rechnung des Händlers mit Überfälligkeit + Stufe. */
 export interface DealerOpenItem {
-  invoice: InvoiceListRow
+  invoice: OpenPaymentRow
   /** Fälligkeitsdatum (ISO) laut gemeinsamer dueDates-Logik. */
   faelligIso: string | null
   /** Tage überfällig (> 0) oder null, wenn (noch) nicht überfällig. */

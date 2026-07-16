@@ -1,21 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listOpenPayments } from '../lib/openPayments'
+import { listOpenPayments, type OpenPaymentRow } from '../lib/openPayments'
 import { markInvoicePaid } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { faelligkeitIso, isOverdue, daysOverdue } from '../lib/dueDates'
-import type { InvoiceListRow } from '../types/invoice'
 import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
 import MarkPaidDialog from '../components/MarkPaidDialog'
 import ExportButtons from '../components/ExportButtons'
 import { useT } from '../i18n'
-
-/** numeric/number robust zu number. */
-function num(v: number | string | null): number {
-  if (v === null || v === '') return 0
-  const n = typeof v === 'string' ? Number(v) : v
-  return Number.isNaN(n) ? 0 : n
-}
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
 function formatDate(iso: string | null): string {
@@ -28,13 +20,13 @@ function formatDate(iso: string | null): string {
 }
 
 /** Spalten für den Offene-Posten-Export (deutsche Überschriften). */
-const OPEN_PAYMENT_EXPORT_COLUMNS: ExportColumn<InvoiceListRow>[] = [
+const OPEN_PAYMENT_EXPORT_COLUMNS: ExportColumn<OpenPaymentRow>[] = [
   { header: 'Rechnungsnummer', value: (r) => r.invoice_number },
   { header: 'Händler', value: (r) => r.dealer?.name ?? '' },
   { header: 'Rechnungsdatum', value: (r) => formatDateDE(r.invoice_date) },
   { header: 'Fällig am', value: (r) => formatDateDE(faelligkeitIso(r)) },
   { header: 'Status', value: (r) => (isOverdue(r) ? 'Überfällig' : 'Offen') },
-  { header: 'Offener Betrag', value: (r) => numify(r.total) },
+  { header: 'Offener Betrag', value: (r) => numify(r.open_amount) },
   { header: 'Tage überfällig', value: (r) => daysOverdue(r) },
 ]
 
@@ -42,11 +34,11 @@ type Filter = 'all' | 'overdue'
 
 export default function OpenPayments() {
   const t = useT()
-  const [rows, setRows] = useState<InvoiceListRow[]>([])
+  const [rows, setRows] = useState<OpenPaymentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
-  const [payRow, setPayRow] = useState<InvoiceListRow | null>(null)
+  const [payRow, setPayRow] = useState<OpenPaymentRow | null>(null)
 
   async function load() {
     setLoading(true)
@@ -74,13 +66,14 @@ export default function OpenPayments() {
     setPayRow(null)
   }
 
-  // Summen über alle offenen Posten (unabhängig vom Filter).
+  // Summen über alle offenen Posten (unabhängig vom Filter) — offener Rest
+  // (brutto, Retouren gemindert), nicht der volle Rechnungsbetrag.
   const totalOpen = useMemo(
-    () => rows.reduce((s, r) => s + num(r.total), 0),
+    () => rows.reduce((s, r) => s + r.open_amount, 0),
     [rows],
   )
   const totalOverdue = useMemo(
-    () => rows.filter((r) => isOverdue(r)).reduce((s, r) => s + num(r.total), 0),
+    () => rows.filter((r) => isOverdue(r)).reduce((s, r) => s + r.open_amount, 0),
     [rows],
   )
 
@@ -225,7 +218,7 @@ export default function OpenPayments() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {formatEUR(r.total)}
+                        {formatEUR(r.open_amount)}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button
@@ -264,7 +257,7 @@ export default function OpenPayments() {
       {payRow && (
         <MarkPaidDialog
           invoiceNumber={payRow.invoice_number}
-          defaultAmount={num(payRow.total)}
+          defaultAmount={payRow.open_amount}
           onConfirm={handleMarkPaid}
           onClose={() => setPayRow(null)}
         />

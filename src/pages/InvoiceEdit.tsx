@@ -15,6 +15,7 @@ import {
   createReturn,
   cancelReturn,
 } from '../lib/returns'
+import { openAfterReturns } from '../lib/returnsCalc'
 import type { InvoiceReturnContext, ReturnWithItems } from '../types/return'
 import MarkPaidDialog from '../components/MarkPaidDialog'
 import {
@@ -189,6 +190,12 @@ export default function InvoiceEdit() {
   const hasReturnable =
     returnsCtx?.lines.some((l) => l.remaining_quantity > 0) ?? false
   const canReturn = (isPaid || invoice.status === 'sent') && hasReturnable
+  // Offener Rest = Rechnungsbrutto − recorded Retouren (zentral über
+  // openAfterReturns, wie in der Offene-Posten-Liste). Vorbelegung für die
+  // Zahlungserfassung — bei Teilretoure ist der volle Rechnungsbetrag falsch.
+  const recordedReturnsGross = returns
+    .filter((r) => r.status === 'recorded')
+    .reduce((s, r) => s + (Number(r.total_amount) || 0), 0)
 
   // Zahlungskonditionen (WARM-ME-Standard, bis der Händler-Import die Felder
   // befüllt) — nur Anzeige, spiegelt die Skonto-Zeile der Rechnungs-PDF.
@@ -485,7 +492,7 @@ export default function InvoiceEdit() {
       {payOpen && (
         <MarkPaidDialog
           invoiceNumber={invoice.invoice_number}
-          defaultAmount={totalNum}
+          defaultAmount={openAfterReturns(totalNum, recordedReturnsGross)}
           onConfirm={handleMarkPaid}
           onClose={() => setPayOpen(false)}
         />

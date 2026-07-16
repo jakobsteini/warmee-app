@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { formatEUR } from './money'
 import { faelligkeitIso, todayIso } from './dueDates'
+import { openAfterReturns } from './returnsCalc'
+import { recordedReturnsByInvoice } from './returns'
 
 // ============================================================================
 // Bonitäts-Bewertung je Händler — rein aus den EIGENEN Zahlungsdaten abgeleitet
@@ -73,6 +75,8 @@ interface NormInvoice {
   dealer_id: string
   status: string
   total: number
+  /** Summe der (recorded) Retouren-Gutschriften dieser Rechnung, BRUTTO. */
+  returnsTotal: number
   /** Fälligkeit: due_date, sonst invoice_date + zahlungsziel_tage (Fallback Standard). */
   dueIso: string | null
   /** Zahlungsdatum, falls bezahlt. */
@@ -81,6 +85,7 @@ interface NormInvoice {
 
 /** Rohzeile aus der Rechnungs-Abfrage (mit Händler-Zahlungsziel). */
 interface RawInvoice {
+  id: string
   dealer_id: string
   status: string
   total: number | string | null
@@ -90,11 +95,12 @@ interface RawInvoice {
   dealer: { zahlungsziel_tage: number | null } | null
 }
 
-function normalize(row: RawInvoice): NormInvoice {
+function normalize(row: RawInvoice, returnsByInvoice: Map<string, number>): NormInvoice {
   return {
     dealer_id: row.dealer_id,
     status: row.status,
     total: num(row.total),
+    returnsTotal: returnsByInvoice.get(row.id) ?? 0,
     // Fälligkeit über die gemeinsame Logik (dueDates): due_date, sonst
     // invoice_date + Händler-Zahlungsziel. Identisch zur Offene-Posten-Liste.
     dueIso: faelligkeitIso(row),
@@ -103,19 +109,25 @@ function normalize(row: RawInvoice): NormInvoice {
 }
 
 /**
- * Aktive (nicht stornierte) Rechnungen laden, normalisiert. Read-only,
- * org-scoped über RLS. Mit `*` statt expliziter Spaltenliste, damit die Abfrage
- * auch dann trägt, falls die paid_at-Migration noch nicht eingespielt ist
- * (fehlende Spalte → undefined → als „nicht bezahlt" behandelt).
+ * Aktive (nicht stornierte) Rechnungen laden, normalisiert, samt Retouren-Summe
+ * je Rechnung (recordedReturnsByInvoice — dieselbe Quelle wie die offene-Posten-
+ * Liste). Read-only, org-scoped über RLS. Mit `*` statt expliziter Spaltenliste,
+ * damit die Abfrage auch dann trägt, falls die paid_at-Migration noch nicht
+ * eingespielt ist (fehlende Spalte → undefined → als „nicht bezahlt").
  */
 async function loadActiveInvoices(): Promise<NormInvoice[]> {
-  const { data, error } = await supabase
-    .from('invoices')
-    .select('*, dealer:dealers(zahlungsziel_tage)')
-    .neq('status', 'cancelled')
+  const [invoicesRes, returnsByInvoice] = await Promise.all([
+    supabase
+      .from('invoices')
+      .select('*, dealer:dealers(zahlungsziel_tage)')
+      .neq('status', 'cancelled'),
+    recordedReturnsByInvoice(),
+  ])
 
-  if (error) throw error
-  return ((data ?? []) as unknown as RawInvoice[]).map(normalize)
+  if (invoicesRes.error) throw invoicesRes.error
+  return ((invoicesRes.data ?? []) as unknown as RawInvoice[]).map((row) =>
+    normalize(row, returnsByInvoice),
+  )
 }
 
 interface Summary {
@@ -137,10 +149,16 @@ function summarize(rows: NormInvoice[], today: string): Summary {
 
   for (const r of rows) {
     if (r.status === 'sent') {
-      openAmount += r.total
-      if (r.dueIso && r.dueIso < today) {
-        overdueAmount += r.total
-        overdueCount += 1
+      // Offener Rest = Rechnungsbrutto − recorded Retouren (zentral in
+      // returnsCalc.openAfterReturns, nie unter 0). Voll gutgeschriebene
+      // Rechnungen (Rest 0) zählen weder offen noch überfällig.
+      const open = openAfterReturns(r.total, r.returnsTotal)
+      if (open > 0) {
+        openAmount += open
+        if (r.dueIso && r.dueIso < today) {
+          overdueAmount += open
+          overdueCount += 1
+        }
       }
     } else if (r.status === 'paid') {
       paidCount += 1

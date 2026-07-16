@@ -339,7 +339,7 @@ export default function DealerDetail() {
                   </td>
                   <td className={`${tdClass} text-muted`}>{fmtDate(it.faelligIso)}</td>
                   <td className={`${tdClass} text-right tabular-nums`}>
-                    {formatEUR(it.invoice.total)}
+                    {formatEUR(it.invoice.open_amount)}
                   </td>
                   <td className={tdClass}>
                     {it.daysOverdue !== null ? (

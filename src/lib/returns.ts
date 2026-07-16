@@ -26,6 +26,29 @@ import type {
 // KEINE Andockung an offene Posten oder deductions in diesem Modul.
 // ============================================================================
 
+/**
+ * Je Rechnung die Summe der (recorded) Retouren-Gutschriften, BRUTTO
+ * (return.total_amount). Storno (status='cancelled') zählt nicht. Read-only,
+ * org-scoped über RLS. Die EINE Datenquelle für die Retouren-Minderung der
+ * offenen Posten (creditRating + openPayments). Weich: bei Fehler leere Map,
+ * damit die offenen Posten schlicht ungemindert bleiben statt zu brechen.
+ */
+export async function recordedReturnsByInvoice(): Promise<Map<string, number>> {
+  const map = new Map<string, number>()
+  const { data, error } = await supabase
+    .from('returns')
+    .select('invoice_id, total_amount')
+    .eq('status', 'recorded')
+  if (error) return map
+  for (const r of (data ?? []) as {
+    invoice_id: string
+    total_amount: number | string
+  }[]) {
+    map.set(r.invoice_id, (map.get(r.invoice_id) ?? 0) + (Number(r.total_amount) || 0))
+  }
+  return map
+}
+
 /** Alle Retouren-Vorgänge einer Rechnung inkl. Positionen, neueste zuerst. */
 export async function listReturnsByInvoice(
   invoiceId: string,

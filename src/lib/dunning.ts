@@ -138,7 +138,9 @@ export async function listOverdueWithLevels(): Promise<OverdueDossier> {
         dealer_id: inv.dealer_id,
         dealer_name: inv.dealer?.name ?? null,
         total,
-        open_amount: total - num(inv.paid_amount),
+        // Offener Rest brutto = total − recorded Retouren (aus listOpenPayments,
+        // zentral). Für 'sent' ohne Teilzahlung entspricht das total − Retouren.
+        open_amount: inv.open_amount,
         faellig_iso: faelligkeitIso(inv),
         days_overdue: days,
         level: reachedLevel(days, levels),

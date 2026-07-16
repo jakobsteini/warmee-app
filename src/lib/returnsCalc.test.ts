@@ -99,3 +99,20 @@ test('openAfterReturns: offener Rest, nie unter 0', () => {
   assert.equal(openAfterReturns(100, 100), 0) // voll gutgeschrieben
   assert.equal(openAfterReturns(100, 140), 0) // clamp, kein Negativbetrag
 })
+
+test('offener Rest (Modul 3): Rechnungsbrutto − Σ Retouren-Brutto', () => {
+  // Rechnung brutto 238,80. Retoure 3 × 19,90 netto → 71,64 brutto.
+  const r1 = returnTotal([{ quantity: 3, unit_price: '19.90' }]).gross
+  assert.equal(r1, 71.64)
+  assert.equal(openAfterReturns('238.80', r1), 167.16)
+
+  // Zweite Retoure 2 × 10 netto → 24,00 brutto; Summe der recorded Retouren.
+  const r2 = returnTotal([{ quantity: 2, unit_price: 10 }]).gross
+  assert.equal(r2, 24)
+  assert.equal(openAfterReturns('238.80', r1 + r2), 143.16)
+})
+
+test('offener Rest (Modul 3): voll retourniert → 0 (wird ausgeblendet)', () => {
+  const gross = returnTotal([{ quantity: 5, unit_price: '19.90' }]).gross // 119,40
+  assert.equal(openAfterReturns('119.40', gross), 0)
+})
