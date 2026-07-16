@@ -43,6 +43,21 @@ Sie sieht keine Rechnungen, keine Produktions-Bestellung, keine anderen Kunden.
   und `commission_settlements` (Abrechnung als eingefrorenes Dokument). Provision
   basiert auf der **Zuteilung je Order** (`orders.assignment`), NICHT auf dem
   Händlerland, und auf dem **tatsächlich eingegangenen Betrag** (`invoices.paid_amount`).
+  - **Stand ec3370f (2026-07-16):** Die Provisionsregel lebt zentral in
+    `src/lib/commissionCalc.ts` (`agentGetsCommission`) — Änderungen an der Regel
+    **nur dort**; Übersicht und Abrechnung nutzen dieselbe Funktion.
+  - **Regel:** Aggregation je **(Händler, Saison)** aus den bestätigten Orders.
+    Enthält die Zuteilung `'agent'` (reine Agent- **oder** gemischte Zuteilung
+    agent + internal), zählt der **volle eingegangene Betrag** des Händlers zur
+    Provision der Agentin — **auch der Anteil aus internen Orders** (Kundenentscheidung
+    Theresa). Nur-internal = provisionsfrei.
+  - **Zahlung ohne bestätigte Order** in (Händler, Saison): keine Zuteilung
+    ableitbar → **amber-Badge** „Zahlung ohne Order" (Datenlage-Hinweis, kein Fehler),
+    zählt **nicht** zur Provision. Freie Rechnungen ohne Saisonbezug bleiben still
+    unberücksichtigt.
+  - **Vorabprovision (Vorschau aus bestätigten Orders) gibt es nicht mehr** —
+    ersatzlos entfernt (war nie persistiert, kein DB-Teil überflüssig). Die
+    Übersicht zeigt nur die tatsächliche Provision aus eingegangenen Zahlungen.
 - **Mahnwesen:** `dunning_levels` (konfigurierbare Stufen: Bezeichnung, Tage nach
   Fälligkeit, Gebühr, Inkasso-Flag) und `dunning_history` (welche Stufe wann je
   Rechnung gesetzt wurde). Scope aktuell: nur Konfiguration + Historie, **kein**
@@ -170,6 +185,15 @@ zu schreiben: nur `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS` /
 kein RENAME, kein Typwechsel an bestehenden Spalten — die Echtdaten (128 Händler,
 48 Artikel in Saison SS27) müssen gültig bleiben. Jede neue Tabelle bekommt `org_id` + dieselben
 RLS-Policies wie der Rest (`org_id = auth_org_id()`).
+
+### Rechenkerne supabase-frei halten (testbar unter `node --test`)
+Reine Berechnungslogik gehört in ein **Modul ohne Supabase-Import**, damit sie
+unter `node --test` (kein Vite, kein `import.meta.env`) importierbar ist —
+`src/lib/supabase.ts` wirft schon beim Laden, wenn die `VITE_*`-Env fehlt. Muster:
+die datenbeschaffende Funktion lädt und **delegiert** an den reinen Kern, der Kern
+bekommt seine Eingaben als Argumente. Beispiele: `src/lib/itemKey.ts` (neutraler
+Positions-Schlüssel), `src/lib/commissionCalc.ts` (Provisions-Rechenkern, u. a.
+`agentGetsCommission` / `computeCommissionOverview`) mit `commissionCalc.test.ts`.
 
 ### Newsletter-Assets → Bucket `newsletter-assets`, nicht Mailchimp
 Die konstanten Marken-Grafiken (Header-Headline, Showroom-Promo, Werte-Badges)
