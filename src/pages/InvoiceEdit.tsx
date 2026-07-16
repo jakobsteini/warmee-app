@@ -10,7 +10,17 @@ import {
 } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { type InvoiceWithItems } from '../types/invoice'
+import {
+  loadInvoiceReturnContext,
+  createReturn,
+  cancelReturn,
+} from '../lib/returns'
+import type { InvoiceReturnContext, ReturnWithItems } from '../types/return'
 import MarkPaidDialog from '../components/MarkPaidDialog'
+import {
+  ReturnCaptureDialog,
+  CancelReturnDialog,
+} from '../components/ReturnDialog'
 import {
   VAT_RATE_PERCENT,
   computeSkonto,
@@ -44,18 +54,32 @@ export default function InvoiceEdit() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [payOpen, setPayOpen] = useState(false)
+  const [returnsCtx, setReturnsCtx] = useState<InvoiceReturnContext | null>(null)
+  const [returnOpen, setReturnOpen] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<ReturnWithItems | null>(null)
 
   async function load() {
     if (!id) return
     setLoading(true)
     setError(null)
     try {
-      setInvoice(await getInvoice(id))
+      const [inv, ctx] = await Promise.all([
+        getInvoice(id),
+        loadInvoiceReturnContext(id).catch(() => null),
+      ])
+      setInvoice(inv)
+      setReturnsCtx(ctx)
     } catch {
       setError(t('invoiceEdit.loadError'))
     } finally {
       setLoading(false)
     }
+  }
+
+  /** Retouren-Kontext nach einer Änderung neu laden (Restmengen + Liste). */
+  async function reloadReturns() {
+    if (!id) return
+    setReturnsCtx(await loadInvoiceReturnContext(id).catch(() => null))
   }
 
   useEffect(() => {
@@ -123,6 +147,24 @@ export default function InvoiceEdit() {
     }
   }
 
+  async function handleCreateReturn(payload: {
+    lines: { invoice_item_id: string; quantity: number }[]
+    return_date: string
+    reason: string | null
+  }) {
+    if (!invoice) return
+    await createReturn({ invoice_id: invoice.id, ...payload })
+    await reloadReturns()
+    setReturnOpen(false)
+  }
+
+  async function handleCancelReturn(reason: string) {
+    if (!cancelTarget) return
+    await cancelReturn(cancelTarget.id, reason)
+    await reloadReturns()
+    setCancelTarget(null)
+  }
+
   if (loading) return <p className="text-sm text-muted">{t('common.loading')}</p>
   if (!invoice)
     return (
@@ -141,6 +183,12 @@ export default function InvoiceEdit() {
   const canSend = invoice.status === 'draft'
   const canPay = invoice.status === 'sent'
   const canCancel = invoice.status === 'draft' || invoice.status === 'sent'
+  // Retouren gibt es nur zu gelieferter, fakturierter Ware (versendet/bezahlt),
+  // nicht zu Entwürfen oder stornierten Rechnungen.
+  const returns = returnsCtx?.returns ?? []
+  const hasReturnable =
+    returnsCtx?.lines.some((l) => l.remaining_quantity > 0) ?? false
+  const canReturn = (isPaid || invoice.status === 'sent') && hasReturnable
 
   // Zahlungskonditionen (WARM-ME-Standard, bis der Händler-Import die Felder
   // befüllt) — nur Anzeige, spiegelt die Skonto-Zeile der Rechnungs-PDF.
@@ -349,12 +397,114 @@ export default function InvoiceEdit() {
         </>
       )}
 
+      {(returns.length > 0 || canReturn) && (
+        <section className="mt-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-medium text-ink">
+              {t('returns.section')}
+            </h2>
+            {canReturn && (
+              <button
+                type="button"
+                onClick={() => setReturnOpen(true)}
+                className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+              >
+                {t('returns.record')}
+              </button>
+            )}
+          </div>
+
+          {returns.length === 0 ? (
+            <p className="rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-muted">
+              {t('returns.empty')}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {returns.map((r) => {
+                const cancelled = r.status === 'cancelled'
+                return (
+                  <li
+                    key={r.id}
+                    className={`rounded-md border-[0.5px] border-line px-4 py-3 text-sm ${
+                      cancelled ? 'bg-card text-muted' : 'bg-surface text-ink'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span>
+                        {formatDate(r.return_date)} ·{' '}
+                        <span className="font-medium">
+                          {formatEUR(r.total_amount)}
+                        </span>{' '}
+                        ·{' '}
+                        {t(
+                          cancelled
+                            ? 'returns.status.cancelled'
+                            : 'returns.status.recorded',
+                        )}
+                      </span>
+                      {!cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => setCancelTarget(r)}
+                          className="text-red-700 transition-colors hover:text-red-800"
+                        >
+                          {t('returns.cancel')}
+                        </button>
+                      )}
+                    </div>
+                    <ul className="mt-1.5 space-y-0.5 text-xs text-muted">
+                      {r.return_items.map((it) => (
+                        <li key={it.id}>
+                          {t('returns.itemLine', {
+                            color: it.color ?? '—',
+                            size: it.size ?? '—',
+                            quantity: it.quantity,
+                            price: formatEUR(it.unit_price),
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                    {r.reason && !cancelled && (
+                      <p className="mt-1 text-xs text-muted">{r.reason}</p>
+                    )}
+                    {cancelled && r.cancellation_reason && (
+                      <p className="mt-1 text-xs text-muted">
+                        {t('returns.cancelledWithReason', {
+                          reason: r.cancellation_reason,
+                        })}
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
       {payOpen && (
         <MarkPaidDialog
           invoiceNumber={invoice.invoice_number}
           defaultAmount={totalNum}
           onConfirm={handleMarkPaid}
           onClose={() => setPayOpen(false)}
+        />
+      )}
+
+      {returnOpen && returnsCtx && (
+        <ReturnCaptureDialog
+          invoiceNumber={invoice.invoice_number}
+          lines={returnsCtx.lines}
+          onConfirm={handleCreateReturn}
+          onClose={() => setReturnOpen(false)}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelReturnDialog
+          amount={cancelTarget.total_amount}
+          onConfirm={handleCancelReturn}
+          onClose={() => setCancelTarget(null)}
         />
       )}
     </div>
