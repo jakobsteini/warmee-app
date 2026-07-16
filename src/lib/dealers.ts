@@ -13,6 +13,18 @@ export async function listDealers(): Promise<Dealer[]> {
   return data ?? []
 }
 
+/** Einen einzelnen Händler laden (für die Detailseite). */
+export async function getDealer(id: string): Promise<Dealer> {
+  const { data, error } = await supabase
+    .from('dealers')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
 /** Neuen Händler anlegen. org_id wird aus dem Profil ergänzt. */
 export async function createDealer(input: DealerInput): Promise<Dealer> {
   const org_id = await getMyOrgId()

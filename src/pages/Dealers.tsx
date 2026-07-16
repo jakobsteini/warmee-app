@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Dealer } from '../types/dealer'
 import { listDealers, deleteDealer } from '../lib/dealers'
 import { countDealerDocuments } from '../lib/dealerDocuments'
@@ -70,6 +71,7 @@ const DEALER_EXPORT_COLUMNS: ExportColumn<Dealer>[] = [
 
 export default function Dealers() {
   const t = useT()
+  const navigate = useNavigate()
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
   const [seasons, setSeasons] = useState<Season[]>([])
@@ -204,7 +206,8 @@ export default function Dealers() {
               {dealers.map((d) => (
                 <tr
                   key={d.id}
-                  className="border-t-[0.5px] border-line bg-surface text-ink"
+                  onClick={() => navigate(`/dealers/${d.id}`)}
+                  className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                 >
                   <td className="px-4 py-3 align-top text-muted tabular-nums">
                     {d.kundennummer ?? '—'}
@@ -227,14 +230,20 @@ export default function Dealers() {
                   <td className="px-4 py-3 text-right align-top whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => openEdit(d)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEdit(d)
+                      }}
                       className="text-muted transition-colors hover:text-ink"
                     >
                       {t('common.edit')}
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(d)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(d)
+                      }}
                       className="ml-4 text-muted transition-colors hover:text-red-700"
                     >
                       {t('common.delete')}

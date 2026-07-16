@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Dealers from './pages/Dealers'
+import DealerDetail from './pages/DealerDetail'
 import Assets from './pages/Assets'
 import AssetsAssign from './pages/AssetsAssign'
 import Crop from './pages/Crop'
@@ -34,6 +35,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dealers" element={<Dealers />} />
+            <Route path="/dealers/:id" element={<DealerDetail />} />
             <Route path="/assets" element={<Assets />} />
             <Route path="/assets/assign" element={<AssetsAssign />} />
             <Route path="/crop" element={<Crop />} />
