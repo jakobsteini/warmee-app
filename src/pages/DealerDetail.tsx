@@ -412,6 +412,75 @@ export default function DealerDetail() {
         </Section>
       )}
 
+      {/* ── Retouren ── */}
+      <Section title={t('returns.section')} count={data.returns.length}>
+        {data.returns.length === 0 ? (
+          <EmptyRow>{t('returns.empty')}</EmptyRow>
+        ) : (
+          <ul className="divide-y divide-line">
+            {data.returns.map((r) => {
+              const cancelled = r.status === 'cancelled'
+              const invNo =
+                invoiceNumberById.get(r.invoice_id) ?? r.invoice_id.slice(0, 8)
+              return (
+                <li
+                  key={r.id}
+                  className={`px-4 py-3 text-sm ${cancelled ? 'text-muted' : 'text-ink'}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span>{fmtDate(r.return_date)}</span>
+                      <Link
+                        to={`/invoices/${r.invoice_id}`}
+                        className="font-medium underline transition-colors hover:text-ink"
+                      >
+                        {invNo}
+                      </Link>
+                      <span
+                        className={`rounded-full border-[0.5px] px-2.5 py-0.5 text-xs ${
+                          cancelled ? 'border-line text-muted' : 'border-ink text-ink'
+                        }`}
+                      >
+                        {t(
+                          cancelled
+                            ? 'returns.status.cancelled'
+                            : 'returns.status.recorded',
+                        )}
+                      </span>
+                    </span>
+                    <span className="tabular-nums font-medium">
+                      {formatEUR(r.total_amount)}
+                    </span>
+                  </div>
+                  <ul className="mt-1.5 space-y-0.5 text-xs text-muted">
+                    {r.return_items.map((it) => (
+                      <li key={it.id}>
+                        {t('returns.itemLine', {
+                          color: it.color ?? '—',
+                          size: it.size ?? '—',
+                          quantity: it.quantity,
+                          price: formatEUR(it.unit_price),
+                        })}
+                      </li>
+                    ))}
+                  </ul>
+                  {r.reason && !cancelled && (
+                    <p className="mt-1 text-xs text-muted">{r.reason}</p>
+                  )}
+                  {cancelled && r.cancellation_reason && (
+                    <p className="mt-1 text-xs text-muted">
+                      {t('returns.cancelledWithReason', {
+                        reason: r.cancellation_reason,
+                      })}
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Section>
+
       {/* ── Orders ── */}
       <Section title={t('dealerDetail.section.orders')} count={data.orders.length}>
         {data.orders.length === 0 ? (

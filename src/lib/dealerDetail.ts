@@ -9,8 +9,10 @@ import { listDealerDocuments } from './dealerDocuments'
 import { listSeasons } from './seasons'
 import { listDunningLevels, reachedLevel } from './dunning'
 import { listCollections } from './dunningCollections'
+import { listReturnsByDealer } from './returns'
 import { listDealerCredits, type DealerCredit } from './creditRating'
 import { daysOverdue, faelligkeitIso, todayIso } from './dueDates'
+import type { ReturnWithItems } from '../types/return'
 import type { Dealer } from '../types/dealer'
 import type { OrderListRow } from '../types/order'
 import type { InvoiceListRow } from '../types/invoice'
@@ -63,6 +65,8 @@ export interface DealerDetailData {
   documents: DealerDocument[]
   /** Inkasso-Fälle dieses Händlers (aktiv + zurückgezogen), neueste zuerst. */
   collections: DunningCollection[]
+  /** Retouren dieses Händlers (saisonübergreifend), neueste zuerst. */
+  returns: ReturnWithItems[]
   /** Umsatz = Summe der nicht stornierten Rechnungsbeträge dieses Händlers. */
   revenueTotal: number
 }
@@ -94,6 +98,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     seasons,
     levels,
     collections,
+    returns,
   ] = await Promise.all([
     getDealer(id),
     listDealerCredits().catch(() => new Map<string, DealerCredit>()),
@@ -107,6 +112,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     listSeasons().catch(() => []),
     listDunningLevels().catch(() => []),
     listCollections().catch(() => [] as DunningCollection[]),
+    listReturnsByDealer(id).catch(() => [] as ReturnWithItems[]),
   ])
 
   const dealerOrders = orders.filter((o) => o.dealer_id === id)
@@ -171,6 +177,7 @@ export async function loadDealerDetail(id: string): Promise<DealerDetailData> {
     priorities: priorityRows,
     documents,
     collections: dealerCollections,
+    returns,
     revenueTotal,
   }
 }

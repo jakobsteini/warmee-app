@@ -62,6 +62,22 @@ export async function listReturnsByInvoice(
   return (data ?? []) as unknown as ReturnWithItems[]
 }
 
+/**
+ * Alle Retouren-Vorgänge eines Händlers (saisonübergreifend) inkl. Positionen,
+ * neueste zuerst. Für die Kundendetailseite (Read-only, org-scoped über RLS).
+ */
+export async function listReturnsByDealer(
+  dealerId: string,
+): Promise<ReturnWithItems[]> {
+  const { data, error } = await supabase
+    .from('returns')
+    .select('*, return_items(*)')
+    .eq('dealer_id', dealerId)
+    .order('return_date', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as ReturnWithItems[]
+}
+
 /** Rechnungspositionen einer Rechnung (Herkunft der Retouren-Zeilen). */
 async function loadInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
   const { data, error } = await supabase
