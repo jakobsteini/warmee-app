@@ -147,6 +147,43 @@ Kundendetail-KPIs, den Kreditlimit-Kontext und das Dashboard (`getMoneySnapshot`
 `rateDealer` bleibt technisch vorhanden, aber ohne Verbraucher (siehe KONVENTIONEN
 → Bonität).
 
+### Retouren (Variante B) — komplett (Stand 1e95d83, 2026-07-16)
+**Positionsbasierte Retoure/Gutschrift, an der RECHNUNG verankert, OHNE Bestandskonto**
+(die Ware ist mit der Retoure für WARM ME erledigt — Kundenentscheidung Theresa).
+Teilretouren je Rechnungsposition sind möglich. Fünf Module, alle gebaut:
+1. **Schema + Kern:** `returns` + `return_items` ([Migration](supabase/migrations/20260716140000_returns.sql),
+   Steuerfelder additiv in [20260716150000](supabase/migrations/20260716150000_returns_tax.sql)).
+   Rechenkern supabase-frei in [returnsCalc.ts](src/lib/returnsCalc.ts) (`remainingReturnable`,
+   `canReturnQuantity`, `returnTotal`, `openAfterReturns`), Datenschicht
+   [returns.ts](src/lib/returns.ts). Storno = `status='cancelled'` + Grund, **kein Löschen**.
+2. **Erfassung:** Modal in [InvoiceEdit](src/pages/InvoiceEdit.tsx)
+   ([ReturnDialog](src/components/ReturnDialog.tsx)) — Restmenge je Position, harte
+   Mengenprüfung, Live-Summe Netto/USt/Brutto, Storno mit Pflicht-Grund.
+3. **Beträge brutto mit USt-Snapshot:** `returnTotal` liefert `{net,tax,gross}` via
+   `applyVat` (Satz zentral aus `tax.ts`); `returns` speichert `subtotal_net`/`tax_rate`/
+   `tax_amount`/`total_amount` (brutto) eingefroren — wie die Rechnung.
+4. **Offener Rest — EINE Definition, zentral:** `offener Rest = invoice.total (brutto)
+   − Σ recorded return.total_amount`, via `returnsCalc.openAfterReturns`. Eingebaut in
+   `creditRating.summarize` (KPIs, `getMoneySnapshot`/Dashboard, Kreditlimit-Kontext),
+   `openPayments` (Rest ≤ 0 **abgeleitet** ausgeblendet, `invoices.status` unberührt),
+   `dunning` und die DealerDetail-Liste. Eine Datenquelle: `returns.recordedReturnsByInvoice`.
+   Der „Zahlung erfassen"-Default ist der offene Rest, nicht der volle Betrag.
+5. **DealerDetail-Sektion:** alle Retouren des Händlers saisonübergreifend.
+6. **Provision (`deductions`):** `deductions = Σ recorded return.total_amount` im
+   Zeitraum (über `return_date`), nur agent-berechtigt (**dieselbe `agentGetsCommission`-
+   Regel**, zentral in [commissionCalc.ts](src/lib/commissionCalc.ts) `computeSettlementBase`).
+   `net_base = gross_received − deductions` (**kein Clamp** — darf negativ sein, echter
+   Sachverhalt). Live-Übersicht rechnet netto. **Eingefrorene Abrechnungen bleiben
+   unberührt**: eine Retoure mit `return_date` in einer bereits abgerechneten Periode,
+   die erst NACH dem Einfrieren erfasst wurde (`created_at > settlement.created_at`),
+   erscheint als **amber Late-Return-Badge** (`lateReturnsBySettlement`), ändert die
+   Abrechnung aber nicht.
+
+**Noch offen (eigener Baustein, wenn gewünscht):** formaler Gutschrift-Beleg mit
+Nummernkreis + PDF (`returns.credit_note_number`/`pdf_path` sind vorgerüstet, nullable);
+Retouren auf **nie fakturierte** Ware (Ansichtssendung/Kommission) — hängt am ebenfalls
+offenen Liefertyp Kommission.
+
 ### Bewusst (noch) NICHT gebaut — und warum
 
 Diese Lücken sind **Absicht, keine Vergessenheit**. Nicht nach Gefühl nachbauen —
