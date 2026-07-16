@@ -87,7 +87,6 @@ export const de = {
   'dealers.col.customerNo': 'Kd.-Nr.',
   'dealers.col.contact': 'Ansprechpartner',
   'dealers.col.city': 'Ort',
-  'dealers.col.credit': 'Bonität',
 
   // ─── Artikel ─────────────────────────────────────────────────────────────
   'products.title': 'Artikel',
@@ -497,16 +496,9 @@ export const de = {
   'barList.empty': 'Keine Daten im gewählten Zeitraum.',
   'barList.pieces': '{count} Stk',
 
-  // ─── Bonitäts-Ampel ──────────────────────────────────────────────────────
-  'credit.good': 'Gut',
-  'credit.watch': 'Beobachten',
-  'credit.critical': 'Kritisch',
-  'credit.noData': 'Keine Daten',
-
-  // ─── Bonitäts-Hinweis in der Ordererfassung ───────────────────────────────
+  // ─── Kreditlimit-Kontext in der Ordererfassung ────────────────────────────
   'creditHint.limitLine': 'Offen: {open} von {limit} Kreditlimit',
   'creditHint.limitExceeded': ' — Limit überschritten',
-  'creditHint.criticalAction': 'Vor weiterer Warenzusage prüfen.',
 
   // ─── Newsletter ──────────────────────────────────────────────────────────
   'newsletter.loadError': 'Newsletter konnten nicht geladen werden.',
@@ -841,7 +833,6 @@ export const en: Record<TranslationKey, string> = {
   'dealers.col.customerNo': 'Cust. no.',
   'dealers.col.contact': 'Contact',
   'dealers.col.city': 'City',
-  'dealers.col.credit': 'Credit rating',
 
   'products.title': 'Products',
   'products.subtitle': 'Product catalogue – master data, colours, prices and season.',
@@ -1246,16 +1237,9 @@ export const en: Record<TranslationKey, string> = {
   'barList.empty': 'No data in the selected period.',
   'barList.pieces': '{count} pcs',
 
-  // ─── Bonitäts-Ampel ──────────────────────────────────────────────────────
-  'credit.good': 'Good',
-  'credit.watch': 'Watch',
-  'credit.critical': 'Critical',
-  'credit.noData': 'No data',
-
-  // ─── Credit hint in order capture ─────────────────────────────────────────
+  // ─── Credit limit context in order capture ────────────────────────────────
   'creditHint.limitLine': 'Outstanding: {open} of {limit} credit limit',
   'creditHint.limitExceeded': ' — limit exceeded',
-  'creditHint.criticalAction': 'Review before committing more goods.',
 
   // ─── Newsletter ──────────────────────────────────────────────────────────
   'newsletter.loadError': 'Could not load newsletters.',

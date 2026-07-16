@@ -6,7 +6,6 @@ import { lineTotal, type OrderListRow } from '../types/order'
 import type { DealerEmailRole } from '../types/dealerEmail'
 import type { Dealer } from '../types/dealer'
 import { signedDocumentUrl } from '../lib/dealerDocuments'
-import CreditBadge from '../components/CreditBadge'
 import CollectionBadge from '../components/CollectionBadge'
 import DealerEditModal from '../components/DealerEditModal'
 import { listSeasons } from '../lib/seasons'
@@ -247,8 +246,6 @@ export default function DealerDetail() {
             {(dealer.city || dealer.country) && (
               <span>{[dealer.city, dealer.country].filter(Boolean).join(', ')}</span>
             )}
-            {/* Bonitäts-Ampel bewusst klein, nur als Kontext-Signal. */}
-            <CreditBadge credit={credit} />
           </div>
         </div>
 

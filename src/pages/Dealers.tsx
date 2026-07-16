@@ -5,10 +5,8 @@ import { listDealers, deleteDealer } from '../lib/dealers'
 import { countDealerDocuments } from '../lib/dealerDocuments'
 import { listSeasons } from '../lib/seasons'
 import type { Season } from '../types/asset'
-import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { numify, type ExportColumn } from '../lib/exportFile'
 import EmptyState from '../components/EmptyState'
-import CreditBadge from '../components/CreditBadge'
 import ExportButtons from '../components/ExportButtons'
 import DealerEditModal from '../components/DealerEditModal'
 import { useT } from '../i18n'
@@ -73,7 +71,6 @@ export default function Dealers() {
   const t = useT()
   const navigate = useNavigate()
   const [dealers, setDealers] = useState<Dealer[]>([])
-  const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
   const [seasons, setSeasons] = useState<Season[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,15 +83,11 @@ export default function Dealers() {
     setLoading(true)
     setError(null)
     try {
-      // Händler und Bonitäts-Bewertungen parallel; die Ampel ist ergänzend und
-      // soll die Liste nicht blockieren, falls sie fehlschlägt.
-      const [dealerList, creditMap, seasonList] = await Promise.all([
+      const [dealerList, seasonList] = await Promise.all([
         listDealers(),
-        listDealerCredits().catch(() => new Map<string, DealerCredit>()),
         listSeasons().catch(() => [] as Season[]),
       ])
       setDealers(dealerList)
-      setCredits(creditMap)
       setSeasons(seasonList)
     } catch {
       setError(t('dealers.loadError'))
@@ -196,9 +189,6 @@ export default function Dealers() {
                 <th className="w-24 px-4 py-3 font-medium">
                   {t('dealers.col.city')}
                 </th>
-                <th className="w-32 px-4 py-3 font-medium">
-                  {t('dealers.col.credit')}
-                </th>
                 <th className="w-44 px-4 py-3" />
               </tr>
             </thead>
@@ -223,9 +213,6 @@ export default function Dealers() {
                   </td>
                   <td className="px-4 py-3 align-top text-muted break-words">
                     {[d.city, d.country].filter(Boolean).join(', ') || '—'}
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <CreditBadge credit={credits.get(d.id)} />
                   </td>
                   <td className="px-4 py-3 text-right align-top whitespace-nowrap">
                     <button
