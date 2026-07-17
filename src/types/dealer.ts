@@ -42,6 +42,7 @@ export interface Dealer {
   zahlungsziel_tage: number | null
 
   // Lieferadresse (Excel: LS-*)
+  shipping_name: string | null
   shipping_street: string | null
   shipping_zip: string | null
   shipping_city: string | null
@@ -106,6 +107,7 @@ export interface DealerInput {
   zahlungsziel_tage: number | null
 
   // Lieferadresse
+  shipping_name: string | null
   shipping_street: string | null
   shipping_zip: string | null
   shipping_city: string | null

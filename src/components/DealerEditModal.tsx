@@ -7,6 +7,12 @@ import {
   deleteDealerEmail,
 } from '../lib/dealerEmails'
 import {
+  listDealerAliases,
+  createDealerAlias,
+  deleteDealerAlias,
+} from '../lib/dealerAliases'
+import type { DealerAlias } from '../types/dealerAlias'
+import {
   listDealerPriorities,
   setDealerPriority,
   deleteDealerPriority,
@@ -45,6 +51,12 @@ interface EmailRow {
   role: DealerEmailRole
 }
 
+/** Eine Alias-Zeile im Formular (id nur, wenn bereits persistiert). */
+interface AliasRow {
+  id?: string
+  alias: string
+}
+
 const inputClass =
   'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
 
@@ -71,6 +83,7 @@ type DealerFormKey =
   | 'skonto_prozent'
   | 'skonto_tage'
   | 'zahlungsziel_tage'
+  | 'shipping_name'
   | 'shipping_street'
   | 'shipping_zip'
   | 'shipping_city'
@@ -115,6 +128,7 @@ const emptyForm: DealerForm = {
   skonto_prozent: '',
   skonto_tage: '',
   zahlungsziel_tage: '',
+  shipping_name: '',
   shipping_street: '',
   shipping_zip: '',
   shipping_city: '',
@@ -251,6 +265,7 @@ function toDealerInput(f: DealerForm): DealerInput {
       zahlungsziel_tage,
     }),
 
+    shipping_name: trimOrNull(f.shipping_name),
     shipping_street: trimOrNull(f.shipping_street),
     shipping_zip: trimOrNull(f.shipping_zip),
     shipping_city: trimOrNull(f.shipping_city),
@@ -311,6 +326,7 @@ function dealerToForm(d: Dealer): DealerForm {
     skonto_prozent: numToStr(skonto_prozent),
     skonto_tage: numToStr(skonto_tage),
     zahlungsziel_tage: numToStr(zahlungsziel_tage),
+    shipping_name: d.shipping_name ?? '',
     shipping_street: d.shipping_street ?? '',
     shipping_zip: d.shipping_zip ?? '',
     shipping_city: d.shipping_city ?? '',
@@ -545,6 +561,10 @@ export default function DealerEditModal({
   const [originalEmails, setOriginalEmails] = useState<DealerEmail[]>([])
   const [addEmail, setAddEmail] = useState('')
   const [addRole, setAddRole] = useState<DealerEmailRole>('order_confirmation')
+  // Alias-Namen (mehrere je Händler); Abgleich beim Speichern wie bei E-Mails.
+  const [aliases, setAliases] = useState<AliasRow[]>([])
+  const [originalAliases, setOriginalAliases] = useState<DealerAlias[]>([])
+  const [addAlias, setAddAlias] = useState('')
   // Priorität je Saison: season_id → Eingabestring; original als Zahl zum Diff.
   const [priorities, setPriorities] = useState<Record<string, string>>({})
   const [originalPriorities, setOriginalPriorities] = useState<
@@ -574,14 +594,17 @@ export default function DealerEditModal({
     let cancelled = false
     ;(async () => {
       try {
-        const [em, pr, docs] = await Promise.all([
+        const [em, al, pr, docs] = await Promise.all([
           listDealerEmails(dealer.id),
+          listDealerAliases(dealer.id),
           listDealerPriorities(dealer.id),
           listDealerDocuments(dealer.id),
         ])
         if (cancelled) return
         setOriginalEmails(em)
         setEmails(em.map((e) => ({ id: e.id, email: e.email, role: e.role })))
+        setOriginalAliases(al)
+        setAliases(al.map((a) => ({ id: a.id, alias: a.alias })))
         const prMap: Record<string, number> = {}
         for (const p of pr) prMap[p.season_id] = p.priority
         setOriginalPriorities(prMap)
@@ -649,6 +672,22 @@ export default function DealerEditModal({
     setEmails((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function addAliasRow() {
+    const value = addAlias.trim()
+    if (value === '') return
+    // Doppelte (case-insensitiv) still verwerfen — der Unique-Index täte es auch.
+    if (aliases.some((a) => a.alias.toLowerCase() === value.toLowerCase())) {
+      setAddAlias('')
+      return
+    }
+    setAliases((prev) => [...prev, { alias: value }])
+    setAddAlias('')
+  }
+
+  function removeAliasRow(index: number) {
+    setAliases((prev) => prev.filter((_, i) => i !== index))
+  }
+
   /** E-Mails und Prioritäten des gespeicherten Händlers abgleichen. */
   async function saveRelations(dealerId: string) {
     // E-Mails: entfernte (persistierte, jetzt nicht mehr in der Liste) löschen,
@@ -660,6 +699,16 @@ export default function DealerEditModal({
     await Promise.all(removed.map((o) => deleteDealerEmail(o.id)))
     await Promise.all(
       added.map((e) => createDealerEmail(dealerId, { email: e.email, role: e.role })),
+    )
+
+    // Aliasse: gleicher Diff — entfernte löschen, neue (ohne id) anlegen.
+    const removedAliases = originalAliases.filter(
+      (o) => !aliases.some((a) => a.id === o.id),
+    )
+    const addedAliases = aliases.filter((a) => !a.id && a.alias.trim() !== '')
+    await Promise.all(removedAliases.map((o) => deleteDealerAlias(o.id)))
+    await Promise.all(
+      addedAliases.map((a) => createDealerAlias(dealerId, a.alias)),
     )
 
     // Prioritäten je Saison: gesetzte upserten, geleerte (vorher vorhanden) löschen.
@@ -946,6 +995,63 @@ export default function DealerEditModal({
               <p className="text-xs text-muted">{t('dealers.emails.hint')}</p>
             </Section>
 
+            {/* Alias-Namen (mehrere; die Händlersuche findet sie mit) */}
+            <Section
+              title={t('dealers.section.aliases')}
+              collapsible
+              defaultOpen={!!dealer}
+            >
+              {aliases.length === 0 ? (
+                <p className="text-xs text-muted">{t('dealers.aliases.empty')}</p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {aliases.map((row, idx) => (
+                    <li
+                      key={row.id ?? `new-${idx}`}
+                      className="flex items-center justify-between gap-3 rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 truncate text-ink">{row.alias}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAliasRow(idx)}
+                        aria-label={t('common.remove')}
+                        className="shrink-0 text-muted transition-colors hover:text-red-700"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+                  <span className="text-xs text-muted">{t('dealers.aliases.label')}</span>
+                  <input
+                    type="text"
+                    value={addAlias}
+                    onChange={(e) => setAddAlias(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addAliasRow()
+                      }
+                    }}
+                    placeholder={t('dealers.aliases.placeholder')}
+                    className={inputClass}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={addAliasRow}
+                  disabled={addAlias.trim() === ''}
+                  className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+                >
+                  {t('dealers.aliases.add')}
+                </button>
+              </div>
+              <p className="text-xs text-muted">{t('dealers.aliases.hint')}</p>
+            </Section>
+
             {/* Priorität je Saison */}
             <Section
               title={t('dealers.section.priority')}
@@ -1102,7 +1208,7 @@ export default function DealerEditModal({
               collapsible
               defaultOpen={!!dealer}
             >
-              <AddressBlock prefix="shipping" form={form} set={set} t={t} withEmail2 />
+              <AddressBlock prefix="shipping" form={form} set={set} t={t} withName withEmail2 />
             </Section>
 
             <Section

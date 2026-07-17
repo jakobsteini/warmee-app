@@ -4,13 +4,18 @@
  * Ein Händler kann pro Rolle mehrere Adressen haben, eine Adresse kann mehreren
  * Rollen zugeordnet sein (je eine Zeile pro Kombination).
  */
-export type DealerEmailRole = 'order_confirmation' | 'invoice' | 'delivery'
+export type DealerEmailRole =
+  | 'order_confirmation'
+  | 'invoice'
+  | 'delivery'
+  | 'purchasing'
 
 /** Reihenfolge der Rollen für die Anzeige. */
 export const DEALER_EMAIL_ROLES: DealerEmailRole[] = [
   'order_confirmation',
   'invoice',
   'delivery',
+  'purchasing',
 ]
 
 /** Ein dealer_emails-Datensatz (snake_case wie in der DB). */

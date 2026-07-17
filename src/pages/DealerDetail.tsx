@@ -6,6 +6,7 @@ import { lineTotal, type OrderListRow } from '../types/order'
 import type { DealerEmailRole } from '../types/dealerEmail'
 import type { Dealer } from '../types/dealer'
 import { signedDocumentUrl } from '../lib/dealerDocuments'
+import { listDealerAliases } from '../lib/dealerAliases'
 import CollectionBadge from '../components/CollectionBadge'
 import DealerEditModal from '../components/DealerEditModal'
 import { listSeasons } from '../lib/seasons'
@@ -158,6 +159,7 @@ export default function DealerDetail() {
 
   const [data, setData] = useState<DealerDetailData | null>(null)
   const [seasons, setSeasons] = useState<Season[]>([])
+  const [aliases, setAliases] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -167,12 +169,15 @@ export default function DealerDetail() {
     setLoading(true)
     setError(null)
     try {
-      const [detail, seasonList] = await Promise.all([
+      const [detail, seasonList, aliasList] = await Promise.all([
         loadDealerDetail(id),
         listSeasons().catch(() => [] as Season[]),
+        // Aliasse sind ergänzend (nur Anzeige) — Fehler soll die Seite nicht kippen.
+        listDealerAliases(id).catch(() => []),
       ])
       setData(detail)
       setSeasons(seasonList)
+      setAliases(aliasList.map((a) => a.alias))
     } catch {
       setError(t('dealerDetail.loadError'))
     } finally {
@@ -245,6 +250,9 @@ export default function DealerDetail() {
             </span>
             {(dealer.city || dealer.country) && (
               <span>{[dealer.city, dealer.country].filter(Boolean).join(', ')}</span>
+            )}
+            {aliases.length > 0 && (
+              <span>{t('dealerDetail.aliases', { list: aliases.join(', ') })}</span>
             )}
           </div>
         </div>
@@ -795,6 +803,7 @@ function joinCityLine(zip: string | null, city: string | null): string {
 
 function shippingLines(d: Dealer): string[] {
   return [
+    d.shipping_name ?? '',
     d.shipping_street ?? '',
     joinCityLine(d.shipping_zip, d.shipping_city),
     d.shipping_country_name ?? '',
