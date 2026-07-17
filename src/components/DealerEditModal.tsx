@@ -38,6 +38,7 @@ import {
   parsePaymentTerms,
   formatPaymentTerms,
   parseSkontoPercent,
+  parseDecimalField,
   parseIntField,
   type FieldParse,
 } from '../lib/paymentTerms'
@@ -199,14 +200,6 @@ function intOrNull(v: string): number | null {
   return Number.isNaN(n) ? null : n
 }
 
-/** Dezimalzahl aus String (Dezimalkomma erlaubt) oder null. */
-function decOrNull(v: string): number | null {
-  const t = v.trim()
-  if (t === '') return null
-  const n = Number(t.replace(',', '.'))
-  return Number.isNaN(n) ? null : n
-}
-
 /** number/string/null → Anzeigestring fürs Formular. */
 function numToStr(v: number | string | null): string {
   if (v === null || v === '') return ''
@@ -263,8 +256,10 @@ function toDealerInput(f: DealerForm): DealerInput {
     country: trimOrNull(f.country),
 
     customer_group: (f.customer_group === 'b2c' ? 'b2c' : 'b2b') as CustomerGroup,
-    discount_percent: decOrNull(f.discount_percent) ?? 0,
-    credit_limit: decOrNull(f.credit_limit),
+    // Rabatt/Kreditlimit über den strikten Parser (leer→null; Rabatt-Default 0);
+    // ungültige Eingaben werden vorher in handleSubmit abgefangen.
+    discount_percent: pv(parseDecimalField(f.discount_percent)) ?? 0,
+    credit_limit: pv(parseDecimalField(f.credit_limit)),
 
     uid: trimOrNull(f.uid),
     gegenkonto: intOrNull(f.gegenkonto),
@@ -756,6 +751,15 @@ export default function DealerEditModal({
       !parseIntField(form.zahlungsziel_tage).ok
     ) {
       setFormError(t('dealers.termsInvalid'))
+      return
+    }
+    // Rabatt/Kreditlimit: leer = gültig (kein Rabatt/kein Limit), aber ein nicht
+    // deutbarer Wert wird sichtbar abgelehnt statt still zu null/0.
+    if (
+      !parseDecimalField(form.discount_percent).ok ||
+      !parseDecimalField(form.credit_limit).ok
+    ) {
+      setFormError(t('dealers.amountsInvalid'))
       return
     }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   parsePaymentTerms,
   parseSkontoPercent,
+  parseDecimalField,
   parseIntField,
 } from './paymentTerms.ts'
 
@@ -153,4 +154,23 @@ test('parseIntField: nicht-ganzzahlig/Buchstaben → ungültig (kein stilles par
   assert.deepEqual(parseIntField('2x'), { ok: false })
   assert.deepEqual(parseIntField('2,5'), { ok: false })
   assert.deepEqual(parseIntField('abc'), { ok: false })
+})
+
+// ─── parseDecimalField: Rabatt/Kreditlimit — tolerant, nie stiller Verlust ───
+
+test('parseDecimalField: reine Zahl / Prozent / Leerzeichen / Komma', () => {
+  assert.deepEqual(parseDecimalField('10'), { ok: true, value: 10 })
+  assert.deepEqual(parseDecimalField('10%'), { ok: true, value: 10 })
+  assert.deepEqual(parseDecimalField('10 %'), { ok: true, value: 10 })
+  assert.deepEqual(parseDecimalField('10,5'), { ok: true, value: 10.5 })
+})
+
+test('parseDecimalField: leer → gültig/null (kein Rabatt / kein Limit)', () => {
+  assert.deepEqual(parseDecimalField(''), { ok: true, value: null })
+  assert.deepEqual(parseDecimalField('   '), { ok: true, value: null })
+})
+
+test('parseDecimalField: nicht deutbar → ungültig (kein stilles null)', () => {
+  assert.deepEqual(parseDecimalField('abc'), { ok: false })
+  assert.deepEqual(parseDecimalField('10x'), { ok: false })
 })

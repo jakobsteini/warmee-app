@@ -72,15 +72,21 @@ function fmtNum(n: number): string {
 export type FieldParse = { ok: true; value: number | null } | { ok: false }
 
 /**
- * Skonto-Prozent aus einem Formularfeld. Toleriert ein abschließendes „%" und
- * Leerzeichen sowie Dezimalkomma: „2", „2%", „2 %", „2,5" → Zahl. Leer → null.
- * Alles andere (z. B. „abc", „2x") → ungültig.
+ * Dezimalfeld aus einem Formular. Toleriert ein abschließendes „%" und
+ * Leerzeichen sowie Dezimalkomma: „10", „10%", „10 %", „10,5" → Zahl. Leer →
+ * null (gültig). Alles andere (z. B. „abc", „10x") → ungültig — KEIN stilles
+ * null. Basis für Skonto-Prozent, Rabatt und Kreditlimit.
  */
-export function parseSkontoPercent(raw: string): FieldParse {
+export function parseDecimalField(raw: string): FieldParse {
   const t = raw.trim().replace(/\s*%\s*$/, '').trim().replace(',', '.')
   if (t === '') return { ok: true, value: null }
   const n = Number(t)
   return Number.isNaN(n) ? { ok: false } : { ok: true, value: n }
+}
+
+/** Skonto-Prozent: identisch zum generischen Dezimalfeld (nur semantischer Name). */
+export function parseSkontoPercent(raw: string): FieldParse {
+  return parseDecimalField(raw)
 }
 
 /**
