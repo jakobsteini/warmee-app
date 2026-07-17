@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parsePaymentTerms } from './paymentTerms.ts'
+import {
+  parsePaymentTerms,
+  parseSkontoPercent,
+  parseIntField,
+} from './paymentTerms.ts'
 
 test('Standard-Fall: Skonto + Netto', () => {
   assert.deepEqual(parsePaymentTerms('3%10T N30T'), {
@@ -104,4 +108,49 @@ test('undefined → Standard', () => {
     skonto_tage: 10,
     zahlungsziel_tage: 30,
   })
+})
+
+// ─── parseSkontoPercent: tolerant, aber nie stiller Datenverlust ─────────────
+
+test('parseSkontoPercent: reine Zahl', () => {
+  assert.deepEqual(parseSkontoPercent('2'), { ok: true, value: 2 })
+})
+
+test('parseSkontoPercent: mit Prozentzeichen und Leerzeichen', () => {
+  assert.deepEqual(parseSkontoPercent('2%'), { ok: true, value: 2 })
+  assert.deepEqual(parseSkontoPercent('2 %'), { ok: true, value: 2 })
+  assert.deepEqual(parseSkontoPercent('  3% '), { ok: true, value: 3 })
+})
+
+test('parseSkontoPercent: Dezimalkomma', () => {
+  assert.deepEqual(parseSkontoPercent('2,5'), { ok: true, value: 2.5 })
+  assert.deepEqual(parseSkontoPercent('2,5 %'), { ok: true, value: 2.5 })
+})
+
+test('parseSkontoPercent: leer → gültig/null (Händler ohne Skonto)', () => {
+  assert.deepEqual(parseSkontoPercent(''), { ok: true, value: null })
+  assert.deepEqual(parseSkontoPercent('   '), { ok: true, value: null })
+})
+
+test('parseSkontoPercent: nicht deutbar → ungültig (kein stilles null)', () => {
+  assert.deepEqual(parseSkontoPercent('abc'), { ok: false })
+  assert.deepEqual(parseSkontoPercent('2x'), { ok: false })
+  assert.deepEqual(parseSkontoPercent('2%3'), { ok: false })
+})
+
+// ─── parseIntField: strikt ganzzahlig ────────────────────────────────────────
+
+test('parseIntField: Ziffern (auch mit %-Suffix)', () => {
+  assert.deepEqual(parseIntField('7'), { ok: true, value: 7 })
+  assert.deepEqual(parseIntField('7 %'), { ok: true, value: 7 })
+})
+
+test('parseIntField: leer → null', () => {
+  assert.deepEqual(parseIntField(''), { ok: true, value: null })
+})
+
+test('parseIntField: nicht-ganzzahlig/Buchstaben → ungültig (kein stilles parseInt)', () => {
+  assert.deepEqual(parseIntField('2x'), { ok: false })
+  assert.deepEqual(parseIntField('2,5'), { ok: false })
+  assert.deepEqual(parseIntField('abc'), { ok: false })
 })

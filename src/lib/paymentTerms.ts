@@ -64,6 +64,39 @@ function fmtNum(n: number): string {
 }
 
 /**
+ * Ergebnis eines toleranten Formularfeld-Parsers: gültig (mit Wert, `null` bei
+ * leerem Feld) ODER ungültig. Leer bleibt bewusst gültig → `null` (Händler ohne
+ * Skonto). Der Aufrufer zeigt bei `ok: false` einen sichtbaren Fehler, statt
+ * einen nicht deutbaren Wert still zu `null` zu machen (früherer Datenverlust).
+ */
+export type FieldParse = { ok: true; value: number | null } | { ok: false }
+
+/**
+ * Skonto-Prozent aus einem Formularfeld. Toleriert ein abschließendes „%" und
+ * Leerzeichen sowie Dezimalkomma: „2", „2%", „2 %", „2,5" → Zahl. Leer → null.
+ * Alles andere (z. B. „abc", „2x") → ungültig.
+ */
+export function parseSkontoPercent(raw: string): FieldParse {
+  const t = raw.trim().replace(/\s*%\s*$/, '').trim().replace(',', '.')
+  if (t === '') return { ok: true, value: null }
+  const n = Number(t)
+  return Number.isNaN(n) ? { ok: false } : { ok: true, value: n }
+}
+
+/**
+ * Ganzzahliges Feld (Skonto-Tage, Zahlungsziel). Strikt: nach Trim nur Ziffern
+ * (ein „%" am Ende wird geduldet, damit „7%" nicht als Fehler zählt). Leer →
+ * null. Alles andere → ungültig — KEIN stilles `parseInt` mehr, das „2x" zu 2
+ * verkürzt.
+ */
+export function parseIntField(raw: string): FieldParse {
+  const t = raw.trim().replace(/\s*%\s*$/, '').trim()
+  if (t === '') return { ok: true, value: null }
+  if (!/^\d+$/.test(t)) return { ok: false }
+  return { ok: true, value: Number.parseInt(t, 10) }
+}
+
+/**
  * Gegenstück zu {@link parsePaymentTerms}: baut aus strukturierten Konditionen
  * den kanonischen Rohstring (Spalte payment_terms_raw), damit Rohstring und
  * strukturierte Felder nach dem Speichern nie widersprechen.

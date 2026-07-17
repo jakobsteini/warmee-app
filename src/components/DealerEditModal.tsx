@@ -34,7 +34,13 @@ import {
   type DealerEmailRole,
 } from '../types/dealerEmail'
 import type { Season } from '../types/asset'
-import { parsePaymentTerms, formatPaymentTerms } from '../lib/paymentTerms'
+import {
+  parsePaymentTerms,
+  formatPaymentTerms,
+  parseSkontoPercent,
+  parseIntField,
+  type FieldParse,
+} from '../lib/paymentTerms'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
 import { useT, type TFunc } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
@@ -234,10 +240,17 @@ const EMAIL_FIELDS: DealerFormKey[] = [
  * payment_terms_raw wird aus den strukturierten Konditionen abgeleitet, damit
  * Rohstring und Struktur konsistent bleiben.
  */
+/** Geparsten Wert entnehmen (null bei ungültig – im Speichern vorher validiert). */
+function pv(r: FieldParse): number | null {
+  return r.ok ? r.value : null
+}
+
 function toDealerInput(f: DealerForm): DealerInput {
-  const skonto_prozent = decOrNull(f.skonto_prozent)
-  const skonto_tage = intOrNull(f.skonto_tage)
-  const zahlungsziel_tage = intOrNull(f.zahlungsziel_tage)
+  // Konditionsfelder über die strikten Parser (tolerieren „%"/Leerzeichen/Komma).
+  // Ungültige Eingaben werden vor dem Speichern abgefangen (validateTerms).
+  const skonto_prozent = pv(parseSkontoPercent(f.skonto_prozent))
+  const skonto_tage = pv(parseIntField(f.skonto_tage))
+  const zahlungsziel_tage = pv(parseIntField(f.zahlungsziel_tage))
 
   return {
     name: f.name.trim(),
@@ -356,9 +369,9 @@ function dealerToForm(d: Dealer): DealerForm {
 
 /** Lesbare Klartext-Zusammenfassung der Konditionen fürs Formular. */
 function readableTerms(f: DealerForm, t: TFunc): string {
-  const sp = decOrNull(f.skonto_prozent)
-  const st = intOrNull(f.skonto_tage)
-  const ziel = intOrNull(f.zahlungsziel_tage)
+  const sp = pv(parseSkontoPercent(f.skonto_prozent))
+  const st = pv(parseIntField(f.skonto_tage))
+  const ziel = pv(parseIntField(f.zahlungsziel_tage))
   if (sp === null && st === null && ziel === null) {
     return t('dealers.terms.none', { days: DEFAULT_ZAHLUNGSZIEL_TAGE })
   }
@@ -735,6 +748,16 @@ export default function DealerEditModal({
       setFormError(t('dealers.emailInvalid'))
       return
     }
+    // Konditionsfelder: leer bleibt gültig (Händler ohne Skonto/Ziel), aber ein
+    // nicht deutbarer Wert wird sichtbar abgelehnt statt still zu null gespeichert.
+    if (
+      !parseSkontoPercent(form.skonto_prozent).ok ||
+      !parseIntField(form.skonto_tage).ok ||
+      !parseIntField(form.zahlungsziel_tage).ok
+    ) {
+      setFormError(t('dealers.termsInvalid'))
+      return
+    }
 
     setSaving(true)
     setFormError(null)
@@ -745,8 +768,14 @@ export default function DealerEditModal({
         : await createDealer(payload)
       await saveRelations(saved.id)
       onSaved()
-    } catch {
-      setFormError(t('common.saveFailed'))
+    } catch (e) {
+      // Echten Fehler zeigen (z. B. PostgREST-message) statt ihn zu verschlucken.
+      console.error(e)
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message: unknown }).message)
+          : null
+      setFormError(msg ?? t('common.saveFailed'))
     } finally {
       setSaving(false)
     }
