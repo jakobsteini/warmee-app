@@ -1,5 +1,10 @@
 /** Bild-/Video-Typ (im Schema: asset_type). */
-export type AssetType = 'product' | 'lifestyle' | 'campaign' | 'lookbook'
+export type AssetType =
+  | 'product'
+  | 'lifestyle'
+  | 'campaign'
+  | 'lookbook'
+  | 'swatch'
 
 /** Foto oder Video (im Schema: asset_kind). Aktuell nur Foto. */
 export type AssetKind = 'photo' | 'video'
@@ -101,6 +106,7 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   lifestyle: 'Lifestyle',
   campaign: 'Kampagne',
   lookbook: 'Lookbook',
+  swatch: 'Farbmuster',
 }
 
 /** Reihenfolge der asset_type-Werte für Filter und Upload-Auswahl. */
@@ -109,4 +115,5 @@ export const ASSET_TYPES: AssetType[] = [
   'lifestyle',
   'campaign',
   'lookbook',
+  'swatch',
 ]

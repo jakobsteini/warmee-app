@@ -1,4 +1,4 @@
-import type { AssetWithMeta } from '../types/asset'
+import type { AssetType, AssetWithMeta } from '../types/asset'
 import { categoryLabel } from '../types/product.ts'
 
 /**
@@ -7,6 +7,8 @@ import { categoryLabel } from '../types/product.ts'
  */
 
 export interface AssetFilterState {
+  /** Bild-Typ (primäre Achse); null = alle Typen. */
+  type: AssetType | null
   /** Freitext; leer = keine Textsuche. */
   search: string
   /** Produktgruppe (products.category-Rohwert); null/'' = alle Gruppen. */
@@ -38,16 +40,21 @@ export function availableGroups(assets: AssetWithMeta[]): string[] {
 }
 
 /**
- * Bilder nach Gruppe (UND) und Freitext filtern. Die Suche greift in Dateiname,
- * Modell, beide Farbcodes/-namen sowie Name/Style des verknüpften Artikels.
+ * Bilder nach Typ (primär) und Gruppe (UND) und Freitext filtern. Die Suche
+ * greift in Dateiname, Modell, beide Farbcodes/-namen sowie Name/Style des
+ * verknüpften Artikels. Die Produktgruppe ist eine Feinung *innerhalb* der
+ * Produktfotos — sie wirkt nur, wenn type === 'product' (sonst hätten
+ * Farbmuster/Kampagnen ohnehin keine Artikel-Kategorie).
  */
 export function filterAssets(
   assets: AssetWithMeta[],
-  { search, group }: AssetFilterState,
+  { type, search, group }: AssetFilterState,
 ): AssetWithMeta[] {
   const q = search.trim().toLowerCase()
+  const effectiveGroup = type === 'product' ? group : null
   return assets.filter((a) => {
-    if (group && assetGroup(a) !== group) return false
+    if (type && a.asset_type !== type) return false
+    if (effectiveGroup && assetGroup(a) !== effectiveGroup) return false
     if (q === '') return true
     const haystack = [
       a.filename,

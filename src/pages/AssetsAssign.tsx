@@ -9,6 +9,7 @@ import {
   suggestProducts,
   filterProducts,
   productLabel,
+  exactProductMatch,
 } from '../lib/productMatch'
 import type { AssetWithMeta } from '../types/asset'
 import type { Product } from '../types/product'
@@ -21,6 +22,10 @@ export default function AssetsAssign() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Farbmuster (swatch) sind für die Zuordnung Rauschen → standardmäßig aus.
+  const [hideSwatches, setHideSwatches] = useState(true)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,9 +57,28 @@ export default function AssetsAssign() {
   const unassigned = useMemo(
     () =>
       assets.filter(
-        (a) => a.product_id === null && a.no_product_match !== true,
+        (a) =>
+          a.product_id === null &&
+          a.no_product_match !== true &&
+          (!hideSwatches || a.asset_type !== 'swatch'),
       ),
-    [assets],
+    [assets, hideSwatches],
+  )
+
+  // Eindeutige exakte Namenstreffer über die aktuell offene Liste. Nur genau
+  // ein passender Artikel (kein_treffer/mehrdeutig fallen raus, kein Präfix).
+  const exactMatches = useMemo(
+    () =>
+      unassigned
+        .map((asset) => ({
+          asset,
+          product: exactProductMatch(asset.model, products),
+        }))
+        .filter(
+          (m): m is { asset: AssetWithMeta; product: Product } =>
+            m.product !== null,
+        ),
+    [unassigned, products],
   )
 
   async function assign(assetId: string, productId: string) {
@@ -83,6 +107,31 @@ export default function AssetsAssign() {
       )
     } catch {
       setError(t('assign.skipError'))
+    }
+  }
+
+  // Alle eindeutigen exakten Treffer nach Bestätigung schreiben. Pro Paar ein
+  // Write; danach lokal spiegeln, damit die Karten verschwinden.
+  async function applyExact() {
+    setError(null)
+    setApplying(true)
+    try {
+      for (const { asset, product } of exactMatches) {
+        await setAssetProduct(asset.id, product.id)
+      }
+      const assigned = new Map(
+        exactMatches.map((m) => [m.asset.id, m.product.id]),
+      )
+      setAssets((prev) =>
+        prev.map((a) =>
+          assigned.has(a.id) ? { ...a, product_id: assigned.get(a.id)! } : a,
+        ),
+      )
+      setPreviewOpen(false)
+    } catch {
+      setError(t('assign.exactApplyError'))
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -128,6 +177,42 @@ export default function AssetsAssign() {
         </div>
       )}
 
+      {/* Werkzeugleiste: Swatch-Filter + exakte Treffer übernehmen */}
+      {!loading && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setHideSwatches((v) => !v)}
+            aria-pressed={hideSwatches}
+            className={[
+              'rounded-full px-3 py-1.5 text-sm transition-colors border-[0.5px]',
+              hideSwatches
+                ? 'border-ink bg-ink text-cream'
+                : 'border-line text-ink hover:bg-card',
+            ].join(' ')}
+          >
+            {t('assign.hideSwatches')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            disabled={exactMatches.length === 0}
+            className="ml-auto rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50 disabled:hover:bg-transparent"
+          >
+            {t('assign.applyExact', { count: exactMatches.length })}
+          </button>
+        </div>
+      )}
+
+      {previewOpen && (
+        <ExactPreview
+          matches={exactMatches}
+          applying={applying}
+          onConfirm={applyExact}
+          onCancel={() => setPreviewOpen(false)}
+        />
+      )}
+
       {loading ? (
         <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : unassigned.length === 0 ? (
@@ -148,6 +233,84 @@ export default function AssetsAssign() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Vorschau-Dialog: alle exakten Treffer Bild → Artikel, Write erst auf OK. */
+function ExactPreview({
+  matches,
+  applying,
+  onConfirm,
+  onCancel,
+}: {
+  matches: { asset: AssetWithMeta; product: Product }[]
+  applying: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border-[0.5px] border-line bg-surface shadow-lg">
+        <div className="border-b-[0.5px] border-line px-5 py-4">
+          <h2 className="text-lg font-medium text-ink">
+            {t('assign.exactPreviewTitle')}
+          </h2>
+          <p className="mt-1 text-xs text-muted">{t('assign.exactPreviewHint')}</p>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          <ul className="flex flex-col gap-2">
+            {matches.map(({ asset, product }) => (
+              <li
+                key={asset.id}
+                className="flex items-center gap-3 rounded-md border-[0.5px] border-line bg-card px-3 py-2"
+              >
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded border-[0.5px] border-line bg-surface">
+                  {asset.url && (
+                    <img
+                      src={asset.url}
+                      alt={asset.filename}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                </div>
+                <span
+                  className="min-w-0 flex-1 truncate text-sm text-muted"
+                  title={asset.filename}
+                >
+                  {asset.filename}
+                </span>
+                <span className="text-muted">→</span>
+                <span className="shrink-0 text-sm font-medium text-ink">
+                  {productLabel(product)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t-[0.5px] border-line px-5 py-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={applying}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink disabled:opacity-50"
+          >
+            {t('assign.exactPreviewCancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={applying || matches.length === 0}
+            className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {applying ? t('common.saving') : t('assign.exactPreviewConfirm')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

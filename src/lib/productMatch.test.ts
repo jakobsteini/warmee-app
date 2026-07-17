@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { suggestProducts, filterProducts, productLabel } from './productMatch.ts'
+import {
+  suggestProducts,
+  filterProducts,
+  productLabel,
+  exactProductMatch,
+} from './productMatch.ts'
 import type { Product } from '../types/product.ts'
 
 /** Minimaler Product-Builder – nur die für den Match relevanten Felder. */
@@ -92,4 +97,41 @@ test('filterProducts: Teilstring, case-insensitive', () => {
     r.map((x) => x.id),
     ['3', '4'],
   )
+})
+
+// ─── exactProductMatch: nur-Buchstaben, exakt, gegen products.name ──────────
+
+/** Katalog mit Leerzeichen/Kleinschreibung in `name` wie in den Echtdaten. */
+const nameCatalog: Product[] = [
+  p('a', null, 'Axis felted shaded'),
+  p('b', null, 'Axis felted'),
+  p('c', null, 'Flap Me felted'),
+  p('d', null, 'Isa shaded'),
+]
+
+test('exactProductMatch: CamelCase-Modell trifft Name mit Leerzeichen exakt', () => {
+  const hit = exactProductMatch('AxisFeltedShaded', nameCatalog)
+  assert.equal(hit?.id, 'a')
+})
+
+test('exactProductMatch: KEINE Präfix-Logik ("AxisFelted" trifft nicht "Axis felted shaded")', () => {
+  // "axisfelted" gleicht nur "Axis felted" (b), nicht die längere Variante (a).
+  const hit = exactProductMatch('AxisFelted', nameCatalog)
+  assert.equal(hit?.id, 'b')
+})
+
+test('exactProductMatch: Variante ohne eigenen Artikel → kein Treffer (null)', () => {
+  // "ElderFeltedTw" existiert nicht als Artikel → kein_treffer.
+  assert.equal(exactProductMatch('ElderFeltedTw', nameCatalog), null)
+})
+
+test('exactProductMatch: mehrdeutig (>1 gleicher Name) → null', () => {
+  const dup: Product[] = [p('x', null, 'Isa shaded'), p('y', null, 'Isa Shaded')]
+  assert.equal(exactProductMatch('IsaShaded', dup), null)
+})
+
+test('exactProductMatch: kein Modell (null/leer/nur Ziffern) → null', () => {
+  assert.equal(exactProductMatch(null, nameCatalog), null)
+  assert.equal(exactProductMatch('   ', nameCatalog), null)
+  assert.equal(exactProductMatch('530', nameCatalog), null)
 })

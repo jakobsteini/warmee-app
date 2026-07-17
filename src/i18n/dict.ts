@@ -211,6 +211,7 @@ export const de = {
   'asset.type.lifestyle': 'Lifestyle',
   'asset.type.campaign': 'Kampagne',
   'asset.type.lookbook': 'Lookbook',
+  'asset.type.swatch': 'Farbmuster',
 
   // ─── Händler-Formular ────────────────────────────────────────────────────
   'dealers.edit': 'Händler bearbeiten',
@@ -618,6 +619,13 @@ export const de = {
   'assign.noMatchBtn': 'Kein Artikel / nur Farbmuster',
   'assign.noMatchTitle': 'Bild bleibt bewusst ohne Artikel und gilt als erledigt (wird gespeichert)',
   'assign.assign': 'Zuordnen',
+  'assign.hideSwatches': 'Farbmuster ausblenden',
+  'assign.applyExact': 'Exakte Treffer übernehmen ({count})',
+  'assign.exactPreviewTitle': 'Diese Zuordnungen werden gespeichert',
+  'assign.exactPreviewHint': 'Nur exakte Namenstreffer (Groß-/Kleinschreibung und Leerzeichen ignoriert). Mehrdeutige und Teiltreffer bleiben offen.',
+  'assign.exactPreviewConfirm': 'Übernehmen',
+  'assign.exactPreviewCancel': 'Abbrechen',
+  'assign.exactApplyError': 'Die exakten Treffer konnten nicht gespeichert werden.',
 
   // ─── Zuschnitt ───────────────────────────────────────────────────────────
   'crop.title': 'Zuschnitt',
@@ -1004,6 +1012,7 @@ export const en: Record<TranslationKey, string> = {
   'asset.type.lifestyle': 'Lifestyle',
   'asset.type.campaign': 'Campaign',
   'asset.type.lookbook': 'Lookbook',
+  'asset.type.swatch': 'Color swatch',
 
   // ─── Händler-Formular ────────────────────────────────────────────────────
   'dealers.edit': 'Edit dealer',
@@ -1411,6 +1420,13 @@ export const en: Record<TranslationKey, string> = {
   'assign.noMatchBtn': 'No product / colour swatch only',
   'assign.noMatchTitle': 'Image deliberately stays without a product and counts as done (will be saved)',
   'assign.assign': 'Assign',
+  'assign.hideSwatches': 'Hide colour swatches',
+  'assign.applyExact': 'Apply exact matches ({count})',
+  'assign.exactPreviewTitle': 'These assignments will be saved',
+  'assign.exactPreviewHint': 'Exact name matches only (case and spaces ignored). Ambiguous and partial matches stay open.',
+  'assign.exactPreviewConfirm': 'Apply',
+  'assign.exactPreviewCancel': 'Cancel',
+  'assign.exactApplyError': 'Could not save the exact matches.',
 
   // ─── Zuschnitt ───────────────────────────────────────────────────────────
   'crop.title': 'Crop',

@@ -15,7 +15,7 @@ import {
   type Crop,
   type CropFormatId,
 } from '../types/crop'
-import type { AssetWithMeta } from '../types/asset'
+import type { AssetType, AssetWithMeta } from '../types/asset'
 import AssetFilterBar from '../components/AssetFilterBar'
 import { availableGroups, filterAssets } from '../lib/assetFilter'
 import { useT } from '../i18n'
@@ -31,6 +31,7 @@ export default function Crop() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<AssetWithMeta | null>(null)
+  const [type, setType] = useState<AssetType | null>(null)
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState<string | null>(null)
 
@@ -51,8 +52,8 @@ export default function Crop() {
 
   const groups = useMemo(() => availableGroups(assets), [assets])
   const visible = useMemo(
-    () => filterAssets(assets, { search, group }),
-    [assets, search, group],
+    () => filterAssets(assets, { type, search, group }),
+    [assets, type, search, group],
   )
 
   return (
@@ -81,6 +82,11 @@ export default function Crop() {
           {/* Suche + Produktgruppe — derselbe Baustein wie im Bildarchiv */}
           <div className="mb-6">
             <AssetFilterBar
+              type={type}
+              onTypeChange={(v) => {
+                setType(v)
+                if (v !== 'product') setGroup(null)
+              }}
               search={search}
               onSearchChange={setSearch}
               group={group}

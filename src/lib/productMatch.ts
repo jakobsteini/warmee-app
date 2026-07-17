@@ -5,6 +5,11 @@ function norm(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase()
 }
 
+/** Strenge Normalisierung für den exakten Abgleich: nur Buchstaben a–z, lower. */
+function normLetters(s: string | null | undefined): string {
+  return (s ?? '').toLowerCase().replace(/[^a-z]/g, '')
+}
+
 /**
  * Vergleichs-/Anzeigebasis eines Artikels: bevorzugt `style`
  * (Artikelbezeichnung des Produzenten), sonst der Name.
@@ -69,4 +74,23 @@ export function filterProducts(query: string, products: Product[]): Product[] {
   return [...list].sort((a, b) =>
     productLabel(a).localeCompare(productLabel(b)),
   )
+}
+
+/**
+ * Eindeutiger exakter Treffer für ein geparstes Modell: genau EIN Artikel,
+ * dessen Name (nur-Buchstaben, lower) dem Modell (ebenso normalisiert) gleicht.
+ *
+ * Bewusst gegen `products.name` (nicht `productLabel`/`style`) und ohne jede
+ * Präfix-/Fuzzy-Logik: "AxisFeltedShaded" trifft "Axis felted" NICHT — das ist
+ * eine eigene Variante, kein Grundartikel. 0 Treffer (kein_treffer) ODER >1
+ * (mehrdeutig) → null; nur ein eindeutiger Treffer wird zurückgegeben.
+ */
+export function exactProductMatch(
+  model: string | null,
+  products: Product[],
+): Product | null {
+  const m = normLetters(model)
+  if (m === '') return null
+  const hits = products.filter((p) => normLetters(p.name) === m)
+  return hits.length === 1 ? hits[0] : null
 }

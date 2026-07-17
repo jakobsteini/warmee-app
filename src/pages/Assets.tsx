@@ -61,9 +61,9 @@ export default function Assets() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Filter (Typ/Saison serverseitig; Suche/Gruppe clientseitig auf dem Ergebnis)
-  const [filterType, setFilterType] = useState<AssetType | null>(null)
+  // Filter: Saison serverseitig; Typ/Suche/Gruppe clientseitig auf dem Ergebnis.
   const [filterSeason, setFilterSeason] = useState<string | null>(null)
+  const [type, setType] = useState<AssetType | null>(null)
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState<string | null>(null)
 
@@ -82,15 +82,13 @@ export default function Assets() {
     setLoading(true)
     setError(null)
     try {
-      setAssets(
-        await listAssets({ asset_type: filterType, season_id: filterSeason }),
-      )
+      setAssets(await listAssets({ season_id: filterSeason }))
     } catch {
       setError(t('assets.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [filterType, filterSeason])
+  }, [filterSeason])
 
   useEffect(() => {
     loadAssets()
@@ -212,14 +210,14 @@ export default function Assets() {
 
   const pendingCount = staged.filter((s) => s.status !== 'done').length
 
-  // Gruppen aus dem geladenen Satz; Suche + Gruppe clientseitig darauf.
+  // Gruppen aus dem geladenen Satz; Typ + Suche + Gruppe clientseitig darauf.
   const groups = useMemo(() => availableGroups(assets), [assets])
   const visible = useMemo(
-    () => filterAssets(assets, { search, group }),
-    [assets, search, group],
+    () => filterAssets(assets, { type, search, group }),
+    [assets, type, search, group],
   )
   const filtersActive =
-    filterType !== null || filterSeason !== null || search.trim() !== '' || group !== null
+    type !== null || filterSeason !== null || search.trim() !== '' || group !== null
 
   const selectClass =
     'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -350,44 +348,31 @@ export default function Assets() {
         )}
       </div>
 
-      {/* Filter */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-2">
-          <FilterPill
-            active={filterType === null}
-            onClick={() => setFilterType(null)}
-          >
-            {t('common.all')}
-          </FilterPill>
-          {ASSET_TYPES.map((at) => (
-            <FilterPill
-              key={at}
-              active={filterType === at}
-              onClick={() => setFilterType(at)}
-            >
-              {t(assetTypeKey(at))}
-            </FilterPill>
+      {/* Saison (Assets-eigen, serverseitig) */}
+      <div className="mb-4 flex justify-end">
+        <select
+          value={filterSeason ?? ''}
+          onChange={(e) => setFilterSeason(e.target.value || null)}
+          className={selectClass}
+        >
+          <option value="">{t('common.allSeasons')}</option>
+          {seasons.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
           ))}
-        </div>
-        <div className="ml-auto">
-          <select
-            value={filterSeason ?? ''}
-            onChange={(e) => setFilterSeason(e.target.value || null)}
-            className={selectClass}
-          >
-            <option value="">{t('common.allSeasons')}</option>
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        </select>
       </div>
 
-      {/* Suche + Produktgruppe (clientseitig, gemeinsamer Baustein mit Zuschnitt) */}
+      {/* Typ (primär) + Suche + Gruppe — gemeinsamer Baustein mit Zuschnitt */}
       <div className="mb-6">
         <AssetFilterBar
+          type={type}
+          onTypeChange={(v) => {
+            setType(v)
+            // Gruppe ist nur bei Produktfotos sinnvoll → sonst zurücksetzen.
+            if (v !== 'product') setGroup(null)
+          }}
           search={search}
           onSearchChange={setSearch}
           group={group}
@@ -584,31 +569,6 @@ function StagedCard({
         </label>
       </div>
     </div>
-  )
-}
-
-function FilterPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'rounded-full px-4 py-1.5 text-sm transition-colors',
-        active
-          ? 'bg-ink text-cream'
-          : 'border-[0.5px] border-line text-ink hover:bg-card',
-      ].join(' ')}
-    >
-      {children}
-    </button>
   )
 }
 

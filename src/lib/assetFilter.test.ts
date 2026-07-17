@@ -7,6 +7,7 @@ import type { AssetWithMeta } from '../types/asset.ts'
 function asset(partial: Partial<AssetWithMeta>): AssetWithMeta {
   return {
     filename: '',
+    asset_type: 'product',
     model: null,
     color_code: null,
     color_name: null,
@@ -30,9 +31,16 @@ const scarf = asset({
   color_name: 'ecru',
   product: { id: 'p2', name: 'Loop Schal', style: 'Scarves Ca', category: 'scarf' },
 })
-const orphan = asset({ filename: 'lifestyle_shot.JPG', product: null })
+const orphan = asset({ filename: 'lifestyle_shot.JPG', asset_type: 'lifestyle', product: null })
+const swatch = asset({
+  filename: '16_black.JPG',
+  asset_type: 'swatch',
+  color_code: '16',
+  color_name: 'black',
+  product: null,
+})
 
-const all = [emy, scarf, orphan]
+const all = [emy, scarf, orphan, swatch]
 
 test('assetGroup: Kategorie des verknüpften Artikels, sonst null', () => {
   assert.equal(assetGroup(emy), 'sweater')
@@ -44,24 +52,45 @@ test('availableGroups: nur vorkommende Gruppen, nach Label sortiert', () => {
   assert.deepEqual(availableGroups(all), ['sweater', 'scarf'])
 })
 
-test('filterAssets: Gruppe filtert hart', () => {
-  assert.deepEqual(filterAssets(all, { search: '', group: 'scarf' }), [scarf])
+test('filterAssets: Typ filtert hart (primäre Achse)', () => {
+  assert.deepEqual(filterAssets(all, { type: 'swatch', search: '', group: null }), [swatch])
+  assert.deepEqual(filterAssets(all, { type: 'lifestyle', search: '', group: null }), [orphan])
+})
+
+test('filterAssets: Gruppe filtert nur bei Produktfoto', () => {
+  assert.deepEqual(
+    filterAssets(all, { type: 'product', search: '', group: 'scarf' }),
+    [scarf],
+  )
+})
+
+test('filterAssets: Gruppe wird ohne Typ=Produktfoto ignoriert', () => {
+  // group gesetzt, aber type=null → Gruppe greift nicht (sekundäre Achse).
+  assert.deepEqual(filterAssets(all, { type: null, search: '', group: 'scarf' }), all)
 })
 
 test('filterAssets: Suche trifft Dateiname, Modell, Farbe', () => {
-  assert.deepEqual(filterAssets(all, { search: 'olivine', group: null }), [emy])
-  assert.deepEqual(filterAssets(all, { search: 'emyshaded', group: null }), [emy])
+  assert.deepEqual(filterAssets(all, { type: null, search: 'olivine', group: null }), [emy])
+  assert.deepEqual(filterAssets(all, { type: null, search: 'emyshaded', group: null }), [emy])
+})
+
+test('filterAssets: Suche trifft Farbmuster über color_code/color_name', () => {
+  assert.deepEqual(filterAssets(all, { type: null, search: 'black', group: null }), [swatch])
+  assert.deepEqual(filterAssets(all, { type: null, search: '16', group: null }), [swatch])
 })
 
 test('filterAssets: Suche trifft Name/Style des verknüpften Artikels', () => {
-  assert.deepEqual(filterAssets(all, { search: 'loop', group: null }), [scarf])
-  assert.deepEqual(filterAssets(all, { search: 'scarves ca', group: null }), [scarf])
+  assert.deepEqual(filterAssets(all, { type: null, search: 'loop', group: null }), [scarf])
+  assert.deepEqual(filterAssets(all, { type: null, search: 'scarves ca', group: null }), [scarf])
 })
 
-test('filterAssets: Gruppe UND Suche zusammen', () => {
-  assert.deepEqual(filterAssets(all, { search: 'ecru', group: 'sweater' }), [])
+test('filterAssets: Typ UND Gruppe UND Suche zusammen', () => {
+  assert.deepEqual(
+    filterAssets(all, { type: 'product', search: 'ecru', group: 'sweater' }),
+    [],
+  )
 })
 
-test('filterAssets: leere Suche + keine Gruppe = alles', () => {
-  assert.deepEqual(filterAssets(all, { search: '  ', group: null }), all)
+test('filterAssets: leere Suche + kein Typ + keine Gruppe = alles', () => {
+  assert.deepEqual(filterAssets(all, { type: null, search: '  ', group: null }), all)
 })
