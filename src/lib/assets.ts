@@ -8,6 +8,7 @@ import type {
   AssetWithMeta,
   UploadOptions,
 } from '../types/asset'
+import type { AssetVariantRef } from '../types/productVariant'
 
 const BUCKET = 'assets'
 /** Gültigkeit der Signed-URLs für die Anzeige (privater Bucket). */
@@ -69,7 +70,9 @@ export async function listAssets(
     .from('assets')
     // Verknüpften Artikel mit-embedden (FK assets.product_id → products.id):
     // liefert Produktgruppe (category) für den Filter und Name/Style für die Suche.
-    .select('*, asset_dealers(dealer_id), product:products(id, name, style, category)')
+    .select(
+      '*, asset_dealers(dealer_id), product:products(id, name, style, category), variant:product_variants(id, name)',
+    )
     .order('created_at', { ascending: false })
 
   if (filters.asset_type) query = query.eq('asset_type', filters.asset_type)
@@ -83,6 +86,7 @@ export async function listAssets(
   const rows = (data ?? []) as (Asset & {
     asset_dealers: { dealer_id: string }[] | null
     product: AssetProductRef | null
+    variant: AssetVariantRef | null
   })[]
 
   // Signed-URLs gebündelt erzeugen (privater Bucket).
@@ -98,12 +102,13 @@ export async function listAssets(
   }
 
   return rows.map((r) => {
-    const { asset_dealers, product, ...asset } = r
+    const { asset_dealers, product, variant, ...asset } = r
     return {
       ...asset,
       dealer_ids: (asset_dealers ?? []).map((d) => d.dealer_id),
       url: urlByPath.get(r.storage_path) ?? null,
       product: product ?? null,
+      variant: variant ?? null,
     }
   })
 }
@@ -185,6 +190,27 @@ export async function setAssetProduct(
   const { error } = await supabase
     .from('assets')
     .update({ product_id: productId })
+    .eq('id', assetId)
+  if (error) throw error
+}
+
+/**
+ * Bild einem Artikel UND optional einer Variante zuordnen. Beide werden zusammen
+ * geschrieben; der Composite-FK in der DB erzwingt, dass die Variante zum Artikel
+ * gehört. variantId = null → normales Artikelbild. Ohne product (null) wird auch
+ * die Variante geleert (eine Variante ohne Grundartikel ist per CHECK verboten).
+ */
+export async function setAssetProductAndVariant(
+  assetId: string,
+  productId: string | null,
+  variantId: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('assets')
+    .update({
+      product_id: productId,
+      variant_id: productId === null ? null : variantId,
+    })
     .eq('id', assetId)
   if (error) throw error
 }

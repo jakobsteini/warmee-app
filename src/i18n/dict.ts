@@ -107,6 +107,12 @@ export const de = {
   'products.field.wholesale': 'Großhandelspreis (€)',
   'products.deleteConfirm': 'Artikel „{name}" wirklich löschen?',
   'products.deleteError': '„{name}" konnte nicht gelöscht werden – wird es noch von Bildern oder Newsletter verwendet?',
+  'products.variants': 'Varianten',
+  'products.variantsEmpty': 'Noch keine Varianten. Varianten gehören zum Grundartikel (z. B. „shaded").',
+  'products.variantPlaceholder': 'Variante hinzufügen (z. B. shaded)',
+  'products.variantAdd': 'Hinzufügen',
+  'products.variantSaveError': 'Variante konnte nicht gespeichert werden.',
+  'products.variantDeleteError': '„{name}" konnte nicht gelöscht werden – zeigen noch Bilder darauf?',
 
   // ─── Rechnungen ──────────────────────────────────────────────────────────
   'invoices.title': 'Rechnungen',
@@ -631,6 +637,8 @@ export const de = {
   'assign.exactPreviewConfirm': 'Übernehmen',
   'assign.exactPreviewCancel': 'Abbrechen',
   'assign.exactApplyError': 'Die exakten Treffer konnten nicht gespeichert werden.',
+  'assign.variant': 'Variante',
+  'assign.variantNone': 'Keine Variante',
 
   // ─── Zuschnitt ───────────────────────────────────────────────────────────
   'crop.title': 'Zuschnitt',
@@ -917,6 +925,12 @@ export const en: Record<TranslationKey, string> = {
   'products.field.wholesale': 'Wholesale price (€)',
   'products.deleteConfirm': 'Really delete product “{name}”?',
   'products.deleteError': '“{name}” could not be deleted – is it still used by images or a newsletter?',
+  'products.variants': 'Variants',
+  'products.variantsEmpty': 'No variants yet. Variants belong to the base article (e.g. “shaded”).',
+  'products.variantPlaceholder': 'Add variant (e.g. shaded)',
+  'products.variantAdd': 'Add',
+  'products.variantSaveError': 'Could not save the variant.',
+  'products.variantDeleteError': '“{name}” could not be deleted – are images still pointing to it?',
 
   'invoices.title': 'Invoices',
   'invoices.subtitle': 'Invoices are created from a goods receipt or as a free invoice. Numbers are assigned sequentially without gaps.',
@@ -1437,6 +1451,8 @@ export const en: Record<TranslationKey, string> = {
   'assign.exactPreviewConfirm': 'Apply',
   'assign.exactPreviewCancel': 'Cancel',
   'assign.exactApplyError': 'Could not save the exact matches.',
+  'assign.variant': 'Variant',
+  'assign.variantNone': 'No variant',
 
   // ─── Zuschnitt ───────────────────────────────────────────────────────────
   'crop.title': 'Crop',

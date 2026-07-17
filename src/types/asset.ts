@@ -1,3 +1,5 @@
+import type { AssetVariantRef } from './productVariant'
+
 /** Bild-/Video-Typ (im Schema: asset_type). */
 export type AssetType =
   | 'product'
@@ -55,6 +57,9 @@ export interface Asset {
 
   /** Bewusst KEINEM Artikel zugeordnet (z. B. reines Farbmuster) → erledigt. */
   no_product_match: boolean
+
+  /** Optionale Variante des Grundartikels (assets.variant_id). Null = Artikelbild. */
+  variant_id: string | null
 }
 
 /**
@@ -92,6 +97,8 @@ export interface AssetWithMeta extends Asset {
   dealer_ids: string[]
   url: string | null
   product: AssetProductRef | null
+  /** Zugeordnete Variante (assets.variant_id → product_variants), oder null. */
+  variant: AssetVariantRef | null
 }
 
 /** Auswahl beim Hochladen (gilt für den gesamten Batch). */

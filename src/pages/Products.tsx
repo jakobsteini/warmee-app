@@ -7,12 +7,18 @@ import {
 } from '../lib/products'
 import { listSeasons } from '../lib/seasons'
 import {
+  listVariantsByProduct,
+  createVariant,
+  deleteVariant,
+} from '../lib/productVariants'
+import {
   categoryLabel,
   PRODUCT_CATEGORIES,
   type Product,
   type ProductInput,
 } from '../types/product'
 import type { Season } from '../types/asset'
+import type { ProductVariant } from '../types/productVariant'
 import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n'
 
@@ -74,6 +80,13 @@ export default function Products() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // Varianten des gerade bearbeiteten Artikels (sofort wirksam, wie Dokumente
+  // beim Händler — Anlegen/Löschen läuft nicht über „Speichern").
+  const [variants, setVariants] = useState<ProductVariant[]>([])
+  const [variantInput, setVariantInput] = useState('')
+  const [variantBusy, setVariantBusy] = useState(false)
+  const [variantError, setVariantError] = useState<string | null>(null)
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -91,6 +104,61 @@ export default function Products() {
   useEffect(() => {
     load()
   }, [])
+
+  // Varianten des bearbeiteten Artikels nachladen (nur im Bearbeiten-Modus).
+  useEffect(() => {
+    setVariantInput('')
+    setVariantError(null)
+    if (!editing) {
+      setVariants([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const v = await listVariantsByProduct(editing.id)
+        if (!cancelled) setVariants(v)
+      } catch {
+        if (!cancelled) setVariants([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [editing])
+
+  async function addVariant() {
+    const name = variantInput.trim()
+    if (!editing || name === '') return
+    // Doubletten je Artikel (case-insensitiv) still verwerfen — der Unique-Index
+    // täte es auch, aber so ohne Fehlermeldung.
+    if (variants.some((v) => v.name.toLowerCase() === name.toLowerCase())) {
+      setVariantInput('')
+      return
+    }
+    setVariantBusy(true)
+    setVariantError(null)
+    try {
+      const created = await createVariant(editing.id, name)
+      setVariants((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      setVariantInput('')
+    } catch {
+      setVariantError(t('products.variantSaveError'))
+    } finally {
+      setVariantBusy(false)
+    }
+  }
+
+  async function removeVariant(v: ProductVariant) {
+    setVariantError(null)
+    try {
+      await deleteVariant(v.id)
+      setVariants((prev) => prev.filter((x) => x.id !== v.id))
+    } catch {
+      // ON DELETE RESTRICT: Bilder zeigen noch auf die Variante.
+      setVariantError(t('products.variantDeleteError', { name: v.name }))
+    }
+  }
 
   const seasonLabel = useMemo(() => {
     const map = new Map(seasons.map((s) => [s.id, s.label]))
@@ -465,6 +533,65 @@ export default function Products() {
                   />
                 </label>
               </div>
+
+              {/* Varianten (nur im Bearbeiten-Modus — Anlegen braucht product_id) */}
+              {editing && (
+                <div className="flex flex-col gap-2 border-t-[0.5px] border-line pt-4">
+                  <span className="text-sm text-muted">
+                    {t('products.variants')}
+                  </span>
+                  {variants.length === 0 ? (
+                    <p className="text-xs text-muted">
+                      {t('products.variantsEmpty')}
+                    </p>
+                  ) : (
+                    <ul className="flex flex-wrap gap-2">
+                      {variants.map((v) => (
+                        <li
+                          key={v.id}
+                          className="flex items-center gap-2 rounded-full border-[0.5px] border-line bg-surface px-3 py-1 text-sm text-ink"
+                        >
+                          {v.name}
+                          <button
+                            type="button"
+                            onClick={() => removeVariant(v)}
+                            aria-label={t('common.remove')}
+                            className="text-muted transition-colors hover:text-red-700"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={variantInput}
+                      onChange={(e) => setVariantInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addVariant()
+                        }
+                      }}
+                      placeholder={t('products.variantPlaceholder')}
+                      className={`${inputClass} flex-1`}
+                    />
+                    <button
+                      type="button"
+                      onClick={addVariant}
+                      disabled={variantBusy || variantInput.trim() === ''}
+                      className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+                    >
+                      {t('products.variantAdd')}
+                    </button>
+                  </div>
+                  {variantError && (
+                    <p className="text-sm text-red-700">{variantError}</p>
+                  )}
+                </div>
+              )}
 
               {formError && <p className="text-sm text-red-700">{formError}</p>}
 

@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   listAssets,
   setAssetProduct,
+  setAssetProductAndVariant,
   setAssetNoProductMatch,
 } from '../lib/assets'
 import { listProducts } from '../lib/products'
+import { listAllVariants } from '../lib/productVariants'
 import {
   suggestProducts,
   filterProducts,
@@ -13,6 +15,7 @@ import {
 } from '../lib/productMatch'
 import type { AssetWithMeta } from '../types/asset'
 import type { Product } from '../types/product'
+import type { ProductVariant } from '../types/productVariant'
 import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n'
 
@@ -20,6 +23,7 @@ export default function AssetsAssign() {
   const t = useT()
   const [assets, setAssets] = useState<AssetWithMeta[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [variants, setVariants] = useState<ProductVariant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Farbmuster (swatch) sind für die Zuordnung Rauschen → standardmäßig aus.
@@ -31,9 +35,14 @@ export default function AssetsAssign() {
     setLoading(true)
     setError(null)
     try {
-      const [a, p] = await Promise.all([listAssets({}), listProducts()])
+      const [a, p, v] = await Promise.all([
+        listAssets({}),
+        listProducts(),
+        listAllVariants(),
+      ])
       setAssets(a)
       setProducts(p)
+      setVariants(v)
     } catch {
       setError(t('assign.loadError'))
     } finally {
@@ -81,14 +90,20 @@ export default function AssetsAssign() {
     [unassigned, products],
   )
 
-  async function assign(assetId: string, productId: string) {
+  async function assign(
+    assetId: string,
+    productId: string,
+    variantId: string | null,
+  ) {
     setError(null)
     try {
-      await setAssetProduct(assetId, productId)
+      await setAssetProductAndVariant(assetId, productId, variantId)
       // Lokal spiegeln → Bild verlässt die Liste, Zähler steigt.
       setAssets((prev) =>
         prev.map((a) =>
-          a.id === assetId ? { ...a, product_id: productId } : a,
+          a.id === assetId
+            ? { ...a, product_id: productId, variant_id: variantId }
+            : a,
         ),
       )
     } catch {
@@ -139,6 +154,17 @@ export default function AssetsAssign() {
     () => new Map(products.map((p) => [p.id, p])),
     [products],
   )
+
+  // Varianten je Artikel, für das Dropdown in der Zuordnungs-Karte.
+  const variantsByProduct = useMemo(() => {
+    const map = new Map<string, ProductVariant[]>()
+    for (const v of variants) {
+      const list = map.get(v.product_id) ?? []
+      list.push(v)
+      map.set(v.product_id, list)
+    }
+    return map
+  }, [variants])
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -226,9 +252,12 @@ export default function AssetsAssign() {
               key={asset.id}
               asset={asset}
               products={products}
-              onAssign={(productId) => assign(asset.id, productId)}
+              onAssign={(productId, variantId) =>
+                assign(asset.id, productId, variantId)
+              }
               onSkip={() => skip(asset.id)}
               productById={productById}
+              variantsByProduct={variantsByProduct}
             />
           ))}
         </div>
@@ -321,17 +350,30 @@ function AssignCard({
   onAssign,
   onSkip,
   productById,
+  variantsByProduct,
 }: {
   asset: AssetWithMeta
   products: Product[]
-  onAssign: (productId: string) => Promise<void>
+  onAssign: (productId: string, variantId: string | null) => Promise<void>
   onSkip: () => void
   productById: Map<string, Product>
+  variantsByProduct: Map<string, ProductVariant[]>
 }) {
   const t = useT()
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Variantenwahl gehört zum gewählten Artikel — bei Artikelwechsel zurücksetzen,
+  // damit nie eine Variante des falschen Artikels gebucht wird.
+  useEffect(() => {
+    setSelectedVariantId(null)
+  }, [selectedId])
+
+  const variantOptions = selectedId
+    ? (variantsByProduct.get(selectedId) ?? [])
+    : []
 
   const suggestions = useMemo(
     () => suggestProducts(asset.model, products).slice(0, 6),
@@ -353,7 +395,7 @@ function AssignCard({
   async function confirm() {
     if (!selectedId) return
     setSaving(true)
-    await onAssign(selectedId)
+    await onAssign(selectedId, selectedVariantId)
     // Kein Reset nötig – die Karte verschwindet nach erfolgreicher Zuordnung.
     setSaving(false)
   }
@@ -468,6 +510,25 @@ function AssignCard({
             </div>
           )}
         </div>
+
+        {/* Variante (nur wenn der gewählte Artikel Varianten hat) */}
+        {selectedId && variantOptions.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-xs text-muted">{t('assign.variant')}</p>
+            <select
+              value={selectedVariantId ?? ''}
+              onChange={(e) => setSelectedVariantId(e.target.value || null)}
+              className="w-full max-w-sm rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink"
+            >
+              <option value="">{t('assign.variantNone')}</option>
+              {variantOptions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Aktionen */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
