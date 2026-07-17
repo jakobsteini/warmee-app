@@ -3,6 +3,7 @@ import { getMyOrgId, getMyUserId } from './org'
 import type {
   Asset,
   AssetFileMeta,
+  AssetProductRef,
   AssetType,
   AssetWithMeta,
   UploadOptions,
@@ -66,7 +67,9 @@ export async function listAssets(
 ): Promise<AssetWithMeta[]> {
   let query = supabase
     .from('assets')
-    .select('*, asset_dealers(dealer_id)')
+    // Verknüpften Artikel mit-embedden (FK assets.product_id → products.id):
+    // liefert Produktgruppe (category) für den Filter und Name/Style für die Suche.
+    .select('*, asset_dealers(dealer_id), product:products(id, name, style, category)')
     .order('created_at', { ascending: false })
 
   if (filters.asset_type) query = query.eq('asset_type', filters.asset_type)
@@ -79,6 +82,7 @@ export async function listAssets(
 
   const rows = (data ?? []) as (Asset & {
     asset_dealers: { dealer_id: string }[] | null
+    product: AssetProductRef | null
   })[]
 
   // Signed-URLs gebündelt erzeugen (privater Bucket).
@@ -94,11 +98,12 @@ export async function listAssets(
   }
 
   return rows.map((r) => {
-    const { asset_dealers, ...asset } = r
+    const { asset_dealers, product, ...asset } = r
     return {
       ...asset,
       dealer_ids: (asset_dealers ?? []).map((d) => d.dealer_id),
       url: urlByPath.get(r.storage_path) ?? null,
+      product: product ?? null,
     }
   })
 }

@@ -16,6 +16,8 @@ import {
   type CropFormatId,
 } from '../types/crop'
 import type { AssetWithMeta } from '../types/asset'
+import AssetFilterBar from '../components/AssetFilterBar'
+import { availableGroups, filterAssets } from '../lib/assetFilter'
 import { useT } from '../i18n'
 
 /** Wert auf [min, max] begrenzen. */
@@ -29,6 +31,8 @@ export default function Crop() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<AssetWithMeta | null>(null)
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
@@ -44,6 +48,12 @@ export default function Crop() {
       }
     })()
   }, [])
+
+  const groups = useMemo(() => availableGroups(assets), [assets])
+  const visible = useMemo(
+    () => filterAssets(assets, { search, group }),
+    [assets, search, group],
+  )
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -67,7 +77,26 @@ export default function Crop() {
           <p className="text-sm text-muted">{t('crop.noAssets')}</p>
         </div>
       ) : (
-        <Picker assets={assets} onPick={setSelected} />
+        <>
+          {/* Suche + Produktgruppe — derselbe Baustein wie im Bildarchiv */}
+          <div className="mb-6">
+            <AssetFilterBar
+              search={search}
+              onSearchChange={setSearch}
+              group={group}
+              onGroupChange={setGroup}
+              groups={groups}
+              count={visible.length}
+            />
+          </div>
+          {visible.length === 0 ? (
+            <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
+              <p className="text-sm text-muted">{t('assets.noneInView')}</p>
+            </div>
+          ) : (
+            <Picker assets={visible} onPick={setSelected} />
+          )}
+        </>
       )}
     </div>
   )

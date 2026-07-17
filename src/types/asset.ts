@@ -67,12 +67,26 @@ export interface AssetFileMeta {
 }
 
 /**
- * Asset inklusive der zugeordneten Händler-IDs und einer temporären
- * Signed-URL für die Anzeige (der "assets"-Bucket ist privat).
+ * Kompaktverweis auf den verknüpften Artikel (über assets.product_id).
+ * Trägt die Produktgruppe (`category`) für Filter und den Namen/Style für die
+ * Suche — ohne den ganzen Product-Datensatz mitzuschleppen.
+ */
+export interface AssetProductRef {
+  id: string
+  name: string
+  style: string | null
+  category: string | null
+}
+
+/**
+ * Asset inklusive der zugeordneten Händler-IDs, einer temporären Signed-URL für
+ * die Anzeige (der "assets"-Bucket ist privat) und dem verknüpften Artikel
+ * (null, wenn dem Bild kein Artikel zugeordnet ist).
  */
 export interface AssetWithMeta extends Asset {
   dealer_ids: string[]
   url: string | null
+  product: AssetProductRef | null
 }
 
 /** Auswahl beim Hochladen (gilt für den gesamten Batch). */

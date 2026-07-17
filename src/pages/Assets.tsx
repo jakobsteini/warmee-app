@@ -26,6 +26,8 @@ import {
   type Season,
 } from '../types/asset'
 import EmptyState from '../components/EmptyState'
+import AssetFilterBar from '../components/AssetFilterBar'
+import { availableGroups, filterAssets } from '../lib/assetFilter'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
@@ -59,9 +61,11 @@ export default function Assets() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Filter
+  // Filter (Typ/Saison serverseitig; Suche/Gruppe clientseitig auf dem Ergebnis)
   const [filterType, setFilterType] = useState<AssetType | null>(null)
   const [filterSeason, setFilterSeason] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState<string | null>(null)
 
   // Upload-Auswahl (gilt für den nächsten Batch)
   const [uploadType, setUploadType] = useState<AssetType>('product')
@@ -207,6 +211,15 @@ export default function Assets() {
   }, [seasons])
 
   const pendingCount = staged.filter((s) => s.status !== 'done').length
+
+  // Gruppen aus dem geladenen Satz; Suche + Gruppe clientseitig darauf.
+  const groups = useMemo(() => availableGroups(assets), [assets])
+  const visible = useMemo(
+    () => filterAssets(assets, { search, group }),
+    [assets, search, group],
+  )
+  const filtersActive =
+    filterType !== null || filterSeason !== null || search.trim() !== '' || group !== null
 
   const selectClass =
     'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
@@ -372,6 +385,18 @@ export default function Assets() {
         </div>
       </div>
 
+      {/* Suche + Produktgruppe (clientseitig, gemeinsamer Baustein mit Zuschnitt) */}
+      <div className="mb-6">
+        <AssetFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          group={group}
+          onGroupChange={setGroup}
+          groups={groups}
+          count={loading ? undefined : visible.length}
+        />
+      </div>
+
       {/* Gallery */}
       {loading ? (
         <p className="text-sm text-muted">{t('common.loading')}</p>
@@ -380,7 +405,7 @@ export default function Assets() {
           <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
             <p className="text-sm text-muted">{t('assets.uploadRunning')}</p>
           </div>
-        ) : filterType !== null || filterSeason !== null ? (
+        ) : filtersActive ? (
           <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
             <p className="text-sm text-muted">{t('assets.noneInView')}</p>
           </div>
@@ -392,9 +417,13 @@ export default function Assets() {
             {t('assets.empty')}
           </EmptyState>
         )
+      ) : visible.length === 0 ? (
+        <div className="rounded-md border-[0.5px] border-line bg-card px-6 py-12 text-center">
+          <p className="text-sm text-muted">{t('assets.noneInView')}</p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {assets.map((a) => (
+          {visible.map((a) => (
             <button
               key={a.id}
               type="button"
