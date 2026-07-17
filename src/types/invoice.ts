@@ -28,6 +28,10 @@ export interface Invoice {
   invoice_number: string
   invoice_date: string
   due_date: string | null
+  /** Eingefrorener Skontosatz zum Rechnungszeitpunkt (Snapshot wie due_date). numeric(5,2). */
+  skonto_prozent: number | string | null
+  /** Eingefrorene Skontofrist in Tagen zum Rechnungszeitpunkt. */
+  skonto_tage: number | null
   /** numeric(10,2) – kann als number oder string ankommen. */
   subtotal: number | string
   tax_rate: number | string

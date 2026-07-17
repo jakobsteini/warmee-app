@@ -3,7 +3,7 @@ import { getMyOrgId, getMyUserId } from './org'
 import { recordedReturnsByInvoice } from './returns'
 import { openAfterReturns } from './returnsCalc'
 import type { BelegItem } from './pdf'
-import { addDaysIso } from './dates'
+import { addDaysIso, daysBetweenIso } from './dates'
 import {
   VAT_RATE,
   applyVat,
@@ -400,7 +400,13 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
   )
   const { data: updated, error: upErr } = await supabase
     .from('invoices')
-    .update({ pdf_path: path, due_date: dueDate })
+    .update({
+      pdf_path: path,
+      due_date: dueDate,
+      // Skonto zum Rechnungszeitpunkt einfrieren (Snapshot wie due_date).
+      skonto_prozent: terms.skonto_prozent,
+      skonto_tage: terms.skonto_tage,
+    })
     .eq('id', invoice.id)
     .select()
     .single()
@@ -528,7 +534,13 @@ export async function createFreeInvoice(
   )
   const { data: updated, error: upErr } = await supabase
     .from('invoices')
-    .update({ pdf_path: path, due_date: dueDate })
+    .update({
+      pdf_path: path,
+      due_date: dueDate,
+      // Skonto zum Rechnungszeitpunkt einfrieren (Snapshot wie due_date).
+      skonto_prozent: terms.skonto_prozent,
+      skonto_tage: terms.skonto_tage,
+    })
     .eq('id', invoice.id)
     .select()
     .single()
@@ -541,8 +553,17 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
   const org_id = await getMyOrgId()
   const inv = await getInvoice(id)
 
-  // Konditionen: WARM-ME-Standard (Händlerwerte kommen mit dem Import).
-  const terms = effectivePaymentTerms(null)
+  // Konditionen aus den EINGEFRORENEN Rechnungswerten, damit das neu erzeugte
+  // PDF dem Original entspricht. Zahlungsziel aus dem eingefrorenen due_date
+  // zurückgerechnet. Altbestände ohne Snapshot (skonto_*/due_date null) fallen
+  // pro Feld auf den WARM-ME-Standard zurück — genau so wurden sie gedruckt.
+  const terms = effectivePaymentTerms({
+    skonto_prozent: inv.skonto_prozent,
+    skonto_tage: inv.skonto_tage,
+    zahlungsziel_tage: inv.due_date
+      ? daysBetweenIso(inv.invoice_date, inv.due_date)
+      : null,
+  })
   const total = num(inv.total)
 
   const { buildInvoicePdf } = await import('./pdf')

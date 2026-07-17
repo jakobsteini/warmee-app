@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { formatEUR } from '../lib/money'
+import { skontoPayment } from '../lib/tax'
 import { useT } from '../i18n'
 
 const inputClass =
@@ -10,10 +11,31 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/** ISO-Kurzdatum als deutsches Kurzdatum. */
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+/** Eingefrorene Skontokonditionen der Rechnung für den Zahlbetrag-Vorschlag. */
+export interface MarkPaidSkonto {
+  prozent: number
+  tage: number
+  invoiceDate: string
+}
+
 /**
  * Dialog zum Erfassen eines Zahlungseingangs: Zahlungsdatum (Default heute) und
- * Betrag (Default = offener Bruttobetrag). Wird von der Rechnungs-Detailansicht
- * und der Offene-Posten-Liste gemeinsam genutzt.
+ * Betrag. Wird von der Rechnungs-Detailansicht und der Offene-Posten-Liste
+ * gemeinsam genutzt.
+ *
+ * Skonto: Zahlt der Händler innerhalb der Frist (bezogen auf das eingegebene
+ * Zahlungsdatum), schlägt der Dialog den Skonto-Zahlbetrag (offener Rest −
+ * Skonto) vor — sichtbar gekennzeichnet und frei überschreibbar. Nach der Frist
+ * gilt der volle offene Rest.
  *
  * Bei Erfolg schließt der Aufrufer den Dialog (Komponente wird ausgehängt);
  * Fehler werden inline gezeigt und der Dialog bleibt offen.
@@ -21,18 +43,33 @@ function todayIso(): string {
 export default function MarkPaidDialog({
   invoiceNumber,
   defaultAmount,
+  skonto = null,
   onConfirm,
   onClose,
 }: {
   invoiceNumber: string
-  /** Offener Bruttobetrag der Rechnung (Vorbelegung des Betragsfelds). */
+  /** Offener Bruttobetrag der Rechnung (Basis, auch für den Skonto-Abzug). */
   defaultAmount: number
+  /** Eingefrorene Skontokonditionen, oder null (kein Skonto). */
+  skonto?: MarkPaidSkonto | null
   onConfirm: (paidAt: string, paidAmount: number) => Promise<void>
   onClose: () => void
 }) {
   const t = useT()
   const [paidAt, setPaidAt] = useState(todayIso())
-  const [amount, setAmount] = useState(defaultAmount.toFixed(2))
+  // Skonto-Vorschau reagiert auf das eingegebene Zahlungsdatum.
+  const sk = skonto
+    ? skontoPayment(
+        defaultAmount,
+        skonto.prozent,
+        skonto.tage,
+        skonto.invoiceDate,
+        paidAt,
+      )
+    : null
+  const [amount, setAmount] = useState(
+    (sk?.applicable ? sk.payable : defaultAmount).toFixed(2),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -82,6 +119,28 @@ export default function MarkPaidDialog({
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs text-muted">{t('markPaid.amount')}</span>
+            {sk?.applicable && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAmount(sk.payable.toFixed(2))}
+                  className="rounded-full border-[0.5px] border-ink bg-ink px-3 py-1 text-xs text-cream"
+                >
+                  {t('markPaid.skontoOption', {
+                    amount: formatEUR(sk.payable),
+                    pct: sk.prozent,
+                    date: formatDate(sk.deadline),
+                  })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAmount(defaultAmount.toFixed(2))}
+                  className="rounded-full border-[0.5px] border-line px-3 py-1 text-xs text-ink hover:bg-card"
+                >
+                  {t('markPaid.fullOption', { amount: formatEUR(defaultAmount) })}
+                </button>
+              </div>
+            )}
             <input
               type="text"
               inputMode="decimal"
@@ -90,7 +149,12 @@ export default function MarkPaidDialog({
               className={inputClass}
             />
             <span className="text-xs text-muted">
-              {t('markPaid.openAmount', { amount: formatEUR(defaultAmount) })}
+              {sk?.applicable
+                ? t('markPaid.skontoHint', {
+                    amount: formatEUR(sk.amount),
+                    pct: sk.prozent,
+                  })
+                : t('markPaid.openAmount', { amount: formatEUR(defaultAmount) })}
             </span>
           </label>
 

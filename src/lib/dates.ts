@@ -4,3 +4,9 @@ export function addDaysIso(iso: string, days: number): string {
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
 }
+
+/** Ganze Tage von ISO-Datum a bis b (b − a). Für das Zurückrechnen des
+ * Zahlungsziels aus einem eingefrorenen due_date. */
+export function daysBetweenIso(a: string, b: string): number {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000)
+}

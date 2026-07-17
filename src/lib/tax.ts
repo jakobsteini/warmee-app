@@ -6,6 +6,8 @@
  * UI denselben Satz verwenden. Die Zahl darf nirgends sonst hardcodiert sein.
  */
 
+import { addDaysIso } from './dates.ts'
+
 /** Umsatzsteuer-Regelsatz als Faktor (0.20 = 20 %). */
 export const VAT_RATE = 0.2
 
@@ -105,4 +107,48 @@ export interface SkontoResult {
 export function computeSkonto(gross: number, prozent: number): SkontoResult {
   const amount = roundCents(gross * (prozent / 100))
   return { prozent, amount, payable: roundCents(gross - amount) }
+}
+
+/** Skonto-Zahlungsvorschau für den „Zahlung erfassen"-Dialog. */
+export interface SkontoPayment {
+  /** Skonto gilt für dieses Zahlungsdatum (innerhalb der Frist) und prozent > 0. */
+  applicable: boolean
+  /** Skonto-Frist als ISO-Datum (Rechnungsdatum + skonto_tage). */
+  deadline: string
+  prozent: number
+  /** Skonto-Abzug in EUR auf den offenen Rest (0, wenn nicht anwendbar). */
+  amount: number
+  /** Vorgeschlagener Zahlbetrag: offener Rest − Skonto (bzw. voller Rest). */
+  payable: number
+}
+
+/**
+ * Skonto-Zahlungsvorschau: rechnet den Skonto-Abzug auf den OFFENEN REST (nach
+ * Retouren, aus returnsCalc.openAfterReturns) und sagt, ob er für das gewählte
+ * Zahlungsdatum noch gilt (paymentDate ≤ Rechnungsdatum + skontoTage).
+ *
+ * Basis ist bewusst der offene Rest, NICHT das Rechnungsbrutto — Skonto auf
+ * retournierte Ware wäre falsch. ISO-Kurzdaten (YYYY-MM-DD) sind lexikografisch
+ * vergleichbar; der Frist-Tag selbst zählt noch als fristgerecht.
+ */
+export function skontoPayment(
+  offenerRest: number,
+  prozent: number,
+  skontoTage: number,
+  invoiceDate: string,
+  paymentDate: string,
+): SkontoPayment {
+  const deadline = addDaysIso(invoiceDate, skontoTage)
+  const applicable = prozent > 0 && paymentDate <= deadline
+  if (!applicable) {
+    return {
+      applicable: false,
+      deadline,
+      prozent,
+      amount: 0,
+      payable: roundCents(offenerRest),
+    }
+  }
+  const { amount, payable } = computeSkonto(offenerRest, prozent)
+  return { applicable: true, deadline, prozent, amount, payable }
 }

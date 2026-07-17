@@ -27,7 +27,7 @@ import {
   computeSkonto,
   effectivePaymentTerms,
 } from '../lib/tax'
-import { addDaysIso } from '../lib/dates'
+import { addDaysIso, daysBetweenIso } from '../lib/dates'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
@@ -197,9 +197,16 @@ export default function InvoiceEdit() {
     .filter((r) => r.status === 'recorded')
     .reduce((s, r) => s + (Number(r.total_amount) || 0), 0)
 
-  // Zahlungskonditionen (WARM-ME-Standard, bis der Händler-Import die Felder
-  // befüllt) — nur Anzeige, spiegelt die Skonto-Zeile der Rechnungs-PDF.
-  const terms = effectivePaymentTerms(null)
+  // Zahlungskonditionen aus den EINGEFRORENEN Rechnungswerten (Snapshot wie
+  // due_date) — spiegelt die Skonto-Zeile der Rechnungs-PDF. Altbestände ohne
+  // Snapshot fallen pro Feld auf den WARM-ME-Standard zurück (wie gedruckt).
+  const terms = effectivePaymentTerms({
+    skonto_prozent: invoice.skonto_prozent,
+    skonto_tage: invoice.skonto_tage,
+    zahlungsziel_tage: invoice.due_date
+      ? daysBetweenIso(invoice.invoice_date, invoice.due_date)
+      : null,
+  })
   const totalNum =
     typeof invoice.total === 'string' ? Number(invoice.total) : invoice.total
   const skonto =
@@ -493,6 +500,15 @@ export default function InvoiceEdit() {
         <MarkPaidDialog
           invoiceNumber={invoice.invoice_number}
           defaultAmount={openAfterReturns(totalNum, recordedReturnsGross)}
+          skonto={
+            terms.skonto_prozent > 0
+              ? {
+                  prozent: terms.skonto_prozent,
+                  tage: terms.skonto_tage,
+                  invoiceDate: invoice.invoice_date,
+                }
+              : null
+          }
           onConfirm={handleMarkPaid}
           onClose={() => setPayOpen(false)}
         />

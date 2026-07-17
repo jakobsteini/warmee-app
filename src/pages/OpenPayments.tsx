@@ -258,6 +258,15 @@ export default function OpenPayments() {
         <MarkPaidDialog
           invoiceNumber={payRow.invoice_number}
           defaultAmount={payRow.open_amount}
+          skonto={
+            payRow.skonto_prozent != null && Number(payRow.skonto_prozent) > 0
+              ? {
+                  prozent: Number(payRow.skonto_prozent),
+                  tage: payRow.skonto_tage ?? 0,
+                  invoiceDate: payRow.invoice_date,
+                }
+              : null
+          }
           onConfirm={handleMarkPaid}
           onClose={() => setPayRow(null)}
         />
