@@ -2,7 +2,7 @@
 -- ASSET-TYP „Farbmuster" (swatch)
 -- Baustein „Bildarchiv: Bild-Typ als primäre Achse" (2026-07-17).
 --
--- Hintergrund: 75 der 94 Bilder sind Farbmuster (Dateiname „Code_Farbe",
+-- Hintergrund: 36 der 94 Bilder sind Farbmuster (Dateiname „Code_Farbe",
 -- beginnt mit einer Ziffer), keine Produktfotos. Sie gehören zu einer Farbe,
 -- nicht zu einem Artikel. Bisher lagen sie mangels passendem Typ als
 -- asset_type='product' ohne product_id da. Neuer Typwert 'swatch' macht sie
