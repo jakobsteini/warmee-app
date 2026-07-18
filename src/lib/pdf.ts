@@ -666,6 +666,171 @@ export function buildPickingListPdf(data: PickingListPdfData): Blob {
   return doc.output('blob')
 }
 
+/** Eine Zeile der Kunden-Lagerliste (je Artikel + Farbe). */
+export interface StockListRow {
+  article: string
+  color: string | null
+  /** Bestand (Summe über Größe + Variante). */
+  pieces: number
+  /** Großhandelspreis (VK-GH), oder null. */
+  wholesalePrice: number | null
+  /** Muster-Foto als dataURL (Swatch/Produktfoto), oder null. */
+  photo: string | null
+}
+
+/** Daten für die Kunden-Lagerliste (Bestandslager). Wegwerf-Dokument. */
+export interface StockListPdfData {
+  /** Erzeugungsdatum als ISO (nur Anzeige, nicht persistiert). */
+  date: string
+  rows: StockListRow[]
+  totalPieces: number
+}
+
+/** Kopf der Lagerliste (kein Empfänger-Block — Kundenliste aus dem Bestand). */
+function drawStockListHeader(
+  doc: jsPDF,
+  meta: { label: string; value: string }[],
+): number {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(26, 26, 26)
+  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(120, 115, 108)
+  SENDER.lines.forEach((line, i) => doc.text(line, MARGIN, 28 + i * 4.5))
+
+  const right = PAGE_W - MARGIN
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.setTextColor(26, 26, 26)
+  doc.text('Lagerliste', right, 22, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  let my = 30
+  for (const row of meta) {
+    doc.setTextColor(120, 115, 108)
+    doc.text(row.label, right - 42, my)
+    doc.setTextColor(26, 26, 26)
+    doc.text(row.value, right, my, { align: 'right' })
+    my += 5
+  }
+
+  let ry = 48
+  doc.setTextColor(120, 115, 108)
+  doc.setFontSize(8)
+  doc.text('Bestand', MARGIN, ry)
+  ry += 6
+  doc.setTextColor(26, 26, 26)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Bestandslager', MARGIN, ry)
+  ry += 4.5
+
+  const bottom = Math.max(ry, 56)
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, bottom, PAGE_W - MARGIN, bottom)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+  return bottom
+}
+
+/** Lagerlisten-Tabelle: Muster-Foto · Artikel · Farbe · Stück · VK-GH + Gesamt. */
+function drawStockListTable(
+  doc: jsPDF,
+  rows: StockListRow[],
+  total: number,
+  startY: number,
+) {
+  const right = PAGE_W - MARGIN
+  const cols = { photo: MARGIN, article: 36, color: 96, pieces: 150, price: right }
+  const ROW_H = 16
+
+  let y = startY + 8
+  const drawHead = () => {
+    doc.setFillColor(241, 239, 234)
+    doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90, 85, 80)
+    doc.text('Foto', cols.photo + 1, y)
+    doc.text('Artikel', cols.article, y)
+    doc.text('Farbe', cols.color, y)
+    doc.text('Stueck', cols.pieces, y, { align: 'right' })
+    doc.text('VK-GH', cols.price, y, { align: 'right' })
+    y += 4
+  }
+  drawHead()
+
+  for (const r of rows) {
+    if (y + ROW_H > 270) {
+      doc.addPage()
+      y = 26
+      drawHead()
+    }
+    const rowTop = y + 2
+    // Muster-Foto — pro Bild abgesichert: ein defektes Bild überspringt nur die
+    // Zelle, das PDF baut weiter (dataURL kommt bereits aufgelöst aus stockList.ts).
+    if (r.photo) {
+      try {
+        doc.addImage(r.photo, 'JPEG', cols.photo, rowTop, 14, 14)
+      } catch {
+        /* Bild überspringen, kein Abbruch */
+      }
+    }
+    const textY = rowTop + 9
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(26, 26, 26)
+    doc.text(doc.splitTextToSize(r.article, cols.color - cols.article - 3)[0] ?? '', cols.article, textY)
+    doc.setTextColor(90, 85, 80)
+    doc.text(r.color ?? '-', cols.color, textY)
+    doc.setTextColor(26, 26, 26)
+    doc.text(num(r.pieces), cols.pieces, textY, { align: 'right' })
+    doc.text(r.wholesalePrice != null ? eur(r.wholesalePrice) : '-', cols.price, textY, {
+      align: 'right',
+    })
+
+    doc.setDrawColor(220, 216, 210)
+    doc.setLineWidth(0.1)
+    doc.line(MARGIN, rowTop + ROW_H - 1, PAGE_W - MARGIN, rowTop + ROW_H - 1)
+    doc.setLineWidth(DEFAULT_LINE_WIDTH)
+    y += ROW_H
+  }
+
+  if (y + 12 > 278) {
+    doc.addPage()
+    y = 26
+  }
+  y += 4
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+  y += 6
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(26, 26, 26)
+  doc.text('Gesamtbestand', cols.article, y)
+  doc.text(num(total), cols.pieces, y, { align: 'right' })
+}
+
+/**
+ * Kunden-Lagerliste als PDF-Blob (Bestandslager). Wegwerf-Dokument wie der
+ * Kommissionierschein — kein Nummernkreis, keine Persistenz. Fotos sind bereits
+ * als dataURL vorbereitet (stockList.ts); der Builder platziert sie nur.
+ */
+export function buildStockListPdf(data: StockListPdfData): Blob {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const bottom = drawStockListHeader(doc, [
+    { label: 'Datum', value: deDate(data.date) },
+    { label: 'Artikel', value: num(data.rows.length) },
+  ])
+  drawStockListTable(doc, data.rows, data.totalPieces, bottom)
+  drawFooter(doc)
+  return doc.output('blob')
+}
+
 /** Daten für die Lieferschein-PDF. */
 export interface DeliveryNotePdfData {
   number: string

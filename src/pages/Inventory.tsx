@@ -31,6 +31,7 @@ export default function Inventory() {
   const [filter, setFilter] = useState<WarehouseFilter>('all')
   const [showEmpty, setShowEmpty] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -55,6 +56,37 @@ export default function Inventory() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /**
+   * Kunden-Lagerliste als PDF (Bestandslager) erzeugen und direkt herunterladen.
+   * Wegwerf-Blob wie der Kommissionierschein — kein Nummernkreis, keine Persistenz.
+   */
+  async function handleStockListPdf() {
+    setPdfBusy(true)
+    setError(null)
+    try {
+      const { buildStockListData } = await import('../lib/stockList')
+      const data = await buildStockListData()
+      if (data.rows.length === 0) {
+        setError(t('inventory.stockListEmpty'))
+        return
+      }
+      const { buildStockListPdf } = await import('../lib/pdf')
+      const blob = buildStockListPdf(data)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `lagerliste-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError(t('inventory.stockListError'))
+    } finally {
+      setPdfBusy(false)
+    }
+  }
 
   const productName = useMemo(
     () => new Map(products.map((p) => [p.id, p.name])),
@@ -97,14 +129,24 @@ export default function Inventory() {
           <h1 className="text-2xl font-medium text-ink">{t('inventory.title')}</h1>
           <p className="mt-1 text-sm text-muted">{t('inventory.subtitle')}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          disabled={products.length === 0}
-          className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {t('inventory.addMovement')}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handleStockListPdf}
+            disabled={pdfBusy}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+          >
+            {pdfBusy ? t('common.generating') : t('inventory.stockListPdf')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            disabled={products.length === 0}
+            className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {t('inventory.addMovement')}
+          </button>
+        </div>
       </div>
 
       {error && (

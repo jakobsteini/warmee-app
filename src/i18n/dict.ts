@@ -870,6 +870,9 @@ export const de = {
   'inventory.discharge.already': 'Für diesen Lieferschein wurde bereits ausgebucht.',
   'inventory.discharge.nothing': 'Keine Positionen zum Ausbuchen.',
   'inventory.discharge.loadError': 'Ausbuchungs-Vorschlag konnte nicht geladen werden.',
+  'inventory.stockListPdf': 'Lagerliste als PDF',
+  'inventory.stockListEmpty': 'Kein Bestand im Bestandslager für die Lagerliste.',
+  'inventory.stockListError': 'Lagerliste konnte nicht erzeugt werden.',
 } as const
 
 export type TranslationKey = keyof typeof de
@@ -1720,6 +1723,9 @@ export const en: Record<TranslationKey, string> = {
   'inventory.discharge.already': 'This delivery note has already been booked out.',
   'inventory.discharge.nothing': 'No lines to book out.',
   'inventory.discharge.loadError': 'Could not load the book-out proposal.',
+  'inventory.stockListPdf': 'Stock list as PDF',
+  'inventory.stockListEmpty': 'No main-warehouse stock for the list.',
+  'inventory.stockListError': 'Could not generate the stock list.',
 }
 
 export const translations: Record<Lang, Record<TranslationKey, string>> = {
