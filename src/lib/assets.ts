@@ -173,7 +173,11 @@ export async function uploadAsset(
 /** Typ und/oder Saison eines Assets ändern. */
 export async function updateAsset(
   id: string,
-  patch: { asset_type?: AssetType; season_id?: string | null },
+  patch: {
+    asset_type?: AssetType
+    season_id?: string | null
+    pantone_code?: string | null
+  },
 ): Promise<void> {
   const { error } = await supabase.from('assets').update(patch).eq('id', id)
   if (error) throw error

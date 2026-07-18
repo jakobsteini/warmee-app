@@ -52,6 +52,12 @@ export interface Asset {
   color_code_2: string | null
   /** Optionaler Zweit-Farbname, z. B. "mayfly". */
   color_name_2: string | null
+  /**
+   * Pantone-Code der Farbe (Freitext, z. B. "19-3909 TCX"). Nur bei Swatches
+   * gepflegt — der Pantone hängt am Musterfoto (assets.pantone_code); Farben
+   * ohne Swatch bleiben ohne Pantone (bewusste Grenze, siehe Migration).
+   */
+  pantone_code: string | null
   /** True bei einer "_SocialMedia"-Variante des Bildes. */
   is_social_media: boolean
 

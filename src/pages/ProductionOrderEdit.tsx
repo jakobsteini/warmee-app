@@ -5,7 +5,9 @@ import {
   listProductionOrderItems,
   updateProductionNotes,
   updateProductionStatus,
+  updateProductionTransportkosten,
 } from '../lib/productionOrders'
+import { parseDecimalField } from '../lib/paymentTerms'
 import { listSeasons } from '../lib/seasons'
 import GoodsReceiptSection from '../components/GoodsReceiptSection'
 import {
@@ -43,6 +45,8 @@ export default function ProductionOrderEdit() {
   const [error, setError] = useState<string | null>(null)
 
   const [notes, setNotes] = useState('')
+  const [transport, setTransport] = useState('')
+  const [transportError, setTransportError] = useState<string | null>(null)
 
   async function load() {
     if (!id) return
@@ -57,6 +61,7 @@ export default function ProductionOrderEdit() {
       setOrder(ord)
       setItems(its)
       setNotes(ord.notes ?? '')
+      setTransport(ord.transportkosten != null ? String(ord.transportkosten) : '')
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
     } catch {
       setError(t('productionOrderEdit.loadError'))
@@ -94,6 +99,28 @@ export default function ProductionOrderEdit() {
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
       setError(t('common.notesSaveError'))
+    }
+  }
+
+  /**
+   * Transportkosten strikt über parseDecimalField speichern: leer = null
+   * (gültig), ungültig → sichtbarer Fehler ohne stilles Verschlucken.
+   */
+  async function handleTransportBlur() {
+    if (!order) return
+    const parsed = parseDecimalField(transport)
+    if (!parsed.ok) {
+      setTransportError(t('productionOrderEdit.transportInvalid'))
+      return
+    }
+    setTransportError(null)
+    const current = order.transportkosten != null ? Number(order.transportkosten) : null
+    if (parsed.value === current) return
+    try {
+      await updateProductionTransportkosten(order.id, parsed.value)
+      setOrder({ ...order, transportkosten: parsed.value })
+    } catch {
+      setTransportError(t('productionOrderEdit.transportSaveError'))
     }
   }
 
@@ -176,17 +203,32 @@ export default function ProductionOrderEdit() {
         </div>
       )}
 
-      <label className="mb-8 flex flex-col gap-1.5 print:hidden">
-        <span className="text-sm text-muted">{t('common.notes')}</span>
-        <input
-          type="text"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={handleNotesBlur}
-          placeholder={t('productionOrderEdit.notesPlaceholder')}
-          className={inputClass}
-        />
-      </label>
+      <div className="mb-8 flex flex-col gap-4 print:hidden sm:flex-row">
+        <label className="flex flex-1 flex-col gap-1.5">
+          <span className="text-sm text-muted">{t('common.notes')}</span>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={handleNotesBlur}
+            placeholder={t('productionOrderEdit.notesPlaceholder')}
+            className={inputClass}
+          />
+        </label>
+        <label className="flex w-full flex-col gap-1.5 sm:w-56">
+          <span className="text-sm text-muted">{t('productionOrderEdit.transport')}</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={transport}
+            onChange={(e) => setTransport(e.target.value)}
+            onBlur={handleTransportBlur}
+            placeholder={t('productionOrderEdit.transportPlaceholder')}
+            className={inputClass}
+          />
+          {transportError && <span className="text-sm text-red-700">{transportError}</span>}
+        </label>
+      </div>
 
       {order.notes && (
         <p className="mb-8 hidden text-sm text-ink print:block">

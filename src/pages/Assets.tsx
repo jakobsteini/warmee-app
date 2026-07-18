@@ -590,6 +590,7 @@ function AssetDetail({
   const t = useT()
   const [assetType, setAssetType] = useState<AssetType>(asset.asset_type)
   const [seasonId, setSeasonId] = useState<string | null>(asset.season_id)
+  const [pantone, setPantone] = useState(asset.pantone_code ?? '')
   const [selectedIds, setSelectedIds] = useState<string[]>(asset.dealer_ids)
   const [saving, setSaving] = useState(false)
   const [loadingDealers, setLoadingDealers] = useState(true)
@@ -618,10 +619,17 @@ function AssetDetail({
     setSaving(true)
     setSaveError(null)
     try {
-      if (assetType !== asset.asset_type || seasonId !== asset.season_id) {
+      // Pantone nur bei Swatches; Freitext, leer → null (kein stilles Schlucken).
+      const nextPantone = assetType === 'swatch' ? pantone.trim() || null : asset.pantone_code
+      if (
+        assetType !== asset.asset_type ||
+        seasonId !== asset.season_id ||
+        nextPantone !== asset.pantone_code
+      ) {
         await updateAsset(asset.id, {
           asset_type: assetType,
           season_id: seasonId,
+          pantone_code: nextPantone,
         })
       }
       await setAssetDealers(asset.id, selectedIds)
@@ -729,6 +737,19 @@ function AssetDetail({
               </select>
             </label>
           </div>
+
+          {assetType === 'swatch' && (
+            <label className="mt-4 flex flex-col gap-1.5">
+              <span className="text-sm text-muted">{t('assets.pantone')}</span>
+              <input
+                type="text"
+                value={pantone}
+                onChange={(e) => setPantone(e.target.value)}
+                placeholder={t('assets.pantonePlaceholder')}
+                className={fieldClass}
+              />
+            </label>
+          )}
 
           <div className="mt-5 flex-1">
             <p className="mb-2 text-sm font-medium text-ink">{t('assets.assignDealers')}</p>

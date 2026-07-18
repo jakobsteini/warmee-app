@@ -193,6 +193,18 @@ export async function updateProductionNotes(
   if (error) throw error
 }
 
+/** Transportkosten einer Produktionsbestellung aktualisieren (null = leer). */
+export async function updateProductionTransportkosten(
+  id: string,
+  transportkosten: number | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('production_orders')
+    .update({ transportkosten })
+    .eq('id', id)
+  if (error) throw error
+}
+
 /** Produktionsbestellung löschen (Positionen per ON DELETE CASCADE mit). */
 export async function deleteProductionOrder(id: string): Promise<void> {
   const { error } = await supabase

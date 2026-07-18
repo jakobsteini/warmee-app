@@ -494,6 +494,10 @@ export const de = {
   'productionOrderEdit.meta': 'Saison {season} · Generiert am {date}',
   'productionOrderEdit.sentSuffix': ' · Gesendet am {date}',
   'productionOrderEdit.notesPlaceholder': 'Interne Notiz zur Bestellung',
+  'productionOrderEdit.transport': 'Transportkosten (€)',
+  'productionOrderEdit.transportPlaceholder': 'z. B. 1250,00',
+  'productionOrderEdit.transportInvalid': 'Bitte einen gültigen Betrag eingeben (z. B. 1250 oder 1250,50).',
+  'productionOrderEdit.transportSaveError': 'Transportkosten konnten nicht gespeichert werden.',
   'productionOrderEdit.positions': 'Positionen ({count})',
 
   // ─── Auswertungen ────────────────────────────────────────────────────────
@@ -604,6 +608,8 @@ export const de = {
   'assets.removeFromList': 'Aus Liste entfernen',
   'assets.saveError': 'Änderungen konnten nicht gespeichert werden.',
   'assets.noPreview': 'Keine Vorschau',
+  'assets.pantone': 'Pantone-Code',
+  'assets.pantonePlaceholder': 'z. B. 19-3909 TCX',
   'assets.dimensions': 'Maße',
   'assets.assignDealers': 'Händler zuordnen',
   'assets.noDealers': 'Noch keine Händler angelegt.',
@@ -1348,6 +1354,10 @@ export const en: Record<TranslationKey, string> = {
   'productionOrderEdit.meta': 'Season {season} · Generated on {date}',
   'productionOrderEdit.sentSuffix': ' · Sent on {date}',
   'productionOrderEdit.notesPlaceholder': 'Internal note for the order',
+  'productionOrderEdit.transport': 'Transport cost (€)',
+  'productionOrderEdit.transportPlaceholder': 'e.g. 1250.00',
+  'productionOrderEdit.transportInvalid': 'Please enter a valid amount (e.g. 1250 or 1250.50).',
+  'productionOrderEdit.transportSaveError': 'Could not save the transport cost.',
   'productionOrderEdit.positions': 'Line items ({count})',
 
   // ─── Auswertungen ────────────────────────────────────────────────────────
@@ -1458,6 +1468,8 @@ export const en: Record<TranslationKey, string> = {
   'assets.removeFromList': 'Remove from list',
   'assets.saveError': 'Could not save changes.',
   'assets.noPreview': 'No preview',
+  'assets.pantone': 'Pantone code',
+  'assets.pantonePlaceholder': 'e.g. 19-3909 TCX',
   'assets.dimensions': 'Dimensions',
   'assets.assignDealers': 'Assign dealers',
   'assets.noDealers': 'No dealers created yet.',

@@ -45,6 +45,8 @@ export interface ProductionOrder {
   status: ProductionStatus
   generated_at: string | null
   sent_at: string | null
+  /** Transportkosten dieser Produktion (Ist-Fracht, Nepal ≠ Portugal); numeric(10,2). */
+  transportkosten: number | string | null
   notes: string | null
   created_by: string | null
   created_at: string | null
