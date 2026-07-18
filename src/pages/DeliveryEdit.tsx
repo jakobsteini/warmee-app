@@ -16,6 +16,8 @@ import {
   listDeliveryDocuments,
   signedPdfUrl,
 } from '../lib/invoices'
+import { isDeliveryDischarged } from '../lib/inventory'
+import DeliveryDischargeModal from '../components/DeliveryDischargeModal'
 import {
   nextDeliveryStatus,
   type DeliveryItemWithProduct,
@@ -60,6 +62,9 @@ export default function DeliveryEdit() {
 
   const [notes, setNotes] = useState('')
 
+  const [dischargeOpen, setDischargeOpen] = useState(false)
+  const [discharged, setDischarged] = useState(false)
+
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [docBusy, setDocBusy] = useState(false)
@@ -76,13 +81,15 @@ export default function DeliveryEdit() {
     setLoading(true)
     setError(null)
     try {
-      const [del, its] = await Promise.all([
+      const [del, its, isDischarged] = await Promise.all([
         getDelivery(id),
         listDeliveryItems(id),
+        isDeliveryDischarged(id),
         loadDocs(id),
       ])
       setDelivery(del)
       setItems(its)
+      setDischarged(isDischarged)
       setNotes(del.notes ?? '')
       // Bestellte Mengen für den Soll/Ist-Abgleich aus den originalen Orders.
       const seasonId = del.production_order?.season_id
@@ -249,6 +256,15 @@ export default function DeliveryEdit() {
             className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
           >
             {t('common.printPdf')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDischargeOpen(true)}
+            disabled={discharged}
+            title={discharged ? t('inventory.discharge.already') : undefined}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+          >
+            {t('inventory.discharge.button')}
           </button>
           {next && (
             <button
@@ -458,6 +474,17 @@ export default function DeliveryEdit() {
           </tfoot>
         </table>
       </div>
+
+      {dischargeOpen && id && (
+        <DeliveryDischargeModal
+          deliveryId={id}
+          onClose={() => setDischargeOpen(false)}
+          onDone={() => {
+            setDischargeOpen(false)
+            setDischarged(true)
+          }}
+        />
+      )}
     </div>
   )
 }
