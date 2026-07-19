@@ -214,6 +214,7 @@ export default function DealerDetail() {
   const { dealer, credit } = data
   const openAmount = credit?.openAmount ?? 0
   const overdueAmount = credit?.overdueAmount ?? 0
+  const refundOpen = credit?.refundOpen ?? 0
   const confirmedCount = data.orders.filter((o) => o.status === 'confirmed').length
   const creditLimit = dealer.credit_limit === null ? null : num(dealer.credit_limit)
   // Rechnungsnummer je Rechnung, für die Inkasso-Historie (die Fälle halten nur
@@ -296,6 +297,22 @@ export default function DealerDetail() {
           value={paymentValue(credit?.avgDelayDays ?? null, t)}
         />
       </div>
+
+      {/* Offene Rückerstattung: umgekehrtes Vorzeichen, bewusst getrennt von der
+          „Offen“-Kachel und nur sichtbar, wenn tatsächlich etwas zurückzuzahlen ist. */}
+      {refundOpen > 0 && (
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-md border-[0.5px] border-amber-300 bg-amber-50 px-5 py-3 text-sm">
+          <span className="font-medium text-amber-900">
+            {t('dealerDetail.refundOpen')}
+            <span className="ml-2 font-normal text-amber-700">
+              {t('dealerDetail.refundOpenNote')}
+            </span>
+          </span>
+          <span className="font-medium whitespace-nowrap text-amber-900">
+            {formatEUR(refundOpen)}
+          </span>
+        </div>
+      )}
 
       {/* ── Konditionen (eine ruhige Zeile) ── */}
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 rounded-md border-[0.5px] border-line bg-card px-5 py-3 text-sm">

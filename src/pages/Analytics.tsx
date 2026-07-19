@@ -151,6 +151,22 @@ export default function Analytics() {
           </div>
           <p className="mt-2 text-xs text-muted">{t('analytics.moneyNote')}</p>
 
+          {/* Offene Rückerstattungen: getrennt ausgewiesen (umgekehrtes Vorzeichen,
+              nie in „Offen“ genettet), nur wenn tatsächlich etwas offen ist. */}
+          {data.money.refundTotal > 0 && (
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-md border-[0.5px] border-amber-300 bg-amber-50 px-5 py-3 text-sm">
+              <span className="font-medium text-amber-900">
+                {t('analytics.refundOpen')}
+                <span className="ml-2 font-normal text-amber-700">
+                  {t('analytics.refundOpenNote')}
+                </span>
+              </span>
+              <span className="font-medium whitespace-nowrap text-amber-900">
+                {formatEUR(data.money.refundTotal)}
+              </span>
+            </div>
+          )}
+
           {/* Aufschlüsselungen */}
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <BarList title={t('analytics.bar.revenueBySeason')} rows={data.bySeason} />

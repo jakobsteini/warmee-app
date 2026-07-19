@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listOpenPayments, type OpenPaymentRow } from '../lib/openPayments'
+import {
+  listOpenPayments,
+  listOpenRefunds,
+  type OpenPaymentRow,
+  type OpenRefundRow,
+} from '../lib/openPayments'
 import { markInvoicePaid } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
 import { faelligkeitIso, isOverdue, daysOverdue } from '../lib/dueDates'
@@ -39,12 +44,18 @@ export default function OpenPayments() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [payRow, setPayRow] = useState<OpenPaymentRow | null>(null)
+  const [refunds, setRefunds] = useState<OpenRefundRow[]>([])
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      setRows(await listOpenPayments())
+      const [open, refundRows] = await Promise.all([
+        listOpenPayments(),
+        listOpenRefunds().catch(() => [] as OpenRefundRow[]),
+      ])
+      setRows(open)
+      setRefunds(refundRows)
     } catch {
       setError(t('openPayments.loadError'))
     } finally {
@@ -75,6 +86,10 @@ export default function OpenPayments() {
   const totalOverdue = useMemo(
     () => rows.filter((r) => isOverdue(r)).reduce((s, r) => s + r.open_amount, 0),
     [rows],
+  )
+  const totalRefunds = useMemo(
+    () => refunds.reduce((s, r) => s + r.refund_amount, 0),
+    [refunds],
   )
 
   const visible =
@@ -251,6 +266,58 @@ export default function OpenPayments() {
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* ── Offene Rückerstattungen (bezahlt + danach retourniert) ── */}
+      {/* Eigener Bereich, umgekehrtes Vorzeichen — bewusst NICHT in „offen“ gemischt. */}
+      {!loading && refunds.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-lg font-medium text-ink">
+            {t('openPayments.refunds.heading')}
+          </h2>
+          <p className="mt-1 mb-4 max-w-2xl text-sm text-muted">
+            {t('openPayments.refunds.note')}
+          </p>
+          <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-card text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-medium">
+                    {t('invoices.col.number')}
+                  </th>
+                  <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    {t('common.amount')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {refunds.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-t-[0.5px] border-line bg-surface text-ink"
+                  >
+                    <td className="px-4 py-3 font-medium">{r.invoice_number}</td>
+                    <td className="px-4 py-3">{r.dealer_name ?? '—'}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {formatEUR(r.refund_amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-[0.5px] border-line bg-card text-ink">
+                  <td colSpan={2} className="px-4 py-3 font-medium">
+                    {t('openPayments.refunds.total')}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                    {formatEUR(totalRefunds)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 

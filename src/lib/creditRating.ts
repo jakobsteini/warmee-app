@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { formatEUR } from './money'
 import { faelligkeitIso, todayIso } from './dueDates'
 import { openAfterReturns } from './returnsCalc'
+import { refundDue } from './refundCalc'
 import { recordedReturnsByInvoice } from './returns'
 
 // ============================================================================
@@ -41,6 +42,12 @@ export interface DealerCredit {
   /** Ø Zahlungsverzug in Tagen über bezahlte Rechnungen (paid_at − Fälligkeit); null ohne bezahlte. */
   avgDelayDays: number | null
   paidCount: number
+  /**
+   * Offene Rückerstattung an den Händler (brutto, ≥ 0): bezahlte Rechnung, danach
+   * retourniert. Umgekehrtes Vorzeichen zu openAmount — BEWUSST getrennt, nie
+   * dort hineingerechnet.
+   */
+  refundOpen: number
   /** Menschliche Erklärung der Ampel-Farbe (für Tooltip). */
   reason: string
 }
@@ -52,6 +59,8 @@ export interface MoneySnapshot {
   overdueCount: number
   avgPaymentDelayDays: number | null
   paidInvoiceCount: number
+  /** Summe offener Rückerstattungen (bezahlt + danach retourniert), getrennt von openTotal. */
+  refundTotal: number
 }
 
 // ─── Hilfsfunktionen ────────────────────────────────────────────────────────
@@ -81,6 +90,8 @@ interface NormInvoice {
   dueIso: string | null
   /** Zahlungsdatum, falls bezahlt. */
   paidAtIso: string | null
+  /** Gezahlter Bruttobetrag (0, wenn nicht/leer bezahlt) — Basis der Rückerstattung. */
+  paidAmount: number
 }
 
 /** Rohzeile aus der Rechnungs-Abfrage (mit Händler-Zahlungsziel). */
@@ -92,6 +103,7 @@ interface RawInvoice {
   invoice_date: string | null
   due_date: string | null
   paid_at?: string | null
+  paid_amount?: number | string | null
   dealer: { zahlungsziel_tage: number | null } | null
 }
 
@@ -105,6 +117,7 @@ function normalize(row: RawInvoice, returnsByInvoice: Map<string, number>): Norm
     // invoice_date + Händler-Zahlungsziel. Identisch zur Offene-Posten-Liste.
     dueIso: faelligkeitIso(row),
     paidAtIso: row.paid_at ?? null,
+    paidAmount: num(row.paid_amount),
   }
 }
 
@@ -137,6 +150,7 @@ interface Summary {
   overdueCount: number
   avgDelayDays: number | null
   paidCount: number
+  refundOpen: number
 }
 
 /** Kern-Aggregation über eine Menge Rechnungen (org-weit oder je Händler). */
@@ -145,6 +159,7 @@ function summarize(rows: NormInvoice[], today: string): Summary {
   let overdueAmount = 0
   let overdueCount = 0
   let paidCount = 0
+  let refundOpen = 0
   const delays: number[] = []
 
   for (const r of rows) {
@@ -165,6 +180,10 @@ function summarize(rows: NormInvoice[], today: string): Summary {
       if (r.paidAtIso && r.dueIso) {
         delays.push(daysBetween(r.paidAtIso, r.dueIso))
       }
+      // Bezahlt + danach retourniert → Überzahlung ist rückzuerstatten (zentral
+      // in refundCalc.refundDue, Skonto-korrekt). Getrennt von openAmount, das
+      // umgekehrte Vorzeichen — nie dort hineingerechnet.
+      refundOpen += refundDue(r.total, r.returnsTotal, r.paidAmount)
     }
   }
 
@@ -180,6 +199,7 @@ function summarize(rows: NormInvoice[], today: string): Summary {
     overdueCount,
     avgDelayDays,
     paidCount,
+    refundOpen: Math.round(refundOpen * 100) / 100,
   }
 }
 
@@ -229,6 +249,7 @@ function toDealerCredit(s: Summary): DealerCredit {
     overdueCount: s.overdueCount,
     avgDelayDays: s.avgDelayDays,
     paidCount: s.paidCount,
+    refundOpen: s.refundOpen,
     reason: buildReason(s),
   }
 }
@@ -264,5 +285,6 @@ export async function getMoneySnapshot(): Promise<MoneySnapshot> {
     overdueCount: s.overdueCount,
     avgPaymentDelayDays: s.avgDelayDays,
     paidInvoiceCount: s.paidCount,
+    refundTotal: s.refundOpen,
   }
 }
