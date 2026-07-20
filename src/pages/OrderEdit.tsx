@@ -18,6 +18,8 @@ import { listSeasons } from '../lib/seasons'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { formatEUR, parsePrice } from '../lib/money'
 import { totalAmount, totalQuantity } from '../lib/orderCalc'
+import { taxCalc, applyVat as applyVatAt } from '../lib/taxCalc'
+import { listOssRates, ossRateMap } from '../lib/ossRates'
 import CreditHint from '../components/CreditHint'
 import {
   lineTotal,
@@ -35,7 +37,7 @@ import {
 import type { Product } from '../types/product'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
-import { useT } from '../i18n'
+import { useT, useI18n } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
 /** Order-Status → Übersetzungs-Key. */
@@ -67,6 +69,7 @@ const emptyAdd: AddForm = {
 export default function OrderEdit() {
   const { id } = useParams<{ id: string }>()
   const t = useT()
+  const { lang } = useI18n()
 
   const [order, setOrder] = useState<Order | null>(null)
   const [items, setItems] = useState<OrderItemWithProduct[]>([])
@@ -83,13 +86,16 @@ export default function OrderEdit() {
   const [headError, setHeadError] = useState<string | null>(null)
   const [add, setAdd] = useState<AddForm>(emptyAdd)
   const [adding, setAdding] = useState(false)
+  // OSS-Sätze für die MwSt-VORSCHAU (reine Anzeige). Ohne sie fällt taxCalc bei
+  // B2C-EU auf ossMissing → neutraler Hinweis (kein Block, Order ≠ Steuerbeleg).
+  const [ossMap, setOssMap] = useState<Record<string, number>>({})
 
   async function load() {
     if (!id) return
     setLoading(true)
     setError(null)
     try {
-      const [ord, its, prods, deals, seas, creds] = await Promise.all([
+      const [ord, its, prods, deals, seas, creds, oss] = await Promise.all([
         getOrder(id),
         listOrderItems(id),
         listProducts(),
@@ -98,12 +104,14 @@ export default function OrderEdit() {
         // Bonität aus der bestehenden Ampel-Lib; ohne Bewertung bleibt der
         // Hinweis neutral.
         listDealerCredits().catch(() => new Map<string, DealerCredit>()),
+        listOssRates().catch(() => []),
       ])
       setOrder(ord)
       setItems(its)
       setProducts(prods)
       setNotes(ord.notes ?? '')
       setHead(orderHeadToForm(ord))
+      setOssMap(ossRateMap(oss))
       setDealer(deals.find((d) => d.id === ord.dealer_id) ?? null)
       setCredit(creds.get(ord.dealer_id))
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
@@ -126,6 +134,29 @@ export default function OrderEdit() {
 
   const total = useMemo(() => totalAmount(items), [items])
   const pieces = useMemo(() => totalQuantity(items), [items])
+
+  /**
+   * MwSt-VORSCHAU — reine Anzeige, NICHTS wird gespeichert/eingefroren. Der
+   * verbindliche Steuer-Snapshot passiert ausschließlich bei der Rechnung
+   * (Steuer-Modul Teil 4). Unsichere Lage (kein Land / ossMissing / review)
+   * blockt hier NICHT — sie zeigt nur einen neutralen Hinweis.
+   */
+  const taxPreview = useMemo(() => {
+    if (!dealer) return null
+    if (!dealer.country_iso2) return { uncertain: true as const }
+    const tax = taxCalc(
+      {
+        customer_group: dealer.customer_group,
+        country_iso2: dealer.country_iso2,
+        uid: dealer.uid,
+      },
+      ossMap,
+    )
+    if (tax.ossMissing || tax.review) return { uncertain: true as const }
+    const { vat, gross } = applyVatAt(total, tax.rate)
+    const note = tax.note ? (lang === 'en' ? tax.note.en : tax.note.de) : null
+    return { uncertain: false as const, rate: tax.rate, vat, gross, note }
+  }, [dealer, ossMap, total, lang])
 
   async function handleAdvanceStatus() {
     if (!order) return
@@ -490,6 +521,43 @@ export default function OrderEdit() {
           </tfoot>
         </table>
       </div>
+
+      {/* MwSt-VORSCHAU — reine Anzeige, kein Einfrieren (Snapshot bei Rechnung). */}
+      {taxPreview && (
+        <div className="mt-4 max-w-sm rounded-lg border-[0.5px] border-line bg-card p-4 text-sm">
+          <div className="mb-2 text-xs font-medium text-muted">
+            {t('orderEdit.taxPreview')}
+          </div>
+          {taxPreview.uncertain ? (
+            <p className="text-xs text-muted">{t('orderEdit.taxPreviewUncertain')}</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between">
+                <span className="text-muted">{t('orderEdit.taxNet')}</span>
+                <span className="text-ink">{formatEUR(total)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">
+                  {t('orderEdit.taxVat', {
+                    rate: String(Math.round(taxPreview.rate * 100)),
+                  })}
+                </span>
+                <span className="text-ink">{formatEUR(taxPreview.vat)}</span>
+              </div>
+              <div className="flex justify-between border-t-[0.5px] border-line pt-1 font-medium">
+                <span className="text-ink">{t('orderEdit.taxGross')}</span>
+                <span className="text-ink">{formatEUR(taxPreview.gross)}</span>
+              </div>
+              {taxPreview.note && (
+                <p className="mt-1 text-xs text-muted">{taxPreview.note}</p>
+              )}
+              <p className="mt-1 text-[11px] text-muted">
+                {t('orderEdit.taxPreviewHint')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Artikel hinzufügen */}
       <form

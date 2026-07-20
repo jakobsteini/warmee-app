@@ -547,6 +547,14 @@ export const de = {
   'orderEdit.emptyRow': 'Noch keine Artikel. Unten hinzufügen.',
   'orderEdit.grandTotal': 'Gesamtsumme',
   'orderEdit.totalPieces': 'Gesamt Stück',
+  'orderEdit.taxPreview': 'MwSt-Vorschau',
+  'orderEdit.taxNet': 'Netto',
+  'orderEdit.taxVat': 'USt ({rate} %)',
+  'orderEdit.taxGross': 'Brutto',
+  'orderEdit.taxPreviewHint':
+    'Vorschau — die Steuer wird verbindlich erst bei der Rechnung ermittelt.',
+  'orderEdit.taxPreviewUncertain':
+    'Steuerkategorie wird bei der Rechnungserstellung final bestimmt.',
   'orderEdit.addArticle': 'Artikel hinzufügen',
   'orderEdit.productReq': 'Produkt *',
   'orderEdit.productPlaceholder': '— aus Katalog wählen —',
@@ -1506,6 +1514,14 @@ export const en: Record<TranslationKey, string> = {
   'orderEdit.emptyRow': 'No items yet. Add them below.',
   'orderEdit.grandTotal': 'Grand total',
   'orderEdit.totalPieces': 'Total pieces',
+  'orderEdit.taxPreview': 'VAT preview',
+  'orderEdit.taxNet': 'Net',
+  'orderEdit.taxVat': 'VAT ({rate} %)',
+  'orderEdit.taxGross': 'Gross',
+  'orderEdit.taxPreviewHint':
+    'Preview — the tax is determined bindingly only on the invoice.',
+  'orderEdit.taxPreviewUncertain':
+    'The tax category is finally determined when the invoice is created.',
   'orderEdit.addArticle': 'Add item',
   'orderEdit.productReq': 'Product *',
   'orderEdit.productPlaceholder': '— select from catalogue —',
