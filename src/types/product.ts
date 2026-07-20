@@ -41,6 +41,8 @@ export interface ProductInput {
   color: string[] | null
   retail_price: number | null
   wholesale_price: number | null
+  /** EK-Preis Nepal (Artikel-Stamm), EUR, ohne Fracht/Zoll. Excel: "price shangrila". */
+  purchase_price: number | null
   season_id: string | null
   producer_id: string | null
 }

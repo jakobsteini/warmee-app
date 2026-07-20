@@ -7,6 +7,7 @@ import {
 } from '../lib/products'
 import { listSeasons } from '../lib/seasons'
 import { listActiveProducers } from '../lib/producers'
+import { parseDecimalField } from '../lib/paymentTerms'
 import {
   listVariantsByProduct,
   createVariant,
@@ -54,6 +55,7 @@ interface ProductForm {
   colorsText: string
   retail_price: string
   wholesale_price: string
+  purchase_price: string
   season_id: string
   producer_id: string
 }
@@ -64,6 +66,7 @@ const emptyForm: ProductForm = {
   colorsText: '',
   retail_price: '',
   wholesale_price: '',
+  purchase_price: '',
   season_id: '',
   producer_id: '',
 }
@@ -214,6 +217,8 @@ export default function Products() {
       retail_price: p.retail_price === null ? '' : String(p.retail_price),
       wholesale_price:
         p.wholesale_price === null ? '' : String(p.wholesale_price),
+      purchase_price:
+        p.purchase_price === null ? '' : String(p.purchase_price),
       season_id: p.season_id ?? '',
       producer_id: p.producer_id ?? '',
     })
@@ -234,6 +239,14 @@ export default function Products() {
       return
     }
 
+    // EK-Preis Nepal strikt: leer = null (gültig), ungültig = sichtbarer Fehler
+    // statt stillem Datenverlust (wie Skonto/Transportkosten).
+    const ekParsed = parseDecimalField(form.purchase_price)
+    if (!ekParsed.ok) {
+      setFormError(t('products.field.purchaseInvalid'))
+      return
+    }
+
     const payload: ProductInput = {
       name,
       category: form.category || null,
@@ -242,6 +255,7 @@ export default function Products() {
         : null,
       retail_price: parsePrice(form.retail_price),
       wholesale_price: parsePrice(form.wholesale_price),
+      purchase_price: ekParsed.value,
       season_id: form.season_id || null,
       producer_id: form.producer_id || null,
     }
@@ -565,6 +579,22 @@ export default function Products() {
                   />
                 </label>
               </div>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('products.field.purchase')}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.purchase_price}
+                  onChange={(e) =>
+                    setForm({ ...form, purchase_price: e.target.value })
+                  }
+                  placeholder="0,00"
+                  className={inputClass}
+                />
+              </label>
 
               {/* Varianten (nur im Bearbeiten-Modus — Anlegen braucht product_id) */}
               {editing && (

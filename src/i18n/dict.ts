@@ -106,6 +106,9 @@ export const de = {
   'products.field.colorsPlaceholder': 'z. B. Camel, Anthrazit, Creme',
   'products.field.retail': 'Endkundenpreis (€)',
   'products.field.wholesale': 'Großhandelspreis (€)',
+  'products.field.purchase': 'EK-Preis Nepal (€)',
+  'products.field.purchaseInvalid':
+    'EK-Preis Nepal: bitte eine gültige Zahl eingeben (oder leer lassen).',
   'products.field.producer': 'Lieferant',
   'products.deleteConfirm': 'Artikel „{name}" wirklich löschen?',
   'products.deleteError': '„{name}" konnte nicht gelöscht werden – wird es noch von Bildern oder Newsletter verwendet?',
@@ -979,6 +982,9 @@ export const en: Record<TranslationKey, string> = {
   'products.field.colorsPlaceholder': 'e.g. Camel, Anthracite, Cream',
   'products.field.retail': 'Retail price (€)',
   'products.field.wholesale': 'Wholesale price (€)',
+  'products.field.purchase': 'Purchase price Nepal (€)',
+  'products.field.purchaseInvalid':
+    'Purchase price Nepal: please enter a valid number (or leave empty).',
   'products.field.producer': 'Supplier',
   'products.deleteConfirm': 'Really delete product “{name}”?',
   'products.deleteError': '“{name}” could not be deleted – is it still used by images or a newsletter?',
