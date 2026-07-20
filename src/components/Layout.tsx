@@ -59,9 +59,11 @@ export default function Layout() {
     <div className="flex min-h-screen">
       <aside className="flex w-60 shrink-0 flex-col bg-ink text-nav print:hidden">
         <div className="px-6 py-8">
-          <span className="text-sm font-medium uppercase tracking-[4px] text-accent">
-            WARM ME
-          </span>
+          <img
+            src="/warm-me-wordmark-white.png"
+            alt="WARM ME"
+            className="h-6 w-auto"
+          />
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-3">

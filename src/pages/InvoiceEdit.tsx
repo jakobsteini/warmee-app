@@ -104,6 +104,30 @@ export default function InvoiceEdit() {
     }
   }
 
+  /**
+   * PDF FORCE-neu erzeugen (z. B. nach Layout-/Logo-Änderung). Tauscht NUR das
+   * PDF im Storage aus — regenerateInvoicePdf rechnet KEINE Steuer/Beträge neu
+   * (liest die eingefrorenen tax_rate/tax_amount/tax_note/total aus dem
+   * Datensatz und aktualisiert ausschließlich pdf_path). Die Snapshot-Werte der
+   * Rechnung bleiben unverändert.
+   */
+  async function handleRegenerate() {
+    if (!invoice) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await regenerateInvoicePdf(invoice.id)
+      setInvoice({ ...invoice, pdf_path: updated.pdf_path })
+      if (updated.pdf_path) {
+        window.open(await signedPdfUrl(updated.pdf_path), '_blank', 'noopener')
+      }
+    } catch {
+      setError(t('invoiceEdit.regenerateError'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleSend() {
     if (!invoice) return
     setBusy(true)
@@ -244,6 +268,15 @@ export default function InvoiceEdit() {
             className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
           >
             {t('common.openPdf')}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleRegenerate}
+            title={t('invoiceEdit.regenerateHint')}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink disabled:opacity-50"
+          >
+            {t('invoiceEdit.regeneratePdf')}
           </button>
           {canSend && (
             <button

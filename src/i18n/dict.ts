@@ -449,6 +449,10 @@ export const de = {
   'invoices.createError': 'Rechnung konnte nicht erstellt werden.',
   'invoiceEdit.loadError': 'Rechnung konnte nicht geladen werden.',
   'invoiceEdit.statusError': 'Status konnte nicht geändert werden.',
+  'invoiceEdit.regeneratePdf': 'PDF neu erzeugen',
+  'invoiceEdit.regenerateHint':
+    'Erzeugt das PDF neu (z. B. neues Logo). Beträge/Steuer bleiben unverändert.',
+  'invoiceEdit.regenerateError': 'PDF konnte nicht neu erzeugt werden.',
   'invoiceEdit.cancelConfirm': 'Rechnung {number} stornieren? Danach kann für die Lieferung eine neue Rechnung erstellt werden.',
   'invoiceEdit.cancelError': 'Rechnung konnte nicht storniert werden.',
   'invoiceEdit.notFound': 'Rechnung nicht gefunden.',
@@ -1425,6 +1429,10 @@ export const en: Record<TranslationKey, string> = {
   'invoices.createError': 'Could not create the invoice.',
   'invoiceEdit.loadError': 'Could not load the invoice.',
   'invoiceEdit.statusError': 'Could not change the status.',
+  'invoiceEdit.regeneratePdf': 'Regenerate PDF',
+  'invoiceEdit.regenerateHint':
+    'Rebuilds the PDF (e.g. new logo). Amounts/tax stay unchanged.',
+  'invoiceEdit.regenerateError': 'Could not regenerate the PDF.',
   'invoiceEdit.cancelConfirm': 'Cancel invoice {number}? A new invoice can then be created for the delivery.',
   'invoiceEdit.cancelError': 'Could not cancel the invoice.',
   'invoiceEdit.notFound': 'Invoice not found.',

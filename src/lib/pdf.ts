@@ -1,5 +1,10 @@
 import { jsPDF } from 'jspdf'
 import { type Dealerish } from '../types/invoice'
+import {
+  BRAND_LOGO_BLACK,
+  BRAND_LOGO_BLACK_W,
+  BRAND_LOGO_BLACK_H,
+} from './brandLogo'
 
 /**
  * Absenderdaten für Belege. Zentral hier, damit Rechnung und Lieferschein
@@ -63,13 +68,31 @@ const ACCENT: readonly [number, number, number] = [43, 58, 45]
 /** Standard-Linienstärke von jsPDF (mm) – zum Zurücksetzen nach Akzentlinien. */
 const DEFAULT_LINE_WIDTH = 0.2
 
+/**
+ * WARM-ME-Logo (schwarz, mit Tagline) oben links im Beleg — ersetzt den früheren
+ * Text-Schriftzug. Aspektkorrekt skaliert (Höhe fix, Breite abgeleitet). Bei
+ * Einbettungsfehler Fallback auf den Text-Schriftzug, damit ein Beleg NIE bricht.
+ */
+function drawSenderLogo(doc: jsPDF) {
+  const height = 9
+  const width = (height * BRAND_LOGO_BLACK_W) / BRAND_LOGO_BLACK_H
+  try {
+    doc.addImage(BRAND_LOGO_BLACK, 'PNG', MARGIN, 13, width, height)
+  } catch {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(16)
+    doc.setTextColor(26, 26, 26)
+    doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  }
+}
+
 /** Kopf (Absender, Empfänger, Titel, Belegdaten) rendern, Y-Cursor zurück. */
 function drawHeader(doc: jsPDF, h: BelegHeader): number {
   // Absender.
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(26, 26, 26)
-  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  drawSenderLogo(doc)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -414,7 +437,7 @@ function drawPickingHeader(
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(26, 26, 26)
-  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  drawSenderLogo(doc)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(120, 115, 108)
@@ -716,7 +739,7 @@ function drawStockListHeader(
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(26, 26, 26)
-  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  drawSenderLogo(doc)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(120, 115, 108)
@@ -1017,7 +1040,7 @@ export function buildOrderConfirmationPdf(data: OrderConfirmationPdfData): Blob 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
   doc.setTextColor(26, 26, 26)
-  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  drawSenderLogo(doc)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(120, 115, 108)

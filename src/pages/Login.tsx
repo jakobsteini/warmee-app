@@ -44,9 +44,13 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-cream px-4">
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
-          <span className="text-lg font-medium uppercase tracking-[4px] text-ink">
-            WARM ME
-          </span>
+          {/* Login-Hintergrund ist hell (bg-cream) → schwarzes Logo (sichtbar),
+              nicht das weiße. Falls der Login dunkel werden soll: weißes nehmen. */}
+          <img
+            src="/warm-me-logo-black.png"
+            alt="WARM ME"
+            className="mx-auto h-12 w-auto"
+          />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
