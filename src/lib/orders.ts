@@ -3,6 +3,7 @@ import { getMyOrgId, getMyUserId } from './org'
 import type {
   Order,
   OrderAssignment,
+  OrderHeadFields,
   OrderInput,
   OrderItemInput,
   OrderItemWithProduct,
@@ -95,6 +96,21 @@ export async function updateOrderNotes(
 ): Promise<void> {
   const { error } = await supabase.from('orders').update({ notes }).eq('id', id)
   if (error) throw error
+}
+
+/** Kopfdaten einer Order aktualisieren (Order-Art, Versand/Lieferung, PO#, …). */
+export async function updateOrderHead(
+  id: string,
+  fields: OrderHeadFields,
+): Promise<Order> {
+  const { data, error } = await supabase
+    .from('orders')
+    .update(fields)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Order
 }
 
 /** Order löschen (order_items werden per ON DELETE CASCADE mitgelöscht). */

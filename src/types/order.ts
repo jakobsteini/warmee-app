@@ -1,6 +1,106 @@
+import type { TranslationKey } from '../i18n/dict'
+
 /** Mögliche Order-Status (englisch gespeichert, wie in der DB-Check-Constraint). */
 export const ORDER_STATUSES = ['draft', 'submitted', 'confirmed'] as const
 export type OrderStatus = (typeof ORDER_STATUSES)[number]
+
+// ─── Kopfdaten-Dropdowns (app-seitig validiert, kein DB-CHECK; erweiterbar) ───
+
+/** Order-Art. */
+export const ORDER_TYPES = ['vororder', 'prompt', 'lager'] as const
+/** Versandart (erweiterbar). */
+export const SHIPPING_METHODS = ['dpd', 'dsv'] as const
+/** Versand-/Lieferkondition (gemeinsamer Wertebereich, zwei getrennte Felder). */
+export const ORDER_TERMS = ['ab_werk', 'frei_haus'] as const
+
+/** i18n-Label-Keys der Dropdown-Werte (via t() aufgelöst). */
+export const ORDER_TYPE_LABEL_KEYS: Record<string, TranslationKey> = {
+  vororder: 'order.type.vororder',
+  prompt: 'order.type.prompt',
+  lager: 'order.type.lager',
+}
+export const SHIPPING_METHOD_LABEL_KEYS: Record<string, TranslationKey> = {
+  dpd: 'order.shipMethod.dpd',
+  dsv: 'order.shipMethod.dsv',
+}
+export const ORDER_TERM_LABEL_KEYS: Record<string, TranslationKey> = {
+  ab_werk: 'order.terms.abWerk',
+  frei_haus: 'order.terms.freiHaus',
+}
+
+/** Editierbare Kopfdaten der Order (Anlage + Bearbeitung). Alle optional. */
+export interface OrderHeadFields {
+  order_type: string | null
+  shipping_method: string | null
+  /** Versandkondition. */
+  shipping_terms: string | null
+  /** Lieferkondition. */
+  delivery_terms: string | null
+  /** Lieferzeitraum von (ISO-Datum) — optional. */
+  delivery_date_from: string | null
+  /** Lieferzeitraum bis (ISO-Datum) — optional; App erzwingt from<=to. */
+  delivery_date_to: string | null
+  /** Kunden-Auftragsnummer / Freitext (separat von notes). */
+  po_number: string | null
+}
+
+/** Formular-Zustand der Kopfdaten (alles String — leeres Feld = nicht gesetzt). */
+export interface OrderHeadForm {
+  order_type: string
+  shipping_method: string
+  shipping_terms: string
+  delivery_terms: string
+  delivery_date_from: string
+  delivery_date_to: string
+  po_number: string
+}
+
+export const emptyOrderHead: OrderHeadForm = {
+  order_type: '',
+  shipping_method: '',
+  shipping_terms: '',
+  delivery_terms: '',
+  delivery_date_from: '',
+  delivery_date_to: '',
+  po_number: '',
+}
+
+/** Bestehende Order-Kopfdaten → Formular (für die Bearbeitung). */
+export function orderHeadToForm(o: OrderHeadFields): OrderHeadForm {
+  return {
+    order_type: o.order_type ?? '',
+    shipping_method: o.shipping_method ?? '',
+    shipping_terms: o.shipping_terms ?? '',
+    delivery_terms: o.delivery_terms ?? '',
+    delivery_date_from: o.delivery_date_from ?? '',
+    delivery_date_to: o.delivery_date_to ?? '',
+    po_number: o.po_number ?? '',
+  }
+}
+
+/** Formular → DB-Felder (leer → null). */
+export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
+  const orNull = (v: string) => (v.trim() === '' ? null : v.trim())
+  return {
+    order_type: orNull(f.order_type),
+    shipping_method: orNull(f.shipping_method),
+    shipping_terms: orNull(f.shipping_terms),
+    delivery_terms: orNull(f.delivery_terms),
+    delivery_date_from: orNull(f.delivery_date_from),
+    delivery_date_to: orNull(f.delivery_date_to),
+    po_number: orNull(f.po_number),
+  }
+}
+
+/**
+ * Lieferzeitraum-Prüfung: gültig, solange nicht BEIDE Daten gesetzt sind und
+ * from > to. Beide optional; nur die echte Verletzung (from > to) ist ungültig.
+ * ISO-Kurzdaten sind lexikografisch vergleichbar.
+ */
+export function orderHeadDateRangeOk(f: OrderHeadForm): boolean {
+  if (f.delivery_date_from === '' || f.delivery_date_to === '') return true
+  return f.delivery_date_from <= f.delivery_date_to
+}
 
 /**
  * Zuteilung einer Order (Grundlage der Provision): der deutschen Agentin
@@ -60,7 +160,7 @@ export interface OrderItemInput {
 }
 
 /** Eine Order (snake_case wie in der DB). */
-export interface Order {
+export interface Order extends OrderHeadFields {
   id: string
   org_id: string
   dealer_id: string
@@ -84,8 +184,8 @@ export interface OrderListRow extends Order {
   order_items: { quantity: number; unit_price: number | string | null }[]
 }
 
-/** Felder zum Anlegen einer neuen Order. */
-export interface OrderInput {
+/** Felder zum Anlegen einer neuen Order (Kopfdaten optional). */
+export interface OrderInput extends OrderHeadFields {
   dealer_id: string
   season_id: string
   assignment: OrderAssignment

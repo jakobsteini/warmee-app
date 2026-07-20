@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createOrder, deleteOrder, listOrders } from '../lib/orders'
+import OrderHeadFieldsForm from '../components/OrderHeadFields'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
@@ -9,8 +10,12 @@ import CreditHint from '../components/CreditHint'
 import {
   lineTotal,
   ORDER_ASSIGNMENTS,
+  emptyOrderHead,
+  orderHeadFromForm,
+  orderHeadDateRangeOk,
   type OrderAssignment,
   type OrderListRow,
+  type OrderHeadForm,
 } from '../types/order'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
@@ -69,6 +74,7 @@ export default function Orders() {
     assignment: '' | OrderAssignment
     notes: string
   }>({ dealer_id: '', season_id: '', assignment: '', notes: '' })
+  const [head, setHead] = useState<OrderHeadForm>(emptyOrderHead)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -111,6 +117,7 @@ export default function Orders() {
       assignment: '',
       notes: '',
     })
+    setHead(emptyOrderHead)
     setFormError(null)
     setFormOpen(true)
   }
@@ -125,6 +132,10 @@ export default function Orders() {
       setFormError(t('orders.assignmentRequired'))
       return
     }
+    if (!orderHeadDateRangeOk(head)) {
+      setFormError(t('order.field.dateRangeInvalid'))
+      return
+    }
     setSaving(true)
     setFormError(null)
     try {
@@ -133,6 +144,7 @@ export default function Orders() {
         season_id: form.season_id,
         assignment: form.assignment,
         notes: form.notes.trim() || null,
+        ...orderHeadFromForm(head),
       })
       setFormOpen(false)
       navigate(`/orders/${order.id}`)
@@ -340,6 +352,11 @@ export default function Orders() {
                   ))}
                 </select>
               </label>
+
+              <OrderHeadFieldsForm
+                value={head}
+                onChange={(patch) => setHead((h) => ({ ...h, ...patch }))}
+              />
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">{t('common.notes')}</span>

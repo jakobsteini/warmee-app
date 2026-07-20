@@ -6,10 +6,12 @@ import {
   getOrder,
   listOrderItems,
   updateOrderAssignment,
+  updateOrderHead,
   updateOrderItem,
   updateOrderNotes,
   updateOrderStatus,
 } from '../lib/orders'
+import OrderHeadFieldsForm from '../components/OrderHeadFields'
 import { listProducts } from '../lib/products'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
@@ -20,9 +22,14 @@ import {
   lineTotal,
   nextStatus,
   ORDER_ASSIGNMENTS,
+  emptyOrderHead,
+  orderHeadToForm,
+  orderHeadFromForm,
+  orderHeadDateRangeOk,
   type Order,
   type OrderAssignment,
   type OrderItemWithProduct,
+  type OrderHeadForm,
 } from '../types/order'
 import type { Product } from '../types/product'
 import type { Dealer } from '../types/dealer'
@@ -70,6 +77,9 @@ export default function OrderEdit() {
   const [error, setError] = useState<string | null>(null)
 
   const [notes, setNotes] = useState('')
+  const [head, setHead] = useState<OrderHeadForm>(emptyOrderHead)
+  const [headSaving, setHeadSaving] = useState(false)
+  const [headError, setHeadError] = useState<string | null>(null)
   const [add, setAdd] = useState<AddForm>(emptyAdd)
   const [adding, setAdding] = useState(false)
 
@@ -92,6 +102,7 @@ export default function OrderEdit() {
       setItems(its)
       setProducts(prods)
       setNotes(ord.notes ?? '')
+      setHead(orderHeadToForm(ord))
       setDealer(deals.find((d) => d.id === ord.dealer_id) ?? null)
       setCredit(creds.get(ord.dealer_id))
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
@@ -136,6 +147,24 @@ export default function OrderEdit() {
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
       setError(t('common.notesSaveError'))
+    }
+  }
+
+  async function handleHeadSave() {
+    if (!order) return
+    if (!orderHeadDateRangeOk(head)) {
+      setHeadError(t('order.field.dateRangeInvalid'))
+      return
+    }
+    setHeadSaving(true)
+    setHeadError(null)
+    try {
+      const updated = await updateOrderHead(order.id, orderHeadFromForm(head))
+      setOrder(updated)
+    } catch {
+      setHeadError(t('common.saveFailed'))
+    } finally {
+      setHeadSaving(false)
     }
   }
 
@@ -296,6 +325,25 @@ export default function OrderEdit() {
 
       <div className="mb-8">
         <CreditHint credit={credit} creditLimit={dealer?.credit_limit} />
+      </div>
+
+      <div className="mb-8 rounded-lg border-[0.5px] border-line p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-medium text-ink">{t('order.headTitle')}</h2>
+          <button
+            type="button"
+            onClick={handleHeadSave}
+            disabled={headSaving}
+            className="rounded-md bg-ink px-4 py-1.5 text-sm text-cream disabled:opacity-50"
+          >
+            {t('common.save')}
+          </button>
+        </div>
+        <OrderHeadFieldsForm
+          value={head}
+          onChange={(patch) => setHead((h) => ({ ...h, ...patch }))}
+        />
+        {headError && <p className="mt-2 text-sm text-red-700">{headError}</p>}
       </div>
 
       <label className="mb-8 flex flex-col gap-1.5">
