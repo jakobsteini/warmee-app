@@ -6,6 +6,7 @@ import {
   updateProduct,
 } from '../lib/products'
 import { listSeasons } from '../lib/seasons'
+import { listActiveProducers } from '../lib/producers'
 import {
   listVariantsByProduct,
   createVariant,
@@ -18,6 +19,7 @@ import {
   type ProductInput,
 } from '../types/product'
 import type { Season } from '../types/asset'
+import type { Producer } from '../types/producer'
 import type { ProductVariant } from '../types/productVariant'
 import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n'
@@ -53,6 +55,7 @@ interface ProductForm {
   retail_price: string
   wholesale_price: string
   season_id: string
+  producer_id: string
 }
 
 const emptyForm: ProductForm = {
@@ -62,12 +65,14 @@ const emptyForm: ProductForm = {
   retail_price: '',
   wholesale_price: '',
   season_id: '',
+  producer_id: '',
 }
 
 export default function Products() {
   const t = useT()
   const [products, setProducts] = useState<Product[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
+  const [producers, setProducers] = useState<Producer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -91,9 +96,14 @@ export default function Products() {
     setLoading(true)
     setError(null)
     try {
-      const [prods, seas] = await Promise.all([listProducts(), listSeasons()])
+      const [prods, seas, prod] = await Promise.all([
+        listProducts(),
+        listSeasons(),
+        listActiveProducers(),
+      ])
       setProducts(prods)
       setSeasons(seas)
+      setProducers(prod)
     } catch {
       setError(t('products.loadError'))
     } finally {
@@ -205,6 +215,7 @@ export default function Products() {
       wholesale_price:
         p.wholesale_price === null ? '' : String(p.wholesale_price),
       season_id: p.season_id ?? '',
+      producer_id: p.producer_id ?? '',
     })
     setFormError(null)
     setFormOpen(true)
@@ -232,6 +243,7 @@ export default function Products() {
       retail_price: parsePrice(form.retail_price),
       wholesale_price: parsePrice(form.wholesale_price),
       season_id: form.season_id || null,
+      producer_id: form.producer_id || null,
     }
 
     setSaving(true)
@@ -499,6 +511,26 @@ export default function Products() {
                   placeholder={t('products.field.colorsPlaceholder')}
                   className={inputClass}
                 />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('products.field.producer')}
+                </span>
+                <select
+                  value={form.producer_id}
+                  onChange={(e) =>
+                    setForm({ ...form, producer_id: e.target.value })
+                  }
+                  className={inputClass}
+                >
+                  <option value="">—</option>
+                  {producers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <div className="flex gap-4">

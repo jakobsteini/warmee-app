@@ -13,6 +13,8 @@ export interface Product {
   /** Einkaufspreis (EK) vom Produzenten; numeric(10,2). Excel: "price shangrila". */
   purchase_price: number | string | null
   season_id: string | null
+  /** Lieferant/Produzent des Artikels (FK auf producers). null = nicht zugeordnet. */
+  producer_id: string | null
   created_at: string | null
 
   // ─── Artikelstamm SS27 (Import), alle nullable ───────────────────────────
@@ -40,6 +42,7 @@ export interface ProductInput {
   retail_price: number | null
   wholesale_price: number | null
   season_id: string | null
+  producer_id: string | null
 }
 
 /**
