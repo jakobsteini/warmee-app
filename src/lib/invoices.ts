@@ -5,13 +5,14 @@ import { openAfterReturns } from './returnsCalc'
 import type { BelegItem } from './pdf'
 import { addDaysIso, daysBetweenIso } from './dates'
 import {
-  VAT_RATE,
-  applyVat,
   computeSkonto,
   effectivePaymentTerms,
   type PaymentTerms,
   type PartialPaymentTerms,
 } from './tax'
+import { taxCalc, applyVat as applyVatAt } from './taxCalc'
+import { listOssRates, ossRateMap } from './ossRates'
+import type { CustomerGroup } from '../types/dealer'
 import type {
   DeliveryNote,
   Dealerish,
@@ -118,9 +119,19 @@ export async function signedPdfUrl(pdfPath: string): Promise<string> {
 
 // ─── Gemeinsame Datenbeschaffung ────────────────────────────────────────────
 
+/** Steuerrelevante Händlerfelder für die Kategorie-Ableitung (taxCalc). */
+export interface TaxDealer {
+  customer_group: CustomerGroup
+  country_iso2: string | null
+  uid: string | null
+  language: string | null
+}
+
 interface DeliveryContext {
   dealer_id: string
   dealer: Dealerish
+  /** Steuerfelder des Händlers für die Kategorie-Ableitung. */
+  taxDealer: TaxDealer
   /** Zahlungskonditionen des Händlers (roh, nullable) – Grundlage der Fälligkeit. */
   terms: PartialPaymentTerms
   seasonLabel: string | null
@@ -141,7 +152,7 @@ async function loadDeliveryContext(
   const { data: del, error: delErr } = await supabase
     .from('deliveries')
     .select(
-      'dealer_id, dealer:dealers(name, contact_name, email, city, country, skonto_prozent, skonto_tage, zahlungsziel_tage), production_order:production_orders(season:seasons(label))',
+      'dealer_id, dealer:dealers(name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage), production_order:production_orders(season:seasons(label))',
     )
     .eq('id', deliveryId)
     .single()
@@ -156,7 +167,7 @@ async function loadDeliveryContext(
 
   const d = del as unknown as {
     dealer_id: string
-    dealer: (Dealerish & PartialPaymentTerms) | null
+    dealer: (Dealerish & PartialPaymentTerms & Partial<TaxDealer>) | null
     production_order: { season: { label: string } | null } | null
   }
 
@@ -189,6 +200,12 @@ async function loadDeliveryContext(
       city: d.dealer?.city ?? null,
       country: d.dealer?.country ?? null,
     },
+    taxDealer: {
+      customer_group: (d.dealer?.customer_group ?? 'b2b') as CustomerGroup,
+      country_iso2: d.dealer?.country_iso2 ?? null,
+      uid: d.dealer?.uid ?? null,
+      language: d.dealer?.language ?? null,
+    },
     terms: {
       skonto_prozent: d.dealer?.skonto_prozent ?? null,
       skonto_tage: d.dealer?.skonto_tage ?? null,
@@ -197,6 +214,59 @@ async function loadDeliveryContext(
     seasonLabel: d.production_order?.season?.label ?? null,
     items,
   }
+}
+
+/** Eingefrorene Steuerwerte einer neuen Rechnung. */
+interface FrozenTax {
+  tax_rate: number
+  tax_amount: number
+  total: number
+  /** Pflichthinweis in der Belegsprache des Kunden (de-Fallback), oder null. */
+  tax_note: string | null
+  tax_category: string
+}
+
+/**
+ * Steuer für eine NEUE Rechnung ableiten (taxCalc aus Kundentyp + Land + UID
+ * gegen die OSS-Sätze) und die Werte zum Einfrieren zurückgeben. BLOCKT hart —
+ * und zwar bewusst so, dass jeder Aufrufer diese Funktion VOR der Vergabe der
+ * Rechnungsnummer (next_invoice_number) aufruft, damit ein Block keine Nummer
+ * verbraucht:
+ *   • country_iso2 fehlt        → eigene Meldung „Land setzen".
+ *   • ossMissing (B2C-EU ohne OSS-Satz) oder review (B2C-Drittland/unklar)
+ *                               → Meldung, keine steuerlich falsche Rechnung.
+ * B2B-Drittland (gültige 0-%-Ausfuhr) blockt NICHT — es ist review=false.
+ */
+async function deriveInvoiceTax(
+  dealer: TaxDealer,
+  subtotal: number,
+): Promise<FrozenTax> {
+  if (!dealer.country_iso2) {
+    throw new Error(
+      'Bitte Land des Kunden setzen (Steuer-Sektion), bevor eine Rechnung erzeugt wird.',
+    )
+  }
+  const rates = await listOssRates()
+  const tax = taxCalc(
+    {
+      customer_group: dealer.customer_group,
+      country_iso2: dealer.country_iso2,
+      uid: dealer.uid,
+    },
+    ossRateMap(rates),
+  )
+  if (tax.ossMissing || tax.review) {
+    throw new Error(
+      'Steuerkategorie unklar oder OSS-Satz fehlt — bitte Kundenstammdaten (Steuer-Sektion) oder OSS-Tabelle prüfen.',
+    )
+  }
+  const { vat: tax_amount, gross: total } = applyVatAt(subtotal, tax.rate)
+  const tax_note = tax.note
+    ? dealer.language === 'en'
+      ? tax.note.en
+      : tax.note.de
+    : null
+  return { tax_rate: tax.rate, tax_amount, total, tax_note, tax_category: tax.category }
 }
 
 /** PDF in den privaten Bucket legen (überschreibt bei Neuerzeugung). */
@@ -314,9 +384,10 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     (s, i) => s + i.quantity * i.wholesale_price,
     0,
   )
-  // Regelbesteuerung: 20 % USt auf den Nettobetrag.
-  const tax_rate = VAT_RATE
-  const { tax: tax_amount, gross: total } = applyVat(subtotal)
+  // Steuer aus der Kategorie ableiten + einfrieren. Blockt VOR der Nummernvergabe
+  // (country fehlt / ossMissing / review) → keine verbrauchte Rechnungsnummer.
+  const { tax_rate, tax_amount, total, tax_note, tax_category } =
+    await deriveInvoiceTax(ctx.taxDealer, subtotal)
 
   const { data: number, error: numErr } = await supabase.rpc(
     'next_invoice_number',
@@ -335,6 +406,8 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
       tax_rate,
       tax_amount,
       total,
+      tax_note,
+      tax_category,
       status: 'draft',
       created_by,
     })
@@ -390,7 +463,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     tax: tax_amount,
     taxRate: tax_rate,
     total,
-    taxNote: null,
+    taxNote: tax_note,
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(invoice.invoice_date, total, terms),
     notes: null,
@@ -445,7 +518,7 @@ export async function createFreeInvoice(
   const { data: dealer, error: dealerErr } = await supabase
     .from('dealers')
     .select(
-      'name, contact_name, email, city, country, skonto_prozent, skonto_tage, zahlungsziel_tage',
+      'name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage',
     )
     .eq('id', input.dealer_id)
     .single()
@@ -460,9 +533,18 @@ export async function createFreeInvoice(
   }
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  // Regelbesteuerung: 20 % USt auf den Nettobetrag (wie order-basierte Rechnung).
-  const tax_rate = VAT_RATE
-  const { tax: tax_amount, gross: total } = applyVat(subtotal)
+  // Steuer aus der Kategorie ableiten + einfrieren (wie order-basierte Rechnung).
+  // Blockt VOR der Nummernvergabe → keine verbrauchte Rechnungsnummer.
+  const { tax_rate, tax_amount, total, tax_note, tax_category } =
+    await deriveInvoiceTax(
+      {
+        customer_group: (dealer.customer_group ?? 'b2b') as CustomerGroup,
+        country_iso2: dealer.country_iso2 ?? null,
+        uid: dealer.uid ?? null,
+        language: dealer.language ?? null,
+      },
+      subtotal,
+    )
 
   const { data: number, error: numErr } = await supabase.rpc(
     'next_invoice_number',
@@ -481,6 +563,8 @@ export async function createFreeInvoice(
       tax_rate,
       tax_amount,
       total,
+      tax_note,
+      tax_category,
       status: 'draft',
       notes: input.notes,
       created_by,
@@ -526,7 +610,7 @@ export async function createFreeInvoice(
     tax: tax_amount,
     taxRate: tax_rate,
     total,
-    taxNote: null,
+    taxNote: tax_note,
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(invoice.invoice_date, total, terms),
     notes: input.notes,

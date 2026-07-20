@@ -161,14 +161,19 @@ export async function createReturn(input: CreateReturnInput): Promise<Return> {
     toExistingReturns(returns),
   )
 
-  // Rechnung für dealer_id (Verankerung) — die Retoure hängt am Händler der
-  // Rechnung, nicht an einer aus dem UI mitgereichten Angabe.
+  // Rechnung für dealer_id (Verankerung) plus die EINGEFRORENEN Steuerwerte —
+  // die Gutschrift erbt Satz und Pflichthinweis der Ursprungsrechnung (kein
+  // erneutes Ableiten via taxCalc). So ergibt eine 0-%-Reverse-Charge-Rechnung
+  // eine 0-%-Gutschrift mit demselben Hinweis.
   const { data: invoice, error: invErr } = await supabase
     .from('invoices')
-    .select('dealer_id')
+    .select('dealer_id, tax_rate, tax_note')
     .eq('id', input.invoice_id)
     .single()
   if (invErr) throw invErr
+
+  const inheritedRate = Number((invoice as { tax_rate: number | string }).tax_rate)
+  const inheritedNote = (invoice as { tax_note: string | null }).tax_note ?? null
 
   const itemRows = input.lines.map((line) => {
     const src = itemById.get(line.invoice_item_id)
@@ -193,10 +198,11 @@ export async function createReturn(input: CreateReturnInput): Promise<Return> {
     }
   })
 
-  // Netto/USt/Brutto wie die Rechnung (Satz zentral aus tax.ts), als Snapshot
+  // Netto/USt/Brutto mit dem EINGEFRORENEN Satz der Rechnung, als Snapshot
   // eingefroren. total_amount ist BRUTTO.
   const amounts = returnTotal(
     itemRows.map((r) => ({ quantity: r.quantity, unit_price: r.unit_price })),
+    Number.isNaN(inheritedRate) ? undefined : inheritedRate,
   )
 
   const { data: created, error: insErr } = await supabase
@@ -208,9 +214,10 @@ export async function createReturn(input: CreateReturnInput): Promise<Return> {
       return_date: input.return_date,
       reason: input.reason ?? null,
       subtotal_net: amounts.net,
-      tax_rate: VAT_RATE,
+      tax_rate: Number.isNaN(inheritedRate) ? VAT_RATE : inheritedRate,
       tax_amount: amounts.tax,
       total_amount: amounts.gross,
+      tax_note: inheritedNote,
       status: 'recorded',
       created_by,
     })

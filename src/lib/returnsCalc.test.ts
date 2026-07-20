@@ -94,6 +94,31 @@ test('returnTotal: brutto = netto + USt (Rundung auf Cent)', () => {
   assert.equal(a.gross, Math.round((a.net + a.tax) * 100) / 100)
 })
 
+// NEU (Teil 4): Satz-Parameter — die Gutschrift erbt den eingefrorenen Satz der
+// Rechnung. Der Default (kein Argument) bleibt unverändert 20 %.
+test('returnTotal: Satz 0 (Reverse Charge) → USt 0, brutto = netto', () => {
+  assert.deepEqual(returnTotal([{ quantity: 3, unit_price: '19.90' }], 0), {
+    net: 59.7,
+    tax: 0,
+    gross: 59.7,
+  })
+})
+
+test('returnTotal: OSS-Satz 0.19 wird angewandt', () => {
+  // 3 × 19,90 = 59,70 netto; 19 % = 11,343 → 11,34; brutto 71,04.
+  assert.deepEqual(returnTotal([{ quantity: 3, unit_price: '19.90' }], 0.19), {
+    net: 59.7,
+    tax: 11.34,
+    gross: 71.04,
+  })
+})
+
+test('returnTotal: Default-Satz (kein Argument) bleibt 20 % — unveränderte Altlogik', () => {
+  const explicit = returnTotal([{ quantity: 3, unit_price: '19.90' }], 0.2)
+  const dflt = returnTotal([{ quantity: 3, unit_price: '19.90' }])
+  assert.deepEqual(dflt, explicit)
+})
+
 test('openAfterReturns: offener Rest, nie unter 0', () => {
   assert.equal(openAfterReturns('100.00', 30), 70)
   assert.equal(openAfterReturns(100, 100), 0) // voll gutgeschrieben

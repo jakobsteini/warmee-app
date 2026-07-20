@@ -4,10 +4,12 @@
 // Funktionen liegen in returns.ts und delegieren die Rechnung hierher.
 //
 // Variante B: Teilretouren je Rechnungsposition, mit Steuerausweis Netto/USt/
-// Brutto wie die Rechnung (Satz zentral aus tax.ts via applyVat, nicht
-// hartkodiert). Ein Storno (status='cancelled') zählt nirgends mit — weder bei
-// der noch retournierbaren Menge noch bei den Gutschrift-Summen.
-import { applyVat } from './tax.ts'
+// Brutto wie die Rechnung. Der Satz wird als Parameter übergeben (Default = der
+// AT-Regelsatz aus tax.ts) — so erbt eine Gutschrift den EINGEFRORENEN Satz der
+// Ursprungsrechnung (z. B. 0 % bei Reverse Charge), ohne ihn neu abzuleiten. Ein
+// Storno (status='cancelled') zählt nirgends mit — weder bei der noch
+// retournierbaren Menge noch bei den Gutschrift-Summen.
+import { VAT_RATE } from './tax.ts'
 
 export type ReturnStatus = 'recorded' | 'cancelled'
 
@@ -101,14 +103,19 @@ export interface ReturnAmounts {
 
 /**
  * Gutschrift-Summe einer Menge Zeilen als Netto/USt/Brutto. Die Nettosumme
- * (Menge × Nettopreis) wird über applyVat mit dem zentralen Satz (tax.ts)
- * versteuert — derselbe Weg wie bei der Rechnung, kein hartkodierter Satz.
+ * (Menge × Nettopreis) wird mit `rate` versteuert. `rate` ist der EINGEFRORENE
+ * Satz der Ursprungsrechnung (Faktor, z. B. 0.20 oder 0 bei Reverse Charge);
+ * ohne Angabe gilt der AT-Regelsatz. Rundung identisch zu tax.ts applyVat: erst
+ * die Nettosumme auf Cent runden, dann die USt darauf.
  */
 export function returnTotal(
   lines: { quantity: number; unit_price: number | string }[],
+  rate: number = VAT_RATE,
 ): ReturnAmounts {
-  const net = lines.reduce((s, l) => s + l.quantity * num(l.unit_price), 0)
-  return applyVat(net)
+  const netRaw = lines.reduce((s, l) => s + l.quantity * num(l.unit_price), 0)
+  const net = round2(netRaw)
+  const tax = round2(net * rate)
+  return { net, tax, gross: round2(net + tax) }
 }
 
 /**
