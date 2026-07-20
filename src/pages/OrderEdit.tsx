@@ -17,6 +17,7 @@ import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { formatEUR, parsePrice } from '../lib/money'
+import { totalAmount, totalQuantity } from '../lib/orderCalc'
 import CreditHint from '../components/CreditHint'
 import {
   lineTotal,
@@ -123,10 +124,8 @@ export default function OrderEdit() {
     [products],
   )
 
-  const total = useMemo(
-    () => items.reduce((sum, i) => sum + lineTotal(i.quantity, i.unit_price), 0),
-    [items],
-  )
+  const total = useMemo(() => totalAmount(items), [items])
+  const pieces = useMemo(() => totalQuantity(items), [items])
 
   async function handleAdvanceStatus() {
     if (!order) return
@@ -470,6 +469,15 @@ export default function OrderEdit() {
             )}
           </tbody>
           <tfoot>
+            <tr className="border-t-[0.5px] border-line text-muted">
+              <td colSpan={5} className="px-3 py-2">
+                {t('orderEdit.totalPieces')}
+              </td>
+              <td className="px-3 py-2 text-right whitespace-nowrap">
+                {pieces}
+              </td>
+              <td className="px-3 py-2" />
+            </tr>
             <tr className="border-t-[0.5px] border-line bg-card text-ink">
               <td colSpan={5} className="px-3 py-3 font-medium">
                 {t('orderEdit.grandTotal')}
