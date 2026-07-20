@@ -86,6 +86,7 @@ export default function OrderEdit() {
   const [headError, setHeadError] = useState<string | null>(null)
   const [add, setAdd] = useState<AddForm>(emptyAdd)
   const [adding, setAdding] = useState(false)
+  const [abBusy, setAbBusy] = useState(false)
   // OSS-Sätze für die MwSt-VORSCHAU (reine Anzeige). Ohne sie fällt taxCalc bei
   // B2C-EU auf ossMissing → neutraler Hinweis (kein Block, Order ≠ Steuerbeleg).
   const [ossMap, setOssMap] = useState<Record<string, number>>({})
@@ -177,6 +178,31 @@ export default function OrderEdit() {
       setOrder({ ...order, notes: notes.trim() || null })
     } catch {
       setError(t('common.notesSaveError'))
+    }
+  }
+
+  /** Auftragsbestätigung als PDF (Wegwerf-Blob) — nur bei bestätigter Order. */
+  async function handleAbPdf() {
+    if (!order?.order_number) return
+    setAbBusy(true)
+    setError(null)
+    try {
+      const { buildOrderConfirmationData } = await import('../lib/orderConfirmation')
+      const data = await buildOrderConfirmationData(order.id)
+      const { buildOrderConfirmationPdf } = await import('../lib/pdf')
+      const blob = buildOrderConfirmationPdf(data)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${order.order_number}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError(t('orderEdit.abError'))
+    } finally {
+      setAbBusy(false)
     }
   }
 
@@ -350,6 +376,15 @@ export default function OrderEdit() {
               {t('common.setStatus', { status: t(orderStatusKey(next)) })}
             </button>
           )}
+          <button
+            type="button"
+            onClick={handleAbPdf}
+            disabled={!order.order_number || abBusy}
+            title={!order.order_number ? t('orderEdit.abNeedsConfirm') : undefined}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+          >
+            {abBusy ? t('common.loading') : t('orderEdit.abPdf')}
+          </button>
         </div>
       </div>
 

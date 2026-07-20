@@ -15,7 +15,7 @@ import type { StockListPdfData, StockListRow } from './pdf'
  * eine fehlende/fehlerhafte URL, ein Netzwerk-/CORS-Fehler → null, damit das
  * PDF trotzdem baut (die Zelle bleibt leer).
  */
-async function urlToDataUrl(url: string): Promise<string | null> {
+export async function urlToDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     if (!res.ok) return null

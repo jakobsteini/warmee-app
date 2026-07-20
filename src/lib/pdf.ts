@@ -853,6 +853,306 @@ export function buildStockListPdf(data: StockListPdfData): Blob {
   return doc.output('blob')
 }
 
+// ─── Auftragsbestätigung (AB) ────────────────────────────────────────────────
+//
+// Wegwerf-Beleg wie Lagerliste/Kommissionierschein: kein Nummernkreis (die
+// order_number ist bereits persistent), keine Storage-Ablage. Die MwSt ist reine
+// VORSCHAU (taxCalc lesend, im Daten-Builder) — der AB friert KEINE Steuer ein.
+// Zweisprachig: alle Beleg-Strings kommen als bereits übersetzte `labels`/`head`
+// in der Kundensprache herein (pdf.ts bleibt Layout-only); der Pflichthinweis ist
+// bilingual aus taxCalc. Fotos sind als dataURL vorbereitet (skip-bei-Fehler).
+
+/** Beleg-Labels der AB in der Kundensprache (im Daten-Builder aufgelöst). */
+export interface OrderConfirmationLabels {
+  title: string
+  recipient: string
+  number: string
+  date: string
+  orderType: string
+  shipMethod: string
+  deliveryPeriod: string
+  colPhoto: string
+  colArticle: string
+  colColor: string
+  colSize: string
+  colQty: string
+  colUnit: string
+  colSum: string
+  totalPieces: string
+  subtotal: string
+  /** USt-/VAT-Label; der Satz wird als „(X %)" angehängt. */
+  vat: string
+  gross: string
+  taxHint: string
+  taxUncertain: string
+}
+
+/** Aufgelöste (bereits lokalisierte) Kopfdaten-Werte der AB. */
+export interface OrderConfirmationHead {
+  orderType: string | null
+  shipMethod: string | null
+  /** ISO-Datum, im Builder als TT.MM.JJJJ formatiert. */
+  deliveryFrom: string | null
+  deliveryTo: string | null
+}
+
+/** Eine AB-Position inkl. vorbereitetem Foto (dataURL) oder null. */
+export interface OrderConfirmationItem {
+  photo: string | null
+  description: string
+  color: string | null
+  size: string | null
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
+/** MwSt-Vorschau der AB: entweder unsicher (nur Hinweis) oder konkret. */
+export type OrderConfirmationTax =
+  | { uncertain: true }
+  | { uncertain: false; rate: number; vat: number; gross: number; note: string | null }
+
+export interface OrderConfirmationPdfData {
+  number: string
+  date: string
+  dealer: Dealerish
+  labels: OrderConfirmationLabels
+  head: OrderConfirmationHead
+  items: OrderConfirmationItem[]
+  totalPieces: number
+  /** Nettosumme (= Gesamtsumme der Positionen). */
+  subtotal: number
+  tax: OrderConfirmationTax
+}
+
+/** AB-Positionstabelle: Foto · Artikel · Farbe · Größe · Menge · Einzelpreis · Summe. */
+function drawOrderItemsTable(
+  doc: jsPDF,
+  data: OrderConfirmationPdfData,
+  startY: number,
+): number {
+  const L = data.labels
+  const right = PAGE_W - MARGIN
+  const cols = {
+    photo: MARGIN,
+    article: 36,
+    color: 92,
+    size: 118,
+    qty: 140,
+    unit: 168,
+    sum: right,
+  }
+  const ROW_H = 16
+
+  let y = startY + 8
+  const drawHead = () => {
+    doc.setFillColor(241, 239, 234)
+    doc.rect(MARGIN, y - 5, PAGE_W - MARGIN * 2, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(90, 85, 80)
+    doc.text(L.colPhoto, cols.photo + 1, y)
+    doc.text(L.colArticle, cols.article, y)
+    doc.text(L.colColor, cols.color, y)
+    doc.text(L.colSize, cols.size, y)
+    doc.text(L.colQty, cols.qty, y, { align: 'right' })
+    doc.text(L.colUnit, cols.unit, y, { align: 'right' })
+    doc.text(L.colSum, cols.sum, y, { align: 'right' })
+    y += 4
+  }
+  drawHead()
+
+  for (const it of data.items) {
+    if (y + ROW_H > 262) {
+      doc.addPage()
+      y = 26
+      drawHead()
+    }
+    const rowTop = y + 2
+    // Foto pro Bild abgesichert — ein defektes Bild überspringt nur die Zelle.
+    if (it.photo) {
+      try {
+        doc.addImage(it.photo, 'JPEG', cols.photo, rowTop, 14, 14)
+      } catch {
+        /* Bild überspringen, kein Abbruch */
+      }
+    }
+    const textY = rowTop + 9
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(26, 26, 26)
+    doc.text(
+      doc.splitTextToSize(it.description, cols.color - cols.article - 3)[0] ?? '',
+      cols.article,
+      textY,
+    )
+    doc.setTextColor(90, 85, 80)
+    doc.text(it.color ?? '—', cols.color, textY)
+    doc.text(it.size ?? '—', cols.size, textY)
+    doc.setTextColor(26, 26, 26)
+    doc.text(num(it.quantity), cols.qty, textY, { align: 'right' })
+    doc.text(eur(it.unitPrice), cols.unit, textY, { align: 'right' })
+    doc.text(eur(it.lineTotal), cols.sum, textY, { align: 'right' })
+
+    doc.setDrawColor(220, 216, 210)
+    doc.setLineWidth(0.1)
+    doc.line(MARGIN, rowTop + ROW_H - 1, PAGE_W - MARGIN, rowTop + ROW_H - 1)
+    doc.setLineWidth(DEFAULT_LINE_WIDTH)
+    y += ROW_H
+  }
+  return y + 4
+}
+
+/**
+ * Auftragsbestätigung als PDF-Blob. Wegwerf-Dokument (kein Nummernkreis/Storage);
+ * die order_number ist bereits persistent. MwSt = Vorschau (im Builder nur
+ * gezeichnet, nicht berechnet/eingefroren). Zweisprachig über `labels`/`head`.
+ */
+export function buildOrderConfirmationPdf(data: OrderConfirmationPdfData): Blob {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const L = data.labels
+  const right = PAGE_W - MARGIN
+
+  // ── Kopf (Absender) ──
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(26, 26, 26)
+  doc.text(SENDER.name.toUpperCase(), MARGIN, 22, { charSpace: 1.5 })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(120, 115, 108)
+  SENDER.lines.forEach((line, i) => doc.text(line, MARGIN, 28 + i * 4.5))
+
+  // Empfänger.
+  doc.setTextColor(120, 115, 108)
+  doc.setFontSize(8)
+  doc.text(L.recipient, MARGIN, 48)
+  doc.setTextColor(26, 26, 26)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text(data.dealer.name, MARGIN, 54)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(90, 85, 80)
+  let ry = 59.5
+  if (data.dealer.contact_name) {
+    doc.text(data.dealer.contact_name, MARGIN, ry)
+    ry += 4.5
+  }
+  const place = [data.dealer.city, data.dealer.country].filter(Boolean).join(', ')
+  if (place) {
+    doc.text(place, MARGIN, ry)
+    ry += 4.5
+  }
+  if (data.dealer.email) {
+    doc.text(data.dealer.email, MARGIN, ry)
+    ry += 4.5
+  }
+
+  // Titel + Belegdaten (rechtsbündig).
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.setTextColor(26, 26, 26)
+  doc.text(L.title, right, 22, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  let my = 30
+  for (const row of [
+    { label: L.number, value: data.number },
+    { label: L.date, value: deDate(data.date) },
+  ]) {
+    doc.setTextColor(120, 115, 108)
+    doc.text(row.label, right - 42, my)
+    doc.setTextColor(26, 26, 26)
+    doc.text(row.value, right, my, { align: 'right' })
+    my += 5
+  }
+
+  // ── Kopfdaten-Zeilen (Order-Art, Versandart, Liefertermin) ──
+  let hy = Math.max(ry, 74)
+  doc.setFontSize(9)
+  const headLines: string[] = []
+  if (data.head.orderType) headLines.push(`${L.orderType}: ${data.head.orderType}`)
+  if (data.head.shipMethod) headLines.push(`${L.shipMethod}: ${data.head.shipMethod}`)
+  if (data.head.deliveryFrom || data.head.deliveryTo) {
+    const from = data.head.deliveryFrom ? deDate(data.head.deliveryFrom) : '—'
+    const to = data.head.deliveryTo ? deDate(data.head.deliveryTo) : '—'
+    headLines.push(`${L.deliveryPeriod}: ${from} – ${to}`)
+  }
+  if (headLines.length > 0) {
+    doc.setTextColor(90, 85, 80)
+    doc.text(headLines.join('   ·   '), MARGIN, hy, { maxWidth: PAGE_W - MARGIN * 2 })
+    hy += 4
+  }
+
+  // Akzentlinie über der Positionstabelle.
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, hy, PAGE_W - MARGIN, hy)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+
+  // ── Positionen ──
+  let y = drawOrderItemsTable(doc, data, hy)
+
+  if (y + 40 > 278) {
+    doc.addPage()
+    y = 26
+  }
+
+  // ── Summen: Gesamt-Stück + Netto/USt/Brutto (Vorschau) ──
+  y += 4
+  doc.setFontSize(9.5)
+  doc.setTextColor(90, 85, 80)
+  doc.text(L.totalPieces, right - 42, y)
+  doc.setTextColor(26, 26, 26)
+  doc.text(num(data.totalPieces), right, y, { align: 'right' })
+
+  y += 5
+  doc.setTextColor(90, 85, 80)
+  doc.text(L.subtotal, right - 42, y)
+  doc.setTextColor(26, 26, 26)
+  doc.text(eur(data.subtotal), right, y, { align: 'right' })
+
+  if (data.tax.uncertain) {
+    y += 6
+    doc.setTextColor(120, 115, 108)
+    doc.setFontSize(8.5)
+    doc.text(L.taxUncertain, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+  } else {
+    y += 5
+    doc.setTextColor(90, 85, 80)
+    doc.setFontSize(9.5)
+    doc.text(`${L.vat} (${Math.round(data.tax.rate * 100)} %)`, right - 42, y)
+    doc.setTextColor(26, 26, 26)
+    doc.text(eur(data.tax.vat), right, y, { align: 'right' })
+
+    y += 3
+    doc.setDrawColor(26, 26, 26)
+    doc.line(right - 55, y, right, y)
+    y += 6
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text(L.gross, right - 72, y)
+    doc.text(eur(data.tax.gross), right, y, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+
+    if (data.tax.note) {
+      y += 8
+      doc.setFontSize(9)
+      doc.setTextColor(26, 26, 26)
+      doc.text(data.tax.note, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+    }
+    // Vorschau-Hinweis (AB ist kein Steuerbeleg).
+    y += 8
+    doc.setFontSize(8)
+    doc.setTextColor(120, 115, 108)
+    doc.text(L.taxHint, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+  }
+
+  drawFooter(doc)
+  return doc.output('blob')
+}
+
 /** Daten für die Lieferschein-PDF. */
 export interface DeliveryNotePdfData {
   number: string
