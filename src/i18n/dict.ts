@@ -110,6 +110,15 @@ export const de = {
   'products.field.purchaseInvalid':
     'EK-Preis Nepal: bitte eine gültige Zahl eingeben (oder leer lassen).',
   'products.field.producer': 'Lieferant',
+  'products.field.quality': 'Qualität',
+  'products.field.qualityPlaceholder': 'z. B. 100% Cashmere oder 85% Cotton / 15% Cashmere',
+  'products.field.sizeScheme': 'Staffel',
+  'products.field.collection': 'Kollektion',
+  'products.field.zuschlag': 'Zuschlag (€)',
+  'products.field.zuschlagInvalid':
+    'Zuschlag: bitte eine gültige Zahl eingeben (oder leer lassen).',
+  'products.sizeScheme.uni': 'UNI Size',
+  'products.sizeScheme.xs2xl': 'XS–2XL',
   'products.deleteConfirm': 'Artikel „{name}" wirklich löschen?',
   'products.deleteError': '„{name}" konnte nicht gelöscht werden – wird es noch von Bildern oder Newsletter verwendet?',
   'products.variants': 'Varianten',
@@ -986,6 +995,15 @@ export const en: Record<TranslationKey, string> = {
   'products.field.purchaseInvalid':
     'Purchase price Nepal: please enter a valid number (or leave empty).',
   'products.field.producer': 'Supplier',
+  'products.field.quality': 'Quality',
+  'products.field.qualityPlaceholder': 'e.g. 100% cashmere or 85% cotton / 15% cashmere',
+  'products.field.sizeScheme': 'Size scheme',
+  'products.field.collection': 'Collection',
+  'products.field.zuschlag': 'Surcharge (€)',
+  'products.field.zuschlagInvalid':
+    'Surcharge: please enter a valid number (or leave empty).',
+  'products.sizeScheme.uni': 'One size',
+  'products.sizeScheme.xs2xl': 'XS–2XL',
   'products.deleteConfirm': 'Really delete product “{name}”?',
   'products.deleteError': '“{name}” could not be deleted – is it still used by images or a newsletter?',
   'products.variants': 'Variants',

@@ -1,3 +1,5 @@
+import type { TranslationKey } from '../i18n/dict'
+
 /** Ein Produkt-/Artikel-Datensatz (snake_case wie in der DB). */
 export interface Product {
   id: string
@@ -15,6 +17,12 @@ export interface Product {
   season_id: string | null
   /** Lieferant/Produzent des Artikels (FK auf producers). null = nicht zugeordnet. */
   producer_id: string | null
+  /** Größen-Schema (Stamm-Etikett): 'uni' | 'xs_2xl' (erweiterbar). Steuert NICHT die Bestellgrößen. */
+  size_scheme: string | null
+  /** Freier Kollektionsname, getrennt von season_id. */
+  collection: string | null
+  /** €-Aufschlag je Artikel (Stammwert), EUR. Nur erfasst — in keiner Rechnung. */
+  zuschlag: number | string | null
   created_at: string | null
 
   // ─── Artikelstamm SS27 (Import), alle nullable ───────────────────────────
@@ -45,6 +53,23 @@ export interface ProductInput {
   purchase_price: number | null
   season_id: string | null
   producer_id: string | null
+  /** Materialzusammensetzung (Excel: Composition), Freitext. UI-Label "Qualität". */
+  composition: string | null
+  /** Größen-Schema (Stamm-Etikett): 'uni' | 'xs_2xl' (erweiterbar). */
+  size_scheme: string | null
+  /** Freier Kollektionsname, getrennt von season_id. */
+  collection: string | null
+  /** €-Aufschlag je Artikel (Stammwert), EUR. Nur erfasst — in keiner Rechnung. */
+  zuschlag: number | null
+}
+
+/** Größen-Schema-Werte (app-seitig validiert, kein DB-CHECK; erweiterbar). */
+export const SIZE_SCHEMES = ['uni', 'xs_2xl'] as const
+
+/** Deutsche/englische UI-Labels der Größen-Schemata (via i18n-Key aufgelöst). */
+export const SIZE_SCHEME_LABEL_KEYS: Record<string, TranslationKey> = {
+  uni: 'products.sizeScheme.uni',
+  xs_2xl: 'products.sizeScheme.xs2xl',
 }
 
 /**

@@ -16,6 +16,8 @@ import {
 import {
   categoryLabel,
   PRODUCT_CATEGORIES,
+  SIZE_SCHEMES,
+  SIZE_SCHEME_LABEL_KEYS,
   type Product,
   type ProductInput,
 } from '../types/product'
@@ -58,6 +60,10 @@ interface ProductForm {
   purchase_price: string
   season_id: string
   producer_id: string
+  composition: string
+  size_scheme: string
+  collection: string
+  zuschlag: string
 }
 
 const emptyForm: ProductForm = {
@@ -69,6 +75,10 @@ const emptyForm: ProductForm = {
   purchase_price: '',
   season_id: '',
   producer_id: '',
+  composition: '',
+  size_scheme: '',
+  collection: '',
+  zuschlag: '',
 }
 
 export default function Products() {
@@ -221,6 +231,10 @@ export default function Products() {
         p.purchase_price === null ? '' : String(p.purchase_price),
       season_id: p.season_id ?? '',
       producer_id: p.producer_id ?? '',
+      composition: p.composition ?? '',
+      size_scheme: p.size_scheme ?? '',
+      collection: p.collection ?? '',
+      zuschlag: p.zuschlag === null ? '' : String(p.zuschlag),
     })
     setFormError(null)
     setFormOpen(true)
@@ -247,6 +261,14 @@ export default function Products() {
       return
     }
 
+    // Zuschlag ebenso strikt: leer = null (gültig), ungültig = sichtbarer Fehler.
+    // Wird NUR erfasst — hängt in keiner Preis-/Margenrechnung.
+    const zuschlagParsed = parseDecimalField(form.zuschlag)
+    if (!zuschlagParsed.ok) {
+      setFormError(t('products.field.zuschlagInvalid'))
+      return
+    }
+
     const payload: ProductInput = {
       name,
       category: form.category || null,
@@ -258,6 +280,10 @@ export default function Products() {
       purchase_price: ekParsed.value,
       season_id: form.season_id || null,
       producer_id: form.producer_id || null,
+      composition: form.composition.trim() || null,
+      size_scheme: form.size_scheme || null,
+      collection: form.collection.trim() || null,
+      zuschlag: zuschlagParsed.value,
     }
 
     setSaving(true)
@@ -590,6 +616,72 @@ export default function Products() {
                   value={form.purchase_price}
                   onChange={(e) =>
                     setForm({ ...form, purchase_price: e.target.value })
+                  }
+                  placeholder="0,00"
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('products.field.quality')}
+                </span>
+                <textarea
+                  rows={2}
+                  value={form.composition}
+                  onChange={(e) =>
+                    setForm({ ...form, composition: e.target.value })
+                  }
+                  placeholder={t('products.field.qualityPlaceholder')}
+                  className={inputClass}
+                />
+              </label>
+
+              <div className="flex gap-4">
+                <label className="flex flex-1 flex-col gap-1.5">
+                  <span className="text-sm text-muted">
+                    {t('products.field.sizeScheme')}
+                  </span>
+                  <select
+                    value={form.size_scheme}
+                    onChange={(e) =>
+                      setForm({ ...form, size_scheme: e.target.value })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {SIZE_SCHEMES.map((s) => (
+                      <option key={s} value={s}>
+                        {t(SIZE_SCHEME_LABEL_KEYS[s])}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-1 flex-col gap-1.5">
+                  <span className="text-sm text-muted">
+                    {t('products.field.collection')}
+                  </span>
+                  <input
+                    type="text"
+                    value={form.collection}
+                    onChange={(e) =>
+                      setForm({ ...form, collection: e.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('products.field.zuschlag')}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.zuschlag}
+                  onChange={(e) =>
+                    setForm({ ...form, zuschlag: e.target.value })
                   }
                   placeholder="0,00"
                   className={inputClass}
