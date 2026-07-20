@@ -25,6 +25,7 @@ const navItems: NavDef[] = [
 /** Aktive Module aus Baustein A – Warenwirtschaft */
 const warenItems: NavDef[] = [
   { to: '/products', key: 'nav.products' },
+  { to: '/suppliers', key: 'nav.suppliers' },
   { to: '/orders', key: 'nav.orders' },
   { to: '/production-orders', key: 'nav.productionOrders' },
   { to: '/deliveries', key: 'nav.deliveries' },

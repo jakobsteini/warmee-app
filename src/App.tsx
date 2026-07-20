@@ -24,6 +24,7 @@ import OpenPayments from './pages/OpenPayments'
 import Dunning from './pages/Dunning'
 import DunningSettings from './pages/DunningSettings'
 import OssRates from './pages/OssRates'
+import Suppliers from './pages/Suppliers'
 import Commission from './pages/Commission'
 import Analytics from './pages/Analytics'
 
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/crop" element={<Crop />} />
             <Route path="/newsletter" element={<Newsletter />} />
             <Route path="/products" element={<Products />} />
+            <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:id" element={<OrderEdit />} />
             <Route

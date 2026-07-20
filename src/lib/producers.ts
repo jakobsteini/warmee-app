@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
-import type { Producer } from '../types/producer'
+import { getMyOrgId } from './org'
+import type { Producer, ProducerInput } from '../types/producer'
 
 /**
  * Alle Produzenten der eigenen Org (RLS scoped automatisch), sortiert nach
@@ -20,4 +21,31 @@ export async function listProducers(): Promise<Producer[]> {
 /** Nur aktive Produzenten (für neue Produktionsbestellungen wählbar). */
 export async function listActiveProducers(): Promise<Producer[]> {
   return (await listProducers()).filter((p) => p.active)
+}
+
+/** Neuen Lieferanten anlegen. org_id wird aus dem Profil ergänzt. */
+export async function createProducer(input: ProducerInput): Promise<Producer> {
+  const org_id = await getMyOrgId()
+  const { data, error } = await supabase
+    .from('producers')
+    .insert({ ...input, org_id })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Producer
+}
+
+/** Vorhandenen Lieferanten aktualisieren. */
+export async function updateProducer(
+  id: string,
+  input: ProducerInput,
+): Promise<Producer> {
+  const { data, error } = await supabase
+    .from('producers')
+    .update(input)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Producer
 }
