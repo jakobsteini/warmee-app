@@ -37,6 +37,10 @@ export interface Invoice {
   tax_rate: number | string
   tax_amount: number | string
   total: number | string
+  /** Eingefrorener Pflichthinweis (Reverse Charge / Ausfuhr); null bei Inland/Altbelegen. */
+  tax_note: string | null
+  /** Eingefrorene Steuerkategorie (Audit-Snapshot); null bei Altbelegen. */
+  tax_category: string | null
   status: InvoiceStatus
   /** Tatsächliches Zahlungsdatum (maßgebliche Quelle des Bezahlt-Zustands). */
   paid_at: string | null

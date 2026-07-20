@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf'
 import { type Dealerish } from '../types/invoice'
-import { VAT_RATE_PERCENT } from './tax'
 
 /**
  * Absenderdaten für Belege. Zentral hier, damit Rechnung und Lieferschein
@@ -226,10 +225,21 @@ export interface InvoicePdfData {
   items: BelegItem[]
   /** Nettobetrag (Summe der Positionen ohne USt). */
   subtotal: number
-  /** Ausgewiesene Umsatzsteuer (20 % auf den Nettobetrag). */
+  /** Ausgewiesene Umsatzsteuer (Betrag, aus dem eingefrorenen tax_amount). */
   tax: number
+  /**
+   * Steuersatz als FAKTOR aus dem eingefrorenen invoices.tax_rate (0.20 = 20 %).
+   * Das USt-Label kommt aus DIESEM Wert, NICHT aus der Konstante VAT_RATE_PERCENT —
+   * so zeigt jeder Beleg seinen eigenen, zum Erzeugungszeitpunkt eingefrorenen Satz.
+   */
+  taxRate: number
   /** Bruttobetrag (Netto + USt). */
   total: number
+  /**
+   * Optionaler Pflichthinweis (Reverse Charge / Ausfuhr), eingefroren aus
+   * invoices.tax_note. null/leer → keine Hinweiszeile (Altbelege, Inland).
+   */
+  taxNote?: string | null
   /** Zahlungsziel in Tagen (für die Beleg-Zeile „…innerhalb von N Tagen netto"). */
   zahlungszielTage: number
   /**
@@ -276,7 +286,9 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
 
   y += 5
   doc.setTextColor(90, 85, 80)
-  doc.text(`USt (${VAT_RATE_PERCENT} %)`, right - 42, y)
+  // Satz aus dem eingefrorenen tax_rate des Belegs (Faktor → Prozent). Altbelege
+  // mit tax_rate = 0.20 ergeben exakt „USt (20 %)" wie bisher.
+  doc.text(`USt (${Math.round(data.taxRate * 100)} %)`, right - 42, y)
   doc.setTextColor(26, 26, 26)
   doc.text(eur(data.tax), right, y, { align: 'right' })
 
@@ -314,6 +326,16 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
       { maxWidth: PAGE_W - MARGIN * 2 },
     )
     doc.setTextColor(26, 26, 26)
+  }
+
+  // Pflichthinweis (Reverse Charge / Ausfuhr) — nur wenn eingefroren vorhanden.
+  // Altbelege haben tax_note = null → keine Zeile, Layout unverändert.
+  if (data.taxNote && data.taxNote.trim()) {
+    y += 8
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(26, 26, 26)
+    doc.text(data.taxNote.trim(), MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
   }
 
   if (data.notes) {
