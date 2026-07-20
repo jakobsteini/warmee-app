@@ -207,6 +207,7 @@ export default function Orders() {
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
+                <th className="px-4 py-3 font-medium">{t('order.number')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.season')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.status')}</th>
@@ -222,6 +223,11 @@ export default function Orders() {
                   onClick={() => navigate(`/orders/${o.id}`)}
                   className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                 >
+                  <td className="px-4 py-3 font-medium whitespace-nowrap">
+                    {o.order_number ?? (
+                      <span className="text-muted">{t('order.draftDash')}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-medium">
                     {o.dealer?.name ?? '—'}
                   </td>
@@ -264,7 +270,7 @@ export default function Orders() {
             </tbody>
             <tfoot>
               <tr className="border-t-[0.5px] border-line bg-card text-ink">
-                <td className="px-4 py-3 font-medium" colSpan={4}>
+                <td className="px-4 py-3 font-medium" colSpan={5}>
                   {t('common.total')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium whitespace-nowrap">

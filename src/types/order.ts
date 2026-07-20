@@ -165,6 +165,8 @@ export interface Order extends OrderHeadFields {
   org_id: string
   dealer_id: string
   season_id: string
+  /** Auftragsnummer AB-YYYY-NNNN; NULL bis zur Bestätigung (confirmed). */
+  order_number: string | null
   status: OrderStatus
   /** Provisions-Zuteilung; NOT NULL DEFAULT 'internal' in der DB. */
   assignment: OrderAssignment

@@ -313,6 +313,12 @@ export default function OrderEdit() {
           <p className="mt-1 text-sm text-muted">
             {t('common.seasonValue', { season: season?.label ?? '—' })}
           </p>
+          <p className="mt-0.5 text-sm text-muted">
+            {t('order.number')}:{' '}
+            <span className="text-ink">
+              {order.order_number ?? t('order.draftNumberHint')}
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-muted">

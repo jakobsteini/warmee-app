@@ -759,6 +759,9 @@ export const de = {
   // ─── Provision ───────────────────────────────────────────────────────────
   'nav.commission': 'Provision',
   'order.assignmentLabel': 'Zuteilung',
+  'order.number': 'Auftragsnr.',
+  'order.draftDash': '— (Entwurf)',
+  'order.draftNumberHint': 'wird bei Bestätigung vergeben',
   'order.headTitle': 'Kopfdaten',
   'order.field.type': 'Order-Art',
   'order.field.shipMethod': 'Versandart',
@@ -1726,6 +1729,9 @@ export const en: Record<TranslationKey, string> = {
   // ─── Provision ───────────────────────────────────────────────────────────
   'nav.commission': 'Commission',
   'order.assignmentLabel': 'Assignment',
+  'order.number': 'Order no.',
+  'order.draftDash': '— (draft)',
+  'order.draftNumberHint': 'assigned on confirmation',
   'order.headTitle': 'Header data',
   'order.field.type': 'Order type',
   'order.field.shipMethod': 'Shipping method',

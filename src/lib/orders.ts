@@ -62,9 +62,34 @@ export async function updateOrderStatus(
   id: string,
   status: OrderStatus,
 ): Promise<Order> {
+  const patch: { status: OrderStatus; order_number?: string } = { status }
+
+  // Beim Übergang auf 'confirmed' (= Fertigstellung/AB) eine lückenlose
+  // Auftragsnummer ziehen — aber NUR, wenn noch keine gesetzt ist (idempotent:
+  // erneutes confirmed vergibt keine zweite Nummer). Race-Sicherheit wie bei der
+  // Rechnungsnummer: max+1 aus der DB (next_order_number) + Unique-Constraint
+  // (org_id, order_number) fängt eine kollidierende Parallelvergabe ab.
+  if (status === 'confirmed') {
+    const { data: cur, error: curErr } = await supabase
+      .from('orders')
+      .select('order_number')
+      .eq('id', id)
+      .single()
+    if (curErr) throw curErr
+    if (!cur.order_number) {
+      const org_id = await getMyOrgId()
+      const { data: num, error: numErr } = await supabase.rpc(
+        'next_order_number',
+        { p_org_id: org_id },
+      )
+      if (numErr) throw numErr
+      patch.order_number = num as string
+    }
+  }
+
   const { data, error } = await supabase
     .from('orders')
-    .update({ status })
+    .update(patch)
     .eq('id', id)
     .select()
     .single()
