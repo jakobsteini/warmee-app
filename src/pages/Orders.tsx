@@ -6,7 +6,11 @@ import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
 import { listDealerCredits, type DealerCredit } from '../lib/creditRating'
 import { formatEUR } from '../lib/money'
+import { filterOrders } from '../lib/orderListFilter'
+import { sortOrders, type OrderSortKey, type SortDir } from '../lib/orderListSort'
+import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import CreditHint from '../components/CreditHint'
+import ExportButtons from '../components/ExportButtons'
 import {
   lineTotal,
   ORDER_ASSIGNMENTS,
@@ -38,6 +42,38 @@ function orderTotal(order: OrderListRow): number {
   return order.order_items.reduce(
     (sum, i) => sum + lineTotal(i.quantity, i.unit_price),
     0,
+  )
+}
+
+const filterClass =
+  'rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink'
+
+/** Klickbarer, sortierbarer Spaltenkopf mit Richtungs-Pfeil. */
+function SortTh({
+  label,
+  col,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string
+  col: OrderSortKey
+  active: OrderSortKey
+  dir: SortDir
+  onClick: (col: OrderSortKey) => void
+}) {
+  const arrow = active === col ? (dir === 'asc' ? ' ↑' : ' ↓') : ''
+  return (
+    <th className="px-4 py-3 font-medium">
+      <button
+        type="button"
+        onClick={() => onClick(col)}
+        className="font-medium text-muted transition-colors hover:text-ink"
+      >
+        {label}
+        {arrow}
+      </button>
+    </th>
   )
 }
 
@@ -78,6 +114,36 @@ export default function Orders() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // Filter (leer = alle) + Sortierung. Alles client-seitig auf der geladenen Liste.
+  const [fSeason, setFSeason] = useState('')
+  const [fDealer, setFDealer] = useState('')
+  const [fAssignment, setFAssignment] = useState('')
+  const [sortKey, setSortKey] = useState<OrderSortKey>('dealer')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  const visibleOrders = useMemo(
+    () =>
+      sortOrders(
+        filterOrders(orders, {
+          seasonId: fSeason,
+          dealerId: fDealer,
+          assignment: fAssignment,
+        }),
+        sortKey,
+        sortDir,
+      ),
+    [orders, fSeason, fDealer, fAssignment, sortKey, sortDir],
+  )
+
+  /** Klick auf einen Spaltenkopf: gleiche Spalte → Richtung toggeln, sonst asc. */
+  function toggleSort(key: OrderSortKey) {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -106,9 +172,21 @@ export default function Orders() {
   }, [])
 
   const grandTotal = useMemo(
-    () => orders.reduce((sum, o) => sum + orderTotal(o), 0),
-    [orders],
+    () => visibleOrders.reduce((sum, o) => sum + orderTotal(o), 0),
+    [visibleOrders],
   )
+
+  // Export-Spalten (gefilterte+sortierte Liste). Getter über t() für Labels.
+  const exportColumns: ExportColumn<OrderListRow>[] = [
+    { header: t('order.number'), value: (o) => o.order_number ?? '' },
+    { header: t('common.dealer'), value: (o) => o.dealer?.name ?? '' },
+    { header: t('common.season'), value: (o) => o.season?.label ?? '' },
+    { header: t('order.assignmentLabel'), value: (o) => t(assignmentKey(o.assignment)) },
+    { header: t('order.field.deliveryFrom'), value: (o) => formatDateDE(o.delivery_date_from) },
+    { header: t('order.field.deliveryTo'), value: (o) => formatDateDE(o.delivery_date_to) },
+    { header: t('common.status'), value: (o) => t(orderStatusKey(o.status)) },
+    { header: t('common.lineSum'), value: (o) => numify(orderTotal(o)) },
+  ]
 
   function openCreate() {
     setForm({
@@ -203,84 +281,157 @@ export default function Orders() {
           {t('orders.empty')}
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-card text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">{t('order.number')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.dealer')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.season')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
-                <th className="px-4 py-3 font-medium">{t('order.assignmentLabel')}</th>
-                <th className="px-4 py-3 text-right font-medium">{t('common.lineSum')}</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((o) => (
-                <tr
-                  key={o.id}
-                  onClick={() => navigate(`/orders/${o.id}`)}
-                  className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
+        <>
+          {/* Filterleiste + Excel-Export der gefilterten Liste */}
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted">{t('common.season')}</span>
+                <select
+                  value={fSeason}
+                  onChange={(e) => setFSeason(e.target.value)}
+                  className={filterClass}
                 >
-                  <td className="px-4 py-3 font-medium whitespace-nowrap">
-                    {o.order_number ?? (
-                      <span className="text-muted">{t('order.draftDash')}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-medium">
-                    {o.dealer?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {o.season?.label ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={o.status} />
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {t(assignmentKey(o.assignment))}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    {formatEUR(orderTotal(o))}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/orders/${o.id}`)
-                      }}
-                      className="text-muted transition-colors hover:text-ink"
-                    >
-                      {t('common.open')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(o)
-                      }}
-                      className="ml-4 text-muted transition-colors hover:text-red-700"
-                    >
-                      {t('common.delete')}
-                    </button>
-                  </td>
+                  <option value="">{t('orders.filterAll')}</option>
+                  {seasons.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted">{t('common.dealer')}</span>
+                <select
+                  value={fDealer}
+                  onChange={(e) => setFDealer(e.target.value)}
+                  className={filterClass}
+                >
+                  <option value="">{t('orders.filterAll')}</option>
+                  {dealers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted">
+                  {t('order.assignmentLabel')}
+                </span>
+                <select
+                  value={fAssignment}
+                  onChange={(e) => setFAssignment(e.target.value)}
+                  className={filterClass}
+                >
+                  <option value="">{t('orders.filterAll')}</option>
+                  {ORDER_ASSIGNMENTS.map((a) => (
+                    <option key={a} value={a}>
+                      {t(assignmentKey(a))}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <ExportButtons
+              filenameBase={t('orders.exportFilename')}
+              sheetName={t('orders.title')}
+              columns={exportColumns}
+              rows={visibleOrders}
+            />
+          </div>
+
+          <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-card text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-medium">{t('order.number')}</th>
+                  <SortTh label={t('common.dealer')} col="dealer" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label={t('common.season')} col="season" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label={t('order.assignmentLabel')} col="assignment" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label={t('order.field.deliveryFrom')} col="delivery_from" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <th className="px-4 py-3 font-medium">{t('order.field.deliveryTo')}</th>
+                  <th className="px-4 py-3 font-medium">{t('common.status')}</th>
+                  <th className="px-4 py-3 text-right font-medium">{t('common.lineSum')}</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-[0.5px] border-line bg-card text-ink">
-                <td className="px-4 py-3 font-medium" colSpan={5}>
-                  {t('common.total')}
-                </td>
-                <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
-                  {formatEUR(grandTotal)}
-                </td>
-                <td className="px-4 py-3" />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {visibleOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-6 text-center text-muted">
+                      {t('orders.noFilterMatch')}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleOrders.map((o) => (
+                    <tr
+                      key={o.id}
+                      onClick={() => navigate(`/orders/${o.id}`)}
+                      className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
+                    >
+                      <td className="px-4 py-3 font-medium whitespace-nowrap">
+                        {o.order_number ?? (
+                          <span className="text-muted">{t('order.draftDash')}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-medium">{o.dealer?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted">{o.season?.label ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted">
+                        {t(assignmentKey(o.assignment))}
+                      </td>
+                      <td className="px-4 py-3 text-muted whitespace-nowrap">
+                        {formatDateDE(o.delivery_date_from) || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-muted whitespace-nowrap">
+                        {formatDateDE(o.delivery_date_to) || '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={o.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {formatEUR(orderTotal(o))}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(`/orders/${o.id}`)
+                          }}
+                          className="text-muted transition-colors hover:text-ink"
+                        >
+                          {t('common.open')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(o)
+                          }}
+                          className="ml-4 text-muted transition-colors hover:text-red-700"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-[0.5px] border-line bg-card text-ink">
+                  <td className="px-4 py-3 font-medium" colSpan={7}>
+                    {t('common.total')}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                    {formatEUR(grandTotal)}
+                  </td>
+                  <td className="px-4 py-3" />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
 
       {formOpen && (
