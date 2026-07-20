@@ -23,6 +23,7 @@ import InvoiceEdit from './pages/InvoiceEdit'
 import OpenPayments from './pages/OpenPayments'
 import Dunning from './pages/Dunning'
 import DunningSettings from './pages/DunningSettings'
+import OssRates from './pages/OssRates'
 import Commission from './pages/Commission'
 import Analytics from './pages/Analytics'
 
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/new" element={<InvoiceNew />} />
             <Route path="/invoices/:id" element={<InvoiceEdit />} />
+            <Route path="/oss-rates" element={<OssRates />} />
             <Route path="/open-payments" element={<OpenPayments />} />
             <Route path="/dunning" element={<Dunning />} />
             <Route path="/dunning/settings" element={<DunningSettings />} />

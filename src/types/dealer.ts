@@ -32,6 +32,12 @@ export interface Dealer {
   owner_name: string | null
   /** Umsatzsteuer-Identifikationsnummer, z. B. "ATU61622989". */
   uid: string | null
+  /** Manuelles „UID-Format geprüft"-Flag (offline, kein VIES). DB default false. */
+  uid_verified: boolean
+  /** Sauberes ISO2-Land für die Steuerkategorie ('AT','DE',…); null = ungepflegt. */
+  country_iso2: string | null
+  /** Belegsprache 'de'|'en'; null = App-Fallback 'de'. */
+  language: string | null
   gegenkonto: number | null
 
   /** Original-Zahlungskondition wie geliefert, z. B. "4,00%10T N30T". */
@@ -98,6 +104,9 @@ export interface DealerInput {
 
   // Steuer & Buchhaltung
   uid: string | null
+  uid_verified: boolean
+  country_iso2: string | null
+  language: string | null
   gegenkonto: number | null
 
   // Zahlungskonditionen (strukturiert = maßgeblich; raw wird daraus abgeleitet)

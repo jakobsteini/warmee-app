@@ -43,7 +43,10 @@ import {
   type FieldParse,
 } from '../lib/paymentTerms'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax'
-import { useT, type TFunc } from '../i18n'
+import { taxCalc } from '../lib/taxCalc'
+import { COUNTRIES, countryLabel } from '../lib/countries'
+import { listOssRates, ossRateMap } from '../lib/ossRates'
+import { useT, useI18n, type TFunc } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
 /** E-Mail-Rolle → Übersetzungs-Key. */
@@ -86,6 +89,9 @@ type DealerFormKey =
   | 'discount_percent'
   | 'credit_limit'
   | 'uid'
+  | 'uid_verified'
+  | 'country_iso2'
+  | 'language'
   | 'gegenkonto'
   | 'skonto_prozent'
   | 'skonto_tage'
@@ -131,6 +137,9 @@ const emptyForm: DealerForm = {
   discount_percent: '',
   credit_limit: '',
   uid: '',
+  uid_verified: 'false',
+  country_iso2: '',
+  language: '',
   gegenkonto: '',
   skonto_prozent: '',
   skonto_tage: '',
@@ -262,6 +271,9 @@ function toDealerInput(f: DealerForm): DealerInput {
     credit_limit: pv(parseDecimalField(f.credit_limit)),
 
     uid: trimOrNull(f.uid),
+    uid_verified: f.uid_verified === 'true',
+    country_iso2: trimOrNull(f.country_iso2),
+    language: f.language === 'en' ? 'en' : f.language === 'de' ? 'de' : null,
     gegenkonto: intOrNull(f.gegenkonto),
 
     skonto_prozent,
@@ -330,6 +342,9 @@ function dealerToForm(d: Dealer): DealerForm {
     discount_percent: pgNumToStr(d.discount_percent),
     credit_limit: pgNumToStr(d.credit_limit),
     uid: d.uid ?? '',
+    uid_verified: d.uid_verified ? 'true' : 'false',
+    country_iso2: d.country_iso2 ?? '',
+    language: d.language ?? '',
     gegenkonto: numToStr(d.gegenkonto),
     skonto_prozent: numToStr(skonto_prozent),
     skonto_tage: numToStr(skonto_tage),
@@ -557,11 +572,30 @@ export default function DealerEditModal({
   onSaved: () => void
 }) {
   const t = useT()
+  const { lang } = useI18n()
 
   const [form, setForm] = useState<DealerForm>(
     dealer ? dealerToForm(dealer) : emptyForm,
   )
   const [saving, setSaving] = useState(false)
+
+  // OSS-Sätze für die abgeleitete Kategorie-Anzeige (read-only). Fehlen sie,
+  // meldet taxCalc bei B2C-EU ossMissing → sichtbarer Warnhinweis unten.
+  const [ossMap, setOssMap] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await listOssRates()
+        if (!cancelled) setOssMap(ossRateMap(r))
+      } catch {
+        /* Anzeige ist ergänzend — ohne OSS-Sätze greift der Fallback-Hinweis */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [formError, setFormError] = useState<string | null>(null)
 
   // ─── Relationen des Händlers (eigene Tabellen) ─────────────────────────────
@@ -785,6 +819,17 @@ export default function DealerEditModal({
     }
   }
 
+  // Abgeleitete Steuerkategorie — REINE ANZEIGE, wird NICHT gespeichert. Live aus
+  // customer_group + country_iso2 + uid gegen die geladenen OSS-Sätze.
+  const derivedTax = taxCalc(
+    {
+      customer_group: form.customer_group as CustomerGroup,
+      country_iso2: form.country_iso2 || null,
+      uid: form.uid || null,
+    },
+    ossMap,
+  )
+
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4 py-8">
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-cream shadow-xl">
@@ -902,6 +947,39 @@ export default function DealerEditModal({
             {/* Steuer & Buchhaltung */}
             <Section title={t('dealers.section.tax')}>
               <div className="flex gap-3">
+                <label className="flex flex-1 flex-col gap-1.5">
+                  <span className="text-xs text-muted">
+                    {t('dealers.field.countryIso')}
+                  </span>
+                  <select
+                    value={form.country_iso2}
+                    onChange={(e) => set('country_iso2', e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {countryLabel(c.code, lang)} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-1 flex-col gap-1.5">
+                  <span className="text-xs text-muted">
+                    {t('dealers.field.language')}
+                  </span>
+                  <select
+                    value={form.language}
+                    onChange={(e) => set('language', e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">{t('dealers.language.default')}</option>
+                    <option value="de">{t('dealers.language.de')}</option>
+                    <option value="en">{t('dealers.language.en')}</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex gap-3">
                 <Field
                   label={t('dealers.field.uid')}
                   value={form.uid}
@@ -914,6 +992,48 @@ export default function DealerEditModal({
                   value={form.gegenkonto}
                   onChange={(v) => set('gegenkonto', v)}
                 />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={form.uid_verified === 'true'}
+                  onChange={(e) =>
+                    set('uid_verified', e.target.checked ? 'true' : 'false')
+                  }
+                />
+                {t('dealers.field.uidVerified')}
+              </label>
+
+              {/* Abgeleitete Steuerkategorie — READ-ONLY, wird nicht gespeichert. */}
+              <div className="rounded-md border-[0.5px] border-line bg-card px-4 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs text-muted">
+                    {t('dealers.tax.derived')}
+                  </span>
+                  <span className="text-sm font-medium text-ink">
+                    {t(`tax.cat.${derivedTax.category}` as TranslationKey)} ·{' '}
+                    {t('dealers.tax.rate')}{' '}
+                    {Math.round(derivedTax.rate * 100)} %
+                  </span>
+                </div>
+                {derivedTax.note && (
+                  <p className="mt-1 text-xs text-muted">
+                    {lang === 'en' ? derivedTax.note.en : derivedTax.note.de}
+                  </p>
+                )}
+                {derivedTax.ossMissing && (
+                  <p className="mt-1 text-xs text-red-700">
+                    {t('dealers.tax.warnOssMissing')}
+                  </p>
+                )}
+                {derivedTax.review && (
+                  <p className="mt-1 text-xs text-red-700">
+                    {t('dealers.tax.warnReview')}
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-muted">
+                  {t('dealers.tax.readonlyHint')}
+                </p>
               </div>
             </Section>
 
