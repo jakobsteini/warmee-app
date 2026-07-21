@@ -9,12 +9,20 @@ import {
 } from '../lib/productionOrders'
 import { parseDecimalField } from '../lib/paymentTerms'
 import { listSeasons } from '../lib/seasons'
+import { getProducer } from '../lib/producers'
+import {
+  supplierLang,
+  supplierOrderRecipients,
+  supplierOrderMailText,
+  buildMailtoUrl,
+} from '../lib/supplierOrderMail'
 import GoodsReceiptSection from '../components/GoodsReceiptSection'
 import {
   nextProductionStatus,
   type ProductionOrder,
   type ProductionOrderItemWithProduct,
 } from '../types/productionOrder'
+import type { Producer } from '../types/producer'
 import type { Season } from '../types/asset'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
@@ -41,6 +49,8 @@ export default function ProductionOrderEdit() {
   const [order, setOrder] = useState<ProductionOrder | null>(null)
   const [items, setItems] = useState<ProductionOrderItemWithProduct[]>([])
   const [season, setSeason] = useState<Season | null>(null)
+  const [producer, setProducer] = useState<Producer | null>(null)
+  const [mailBusy, setMailBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,6 +73,7 @@ export default function ProductionOrderEdit() {
       setNotes(ord.notes ?? '')
       setTransport(ord.transportkosten != null ? String(ord.transportkosten) : '')
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
+      setProducer(ord.producer_id ? await getProducer(ord.producer_id) : null)
     } catch {
       setError(t('productionOrderEdit.loadError'))
     } finally {
@@ -89,6 +100,57 @@ export default function ProductionOrderEdit() {
       setOrder(updated)
     } catch {
       setError(t('common.statusChangeError'))
+    }
+  }
+
+  /**
+   * Bestellung an den Lieferanten: PDF (in dessen Sprache) herunterladen und den
+   * Mail-Client mit vorbefüllten Empfängern/Betreff/Body öffnen. Kein echter SMTP
+   * — die Nutzerin hängt das heruntergeladene PDF an und verschickt selbst.
+   */
+  async function handleSupplierMail() {
+    if (!order || !producer || !order.supplier_order_number) return
+    setMailBusy(true)
+    setError(null)
+    try {
+      const lang = supplierLang(producer.language)
+      const [{ buildSupplierOrderPdf }, { supplierOrderPdfLabels }] = await Promise.all([
+        import('../lib/pdf'),
+        import('../lib/pdfLabels'),
+      ])
+      const blob = buildSupplierOrderPdf({
+        labels: supplierOrderPdfLabels(lang),
+        number: order.supplier_order_number,
+        date: order.sent_at ?? order.generated_at ?? new Date().toISOString(),
+        supplierName: producer.name,
+        supplierAddress: producer.address,
+        seasonLabel: season?.label ?? null,
+        items: items.map((i) => ({
+          description: i.product?.name ?? i.modell ?? 'Artikel',
+          color: i.color,
+          size: i.size,
+          quantity: i.total_quantity ?? 0,
+        })),
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bestellung-${order.supplier_order_number}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+
+      const recipients = supplierOrderRecipients(producer)
+      const { subject, body } = supplierOrderMailText({
+        orderNumber: order.supplier_order_number,
+        lang,
+      })
+      window.location.href = buildMailtoUrl(recipients, subject, body)
+    } catch {
+      setError(t('supplierOrder.mailError'))
+    } finally {
+      setMailBusy(false)
     }
   }
 
@@ -185,6 +247,16 @@ export default function ProductionOrderEdit() {
           >
             {t('common.printPdf')}
           </button>
+          {order.supplier_order_number && producer && (
+            <button
+              type="button"
+              onClick={handleSupplierMail}
+              disabled={mailBusy}
+              className="rounded-md border-[0.5px] border-ink px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+            >
+              {t('supplierOrder.mail')}
+            </button>
+          )}
           {next && (
             <button
               type="button"

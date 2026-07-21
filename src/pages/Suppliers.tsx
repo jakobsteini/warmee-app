@@ -22,6 +22,7 @@ interface SupplierForm {
   address: string
   uid: string
   active: boolean
+  language: string
   kontakt1_name: string
   kontakt1_email: string
   kontakt2_name: string
@@ -39,6 +40,7 @@ const emptyForm: SupplierForm = {
   address: '',
   uid: '',
   active: true,
+  language: '',
   kontakt1_name: '',
   kontakt1_email: '',
   kontakt2_name: '',
@@ -98,6 +100,7 @@ export default function Suppliers() {
       address: p.address ?? '',
       uid: p.uid ?? '',
       active: p.active,
+      language: p.language ?? '',
       kontakt1_name: p.kontakt1_name ?? '',
       kontakt1_email: p.kontakt1_email ?? '',
       kontakt2_name: p.kontakt2_name ?? '',
@@ -139,6 +142,7 @@ export default function Suppliers() {
       address: trimOrNull(form.address),
       uid: trimOrNull(form.uid),
       active: form.active,
+      language: trimOrNull(form.language),
       kontakt1_name: trimOrNull(form.kontakt1_name),
       kontakt1_email: trimOrNull(form.kontakt1_email),
       kontakt2_name: trimOrNull(form.kontakt2_name),
@@ -381,6 +385,21 @@ export default function Suppliers() {
                   />
                 </label>
               </div>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">
+                  {t('suppliers.field.language')}
+                </span>
+                <select
+                  value={form.language}
+                  onChange={(e) => set('language', e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">{t('suppliers.language.default')}</option>
+                  <option value="en">{t('suppliers.language.en')}</option>
+                  <option value="de">{t('suppliers.language.de')}</option>
+                </select>
+              </label>
 
               <label className="flex items-center gap-2 text-sm text-ink">
                 <input

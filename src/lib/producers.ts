@@ -23,6 +23,17 @@ export async function listActiveProducers(): Promise<Producer[]> {
   return (await listProducers()).filter((p) => p.active)
 }
 
+/** Einen einzelnen Lieferanten laden (für die Bestellmail/das Bestell-PDF). */
+export async function getProducer(id: string): Promise<Producer> {
+  const { data, error } = await supabase
+    .from('producers')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as Producer
+}
+
 /** Neuen Lieferanten anlegen. org_id wird aus dem Profil ergänzt. */
 export async function createProducer(input: ProducerInput): Promise<Producer> {
   const org_id = await getMyOrgId()

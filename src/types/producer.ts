@@ -18,6 +18,8 @@ export interface Producer {
   address: string | null
   /** UID-Nr. (optional). */
   uid: string | null
+  /** Belegsprache der Bestellung (‚de'/‚en'); null → Englisch (Nepal-Default). */
+  language: string | null
   /** Bis zu 3 Kontakte (Name + E-Mail), alle optional — z. B. Aufsichtsperson. */
   kontakt1_name: string | null
   kontakt1_email: string | null
@@ -38,6 +40,7 @@ export interface ProducerInput {
   email: string | null
   address: string | null
   uid: string | null
+  language: string | null
   kontakt1_name: string | null
   kontakt1_email: string | null
   kontakt2_name: string | null

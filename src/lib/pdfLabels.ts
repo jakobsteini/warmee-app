@@ -142,9 +142,55 @@ const DELIVERY_NOTE_LABELS: Record<PdfLang, DeliveryNotePdfLabels> = {
   },
 }
 
+/** Aufgelöste Labels des Lieferanten-Bestell-PDFs. */
+export interface SupplierOrderPdfLabels {
+  title: string
+  supplier: string
+  number: string
+  date: string
+  season: string
+  colArticle: string
+  colColor: string
+  colSize: string
+  colQty: string
+  totalQuantity: string
+}
+
+const SUPPLIER_ORDER_LABELS: Record<PdfLang, SupplierOrderPdfLabels> = {
+  de: {
+    title: 'Bestellung',
+    supplier: 'Lieferant',
+    number: 'Nr.',
+    date: 'Datum',
+    season: 'Saison',
+    colArticle: 'Artikel',
+    colColor: 'Farbe',
+    colSize: 'Größe',
+    colQty: 'Menge',
+    totalQuantity: 'Gesamtmenge',
+  },
+  en: {
+    title: 'Order',
+    supplier: 'Supplier',
+    number: 'No.',
+    date: 'Date',
+    season: 'Season',
+    colArticle: 'Article',
+    colColor: 'Colour',
+    colSize: 'Size',
+    colQty: 'Qty',
+    totalQuantity: 'Total quantity',
+  },
+}
+
 /** Rechnungs-Labels in der gewählten Sprache. */
 export function invoicePdfLabels(lang: PdfLang): InvoicePdfLabels {
   return INVOICE_LABELS[lang]
+}
+
+/** Lieferanten-Bestell-Labels in der gewählten Sprache. */
+export function supplierOrderPdfLabels(lang: PdfLang): SupplierOrderPdfLabels {
+  return SUPPLIER_ORDER_LABELS[lang]
 }
 
 /** Lieferschein-Labels in der gewählten Sprache. */

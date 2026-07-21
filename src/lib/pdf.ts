@@ -1,6 +1,10 @@
 import { jsPDF } from 'jspdf'
 import { type Dealerish } from '../types/invoice'
-import type { InvoicePdfLabels, DeliveryNotePdfLabels } from './pdfLabels'
+import type {
+  InvoicePdfLabels,
+  DeliveryNotePdfLabels,
+  SupplierOrderPdfLabels,
+} from './pdfLabels'
 import {
   BRAND_LOGO_BLACK,
   BRAND_LOGO_BLACK_W,
@@ -1291,6 +1295,119 @@ export function buildDeliveryNotePdf(data: DeliveryNotePdfData): Blob {
     doc.setTextColor(120, 115, 108)
     doc.text(data.notes, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
   }
+
+  drawFooter(doc)
+  return doc.output('blob')
+}
+
+// ─── Lieferanten-Bestellung (Nepal-Sammelbestellung) ─────────────────────────
+
+/** Eine Position der Lieferanten-Bestellung (nur Menge, keine Preise). */
+export interface SupplierOrderPdfItem {
+  description: string
+  color: string | null
+  size: string | null
+  quantity: number
+}
+
+/** Daten für das Lieferanten-Bestell-PDF. */
+export interface SupplierOrderPdfData {
+  /** Bereits in der Lieferantensprache aufgelöste Labels (de/en). */
+  labels: SupplierOrderPdfLabels
+  /** Bestellnummer LB-YYYY-NNNN. */
+  number: string
+  /** Belegdatum als ISO (im Builder als TT.MM.JJJJ formatiert). */
+  date: string
+  supplierName: string
+  supplierAddress: string | null
+  seasonLabel: string | null
+  items: SupplierOrderPdfItem[]
+}
+
+/**
+ * Lieferanten-Bestellung als PDF-Blob. Empfänger ist der LIEFERANT (kein
+ * Kundenbeleg), daher eigener Kopf statt drawHeader. Stil wie Lieferschein
+ * (Mengen ohne Preise). Zweisprachig über `labels` (producer.language, en-Default).
+ */
+export function buildSupplierOrderPdf(data: SupplierOrderPdfData): Blob {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const L = data.labels
+  const right = PAGE_W - MARGIN
+
+  // Absender.
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(26, 26, 26)
+  drawSenderLogo(doc)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(120, 115, 108)
+  SENDER.lines.forEach((line, i) => doc.text(line, MARGIN, 28 + i * 4.5))
+
+  // Empfänger (Lieferant).
+  doc.setTextColor(120, 115, 108)
+  doc.setFontSize(8)
+  doc.text(L.supplier, MARGIN, 48)
+  doc.setTextColor(26, 26, 26)
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text(data.supplierName, MARGIN, 54)
+  let ry = 59.5
+  if (data.supplierAddress && data.supplierAddress.trim()) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90, 85, 80)
+    for (const line of doc.splitTextToSize(data.supplierAddress.trim(), 80)) {
+      doc.text(line, MARGIN, ry)
+      ry += 4.5
+    }
+  }
+
+  // Titel + Belegdaten (rechtsbündig).
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.setTextColor(26, 26, 26)
+  doc.text(L.title, right, 22, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  const metaRows = [
+    { label: L.number, value: data.number },
+    { label: L.date, value: deDate(data.date) },
+    ...(data.seasonLabel ? [{ label: L.season, value: data.seasonLabel }] : []),
+  ]
+  let my = 30
+  for (const row of metaRows) {
+    doc.setTextColor(120, 115, 108)
+    doc.text(row.label, right - 42, my)
+    doc.setTextColor(26, 26, 26)
+    doc.text(row.value, right, my, { align: 'right' })
+    my += 5
+  }
+
+  // Akzentlinie unter dem Kopf.
+  const bottom = Math.max(ry, 74)
+  doc.setDrawColor(...ACCENT)
+  doc.setLineWidth(0.5)
+  doc.line(MARGIN, bottom, PAGE_W - MARGIN, bottom)
+  doc.setLineWidth(DEFAULT_LINE_WIDTH)
+
+  // Positionen (ohne Preise) — geteilte Tabelle wiederverwenden.
+  let y = drawItemsTable(doc, data.items, bottom, false, {
+    article: L.colArticle,
+    color: L.colColor,
+    size: L.colSize,
+    quantity: L.colQty,
+    unitPrice: '',
+    sum: '',
+  })
+
+  const totalQty = data.items.reduce((s, i) => s + i.quantity, 0)
+  y += 2
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(26, 26, 26)
+  doc.text(L.totalQuantity, right - 42, y)
+  doc.text(String(totalQty), right, y, { align: 'right' })
 
   drawFooter(doc)
   return doc.output('blob')
