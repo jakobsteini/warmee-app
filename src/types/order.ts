@@ -1,6 +1,7 @@
 import type { TranslationKey } from '../i18n/dict'
 import { parseDecimalField, parseIntField } from '../lib/paymentTerms.ts'
 import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax.ts'
+import { normalizeShippingFreitext } from '../lib/shipping.ts'
 
 /** Mögliche Order-Status (englisch gespeichert, wie in der DB-Check-Constraint). */
 export const ORDER_STATUSES = ['draft', 'submitted', 'confirmed'] as const
@@ -10,8 +11,8 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number]
 
 /** Order-Art. */
 export const ORDER_TYPES = ['vororder', 'prompt', 'lager'] as const
-/** Versandart (erweiterbar). */
-export const SHIPPING_METHODS = ['dpd', 'dsv'] as const
+/** Versandart (erweiterbar). „sonstige" = frei anpassbar via shipping_method_freitext. */
+export const SHIPPING_METHODS = ['dpd', 'dsv', 'sonstige'] as const
 /** Versand-/Lieferkondition (gemeinsamer Wertebereich, zwei getrennte Felder). */
 export const ORDER_TERMS = ['ab_werk', 'frei_haus'] as const
 
@@ -24,6 +25,7 @@ export const ORDER_TYPE_LABEL_KEYS: Record<string, TranslationKey> = {
 export const SHIPPING_METHOD_LABEL_KEYS: Record<string, TranslationKey> = {
   dpd: 'order.shipMethod.dpd',
   dsv: 'order.shipMethod.dsv',
+  sonstige: 'order.shipMethod.sonstige',
 }
 export const ORDER_TERM_LABEL_KEYS: Record<string, TranslationKey> = {
   ab_werk: 'order.terms.abWerk',
@@ -34,6 +36,8 @@ export const ORDER_TERM_LABEL_KEYS: Record<string, TranslationKey> = {
 export interface OrderHeadFields {
   order_type: string | null
   shipping_method: string | null
+  /** Freitext-Versandart, nur bei shipping_method = „sonstige" relevant (sonst null). */
+  shipping_method_freitext: string | null
   /** Versandkondition. */
   shipping_terms: string | null
   /** Lieferkondition. */
@@ -60,6 +64,7 @@ export interface OrderHeadFields {
 export interface OrderHeadForm {
   order_type: string
   shipping_method: string
+  shipping_method_freitext: string
   shipping_terms: string
   delivery_terms: string
   delivery_date_from: string
@@ -75,6 +80,7 @@ export interface OrderHeadForm {
 export const emptyOrderHead: OrderHeadForm = {
   order_type: '',
   shipping_method: '',
+  shipping_method_freitext: '',
   shipping_terms: '',
   delivery_terms: '',
   delivery_date_from: '',
@@ -93,6 +99,7 @@ export function orderHeadToForm(o: OrderHeadFields): OrderHeadForm {
   return {
     order_type: o.order_type ?? '',
     shipping_method: o.shipping_method ?? '',
+    shipping_method_freitext: o.shipping_method_freitext ?? '',
     shipping_terms: o.shipping_terms ?? '',
     delivery_terms: o.delivery_terms ?? '',
     delivery_date_from: o.delivery_date_from ?? '',
@@ -129,6 +136,13 @@ export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
   return {
     order_type: orNull(f.order_type),
     shipping_method: orNull(f.shipping_method),
+    // Freitext nur bei „sonstige" behalten — bei DPD/DSV/leer auf null räumen
+    // (kein widersprüchlicher Zustand). Harte „sonstige braucht Freitext"-Prüfung
+    // liegt vorher in der UI (validateShipping), wie beim Lieferzeitraum.
+    shipping_method_freitext: normalizeShippingFreitext(
+      f.shipping_method,
+      f.shipping_method_freitext,
+    ),
     shipping_terms: orNull(f.shipping_terms),
     delivery_terms: orNull(f.delivery_terms),
     delivery_date_from: orNull(f.delivery_date_from),

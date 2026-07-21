@@ -814,6 +814,11 @@ export const de = {
   'order.type.lager': 'Lagerorder',
   'order.shipMethod.dpd': 'DPD',
   'order.shipMethod.dsv': 'DSV',
+  'order.shipMethod.sonstige': 'Sonstige',
+  'order.field.shipMethodFreitext': 'Versandart (Freitext)',
+  'order.field.shipMethodFreitextPlaceholder': 'z. B. Selbstabholung, Spedition XY',
+  'order.ship.err.freitextRequired':
+    'Bei „Sonstige" bitte die Versandart als Freitext angeben.',
   'order.terms.abWerk': 'Ab Werk',
   'order.terms.freiHaus': 'Frei Haus',
   'order.assignmentReq': 'Zuteilung *',
@@ -1820,6 +1825,11 @@ export const en: Record<TranslationKey, string> = {
   'order.type.lager': 'Stock order',
   'order.shipMethod.dpd': 'DPD',
   'order.shipMethod.dsv': 'DSV',
+  'order.shipMethod.sonstige': 'Other',
+  'order.field.shipMethodFreitext': 'Shipping method (free text)',
+  'order.field.shipMethodFreitextPlaceholder': 'e.g. self-collection, forwarder XY',
+  'order.ship.err.freitextRequired':
+    'For "Other" please enter the shipping method as free text.',
   'order.terms.abWerk': 'Ex works',
   'order.terms.freiHaus': 'Free house',
   'order.assignmentReq': 'Assignment *',

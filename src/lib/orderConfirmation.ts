@@ -13,6 +13,7 @@ import { listAssets } from './assets'
 import { listOssRates, ossRateMap } from './ossRates'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
 import { buildPaymentTermsText } from './paymentTerms'
+import { shippingDisplay } from './shipping'
 import { totalQuantity, totalAmount } from './orderCalc'
 import { normalizeColorKey } from './stockListCalc'
 import { urlToDataUrl } from './stockList'
@@ -33,7 +34,6 @@ function num(v: number | string | null | undefined): number {
 /** Beleg-Labels + Wert-Übersetzungen je Sprache. */
 interface AbTexts extends OrderConfirmationLabels {
   orderTypeValues: Record<string, string>
-  shipMethodValues: Record<string, string>
 }
 
 const AB_TEXTS: Record<'de' | 'en', AbTexts> = {
@@ -60,7 +60,6 @@ const AB_TEXTS: Record<'de' | 'en', AbTexts> = {
     taxUncertain: 'Die Steuer wird mit der Rechnungserstellung final ermittelt.',
     paymentTerms: 'Zahlungsbedingungen',
     orderTypeValues: { vororder: 'Vororder', prompt: 'Prompt Order', lager: 'Lagerorder' },
-    shipMethodValues: { dpd: 'DPD', dsv: 'DSV' },
   },
   en: {
     title: 'Order confirmation',
@@ -85,7 +84,6 @@ const AB_TEXTS: Record<'de' | 'en', AbTexts> = {
     taxUncertain: 'The tax is determined when the invoice is created.',
     paymentTerms: 'Payment terms',
     orderTypeValues: { vororder: 'Pre-order', prompt: 'Prompt order', lager: 'Stock order' },
-    shipMethodValues: { dpd: 'DPD', dsv: 'DSV' },
   },
 }
 
@@ -199,9 +197,12 @@ export async function buildOrderConfirmationData(
       orderType: order.order_type
         ? (texts.orderTypeValues[order.order_type] ?? order.order_type)
         : null,
-      shipMethod: order.shipping_method
-        ? (texts.shipMethodValues[order.shipping_method] ?? order.shipping_method)
-        : null,
+      // Versandart über den zentralen Kern: DPD/DSV oder der Freitext bei „sonstige".
+      shipMethod: shippingDisplay(
+        order.shipping_method,
+        order.shipping_method_freitext,
+        lang,
+      ),
       deliveryFrom: order.delivery_date_from,
       deliveryTo: order.delivery_date_to,
     },

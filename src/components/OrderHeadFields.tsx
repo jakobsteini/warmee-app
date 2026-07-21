@@ -9,6 +9,7 @@ import {
   type OrderHeadForm,
 } from '../types/order'
 import { validateOrderPaymentTerms } from '../lib/paymentTerms'
+import { validateShipping, SHIPPING_SONSTIGE } from '../lib/shipping'
 import type { TranslationKey } from '../i18n/dict'
 import { useT } from '../i18n'
 
@@ -32,6 +33,11 @@ export default function OrderHeadFields({
   // Inline-Rückmeldung für die Zahlungsbedingungen (block-statt-raten): dieselbe
   // Prüfung, die der Speichern-Handler vor dem Schreiben erzwingt.
   const paymentTerms = validateOrderPaymentTerms(value)
+  // Versandart: „Sonstige" braucht einen Freitext (gleiche Prüfung wie beim Save).
+  const shipping = validateShipping({
+    method: value.shipping_method,
+    freitext: value.shipping_method_freitext,
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,6 +73,27 @@ export default function OrderHeadFields({
           </select>
         </label>
       </div>
+
+      {/* Freitext-Versandart — nur bei „Sonstige" sichtbar/relevant. */}
+      {value.shipping_method === SHIPPING_SONSTIGE && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm text-muted">
+            {t('order.field.shipMethodFreitext')}
+          </span>
+          <input
+            type="text"
+            value={value.shipping_method_freitext}
+            onChange={(e) => onChange({ shipping_method_freitext: e.target.value })}
+            placeholder={t('order.field.shipMethodFreitextPlaceholder')}
+            className={inputClass}
+          />
+          {!shipping.ok && (
+            <span className="text-sm text-red-700">
+              {t(shipping.error as TranslationKey)}
+            </span>
+          )}
+        </label>
+      )}
 
       <div className="flex gap-4">
         <label className="flex flex-1 flex-col gap-1.5">

@@ -12,6 +12,7 @@ import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import CreditHint from '../components/CreditHint'
 import ExportButtons from '../components/ExportButtons'
 import { validateOrderPaymentTerms } from '../lib/paymentTerms'
+import { validateShipping } from '../lib/shipping'
 import {
   lineTotal,
   ORDER_ASSIGNMENTS,
@@ -230,6 +231,14 @@ export default function Orders() {
     const pt = validateOrderPaymentTerms(head)
     if (!pt.ok) {
       setFormError(t(pt.error as TranslationKey))
+      return
+    }
+    const ship = validateShipping({
+      method: head.shipping_method,
+      freitext: head.shipping_method_freitext,
+    })
+    if (!ship.ok) {
+      setFormError(t(ship.error as TranslationKey))
       return
     }
     setSaving(true)

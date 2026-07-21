@@ -38,6 +38,7 @@ import type { Product } from '../types/product'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
 import { validateOrderPaymentTerms } from '../lib/paymentTerms'
+import { validateShipping } from '../lib/shipping'
 import { useT, useI18n } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
@@ -216,6 +217,14 @@ export default function OrderEdit() {
     const pt = validateOrderPaymentTerms(head)
     if (!pt.ok) {
       setHeadError(t(pt.error as TranslationKey))
+      return
+    }
+    const ship = validateShipping({
+      method: head.shipping_method,
+      freitext: head.shipping_method_freitext,
+    })
+    if (!ship.ok) {
+      setHeadError(t(ship.error as TranslationKey))
       return
     }
     setHeadSaving(true)
