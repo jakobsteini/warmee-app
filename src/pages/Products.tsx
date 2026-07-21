@@ -128,6 +128,19 @@ export default function Products() {
     load()
   }, [])
 
+  // Escape schließt das Artikel-Modal (nur wenn offen).
+  useEffect(() => {
+    if (!formOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFormOpen(false)
+        setEditing(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [formOpen])
+
   // Varianten des bearbeiteten Artikels nachladen (nur im Bearbeiten-Modus).
   useEffect(() => {
     setVariantInput('')
@@ -478,12 +491,26 @@ export default function Products() {
       )}
 
       {formOpen && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-lg bg-cream p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-medium text-ink">
-              {editing ? t('products.edit') : t('products.add')}
-            </h2>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-lg bg-cream shadow-xl">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+              {/* Kopf (fix) — Titel + Schließen */}
+              <div className="flex items-center justify-between px-6 pt-6 pb-4">
+                <h2 className="text-lg font-medium text-ink">
+                  {editing ? t('products.edit') : t('products.add')}
+                </h2>
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  aria-label={t('common.cancel')}
+                  className="text-xl leading-none text-muted transition-colors hover:text-ink"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Inhalt (scrollt bei langem Formular) */}
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">
                   {t('products.field.nameReq')}
@@ -748,8 +775,10 @@ export default function Products() {
               )}
 
               {formError && <p className="text-sm text-red-700">{formError}</p>}
+              </div>
 
-              <div className="mt-2 flex justify-end gap-3">
+              {/* Fußzeile (fix, scrollt nicht weg) */}
+              <div className="flex justify-end gap-3 border-t-[0.5px] border-line px-6 py-4">
                 <button
                   type="button"
                   onClick={closeForm}
