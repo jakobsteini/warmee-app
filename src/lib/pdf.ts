@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { type Dealerish } from '../types/invoice'
+import type { InvoicePdfLabels, DeliveryNotePdfLabels } from './pdfLabels'
 import {
   BRAND_LOGO_BLACK,
   BRAND_LOGO_BLACK_W,
@@ -46,14 +47,30 @@ export interface BelegItem {
 
 /** Empfänger-/Kopfblock, gemeinsam für Rechnung und Lieferschein. */
 interface BelegHeader {
-  /** Dokumenttitel, z. B. „Rechnung" oder „Lieferschein". */
+  /** Dokumenttitel, z. B. „Rechnung" oder „Lieferschein" (lokalisiert). */
   title: string
   /** Belegnummer (YYYY-0001 bzw. LS-YYYY-0001). */
   number: string
   date: string
   dealer: Dealerish
-  /** Zusätzliche Kopfzeilen rechts (z. B. Fällig am, Saison). */
+  /** Empfänger-Überschrift (lokalisiert), z. B. „Rechnungsempfänger"/„Empfänger". */
+  recipientLabel: string
+  /** Label der Nummern-Zeile rechts (lokalisiert), z. B. „Nr."/„No.". */
+  numberLabel: string
+  /** Label der Datums-Zeile rechts (lokalisiert), z. B. „Datum"/„Date". */
+  dateLabel: string
+  /** Zusätzliche Kopfzeilen rechts (z. B. Fällig am, Saison) — Labels lokalisiert. */
   meta?: { label: string; value: string }[]
+}
+
+/** Spaltenköpfe der Positionstabelle (lokalisiert). Preis-Spalten nur mit Preisen. */
+interface ItemsTableLabels {
+  article: string
+  color: string
+  size: string
+  quantity: string
+  unitPrice: string
+  sum: string
 }
 
 const MARGIN = 18
@@ -102,7 +119,7 @@ function drawHeader(doc: jsPDF, h: BelegHeader): number {
   // Empfänger (Händler).
   doc.setTextColor(120, 115, 108)
   doc.setFontSize(8)
-  doc.text('Rechnungsempfänger', MARGIN, 48)
+  doc.text(h.recipientLabel, MARGIN, 48)
 
   doc.setTextColor(26, 26, 26)
   doc.setFontSize(11)
@@ -137,8 +154,8 @@ function drawHeader(doc: jsPDF, h: BelegHeader): number {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   const metaRows = [
-    { label: 'Nr.', value: h.number },
-    { label: 'Datum', value: deDate(h.date) },
+    { label: h.numberLabel, value: h.number },
+    { label: h.dateLabel, value: deDate(h.date) },
     ...(h.meta ?? []),
   ]
   let my = 30
@@ -167,6 +184,7 @@ function drawItemsTable(
   items: BelegItem[],
   startY: number,
   withPrices: boolean,
+  labels: ItemsTableLabels,
 ): number {
   const right = PAGE_W - MARGIN
   // Spalten-X. Ohne Preise wird der Platz für Beschreibung/Farbe genutzt.
@@ -181,15 +199,15 @@ function drawItemsTable(
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(90, 85, 80)
-  doc.text('Artikel', cols.desc + 1, y)
-  doc.text('Farbe', cols.color, y)
-  doc.text('Größe', cols.size, y)
+  doc.text(labels.article, cols.desc + 1, y)
+  doc.text(labels.color, cols.color, y)
+  doc.text(labels.size, cols.size, y)
   if (withPrices) {
-    doc.text('Menge', cols.qty!, y, { align: 'right' })
-    doc.text('Einzelpreis', cols.unit!, y, { align: 'right' })
-    doc.text('Summe', cols.total!, y, { align: 'right' })
+    doc.text(labels.quantity, cols.qty!, y, { align: 'right' })
+    doc.text(labels.unitPrice, cols.unit!, y, { align: 'right' })
+    doc.text(labels.sum, cols.total!, y, { align: 'right' })
   } else {
-    doc.text('Menge', cols.qty as number, y, { align: 'right' })
+    doc.text(labels.quantity, cols.qty as number, y, { align: 'right' })
   }
   y += 4
 
@@ -241,6 +259,8 @@ function drawFooter(doc: jsPDF) {
 
 /** Daten für die Rechnungs-PDF. */
 export interface InvoicePdfData {
+  /** Bereits in der Kundensprache aufgelöste Beleg-Labels (de-Fallback). */
+  labels: InvoicePdfLabels
   number: string
   date: string
   dueDate: string | null
@@ -284,26 +304,37 @@ export interface InvoicePdfData {
 /** Rechnung als PDF-Blob erzeugen (mit Preisen und Steuerausweisung Netto/USt/Brutto). */
 export function buildInvoicePdf(data: InvoicePdfData): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const L = data.labels
 
   const meta = data.dueDate
-    ? [{ label: 'Fällig am', value: deDate(data.dueDate) }]
+    ? [{ label: L.dueDate, value: deDate(data.dueDate) }]
     : []
   const headerBottom = drawHeader(doc, {
-    title: 'Rechnung',
+    title: L.title,
     number: data.number,
     date: data.date,
     dealer: data.dealer,
+    recipientLabel: L.recipient,
+    numberLabel: L.number,
+    dateLabel: L.date,
     meta,
   })
 
-  let y = drawItemsTable(doc, data.items, headerBottom, true)
+  let y = drawItemsTable(doc, data.items, headerBottom, true, {
+    article: L.colArticle,
+    color: L.colColor,
+    size: L.colSize,
+    quantity: L.colQty,
+    unitPrice: L.colUnit,
+    sum: L.colSum,
+  })
 
   // Summen (rechtsbündig).
   const right = PAGE_W - MARGIN
   y += 2
   doc.setFontSize(9.5)
   doc.setTextColor(90, 85, 80)
-  doc.text('Nettobetrag', right - 42, y)
+  doc.text(L.subtotal, right - 42, y)
   doc.setTextColor(26, 26, 26)
   doc.text(eur(data.subtotal), right, y, { align: 'right' })
 
@@ -311,7 +342,7 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   doc.setTextColor(90, 85, 80)
   // Satz aus dem eingefrorenen tax_rate des Belegs (Faktor → Prozent). Altbelege
   // mit tax_rate = 0.20 ergeben exakt „USt (20 %)" wie bisher.
-  doc.text(`USt (${Math.round(data.taxRate * 100)} %)`, right - 42, y)
+  doc.text(`${L.vat} (${Math.round(data.taxRate * 100)} %)`, right - 42, y)
   doc.setTextColor(26, 26, 26)
   doc.text(eur(data.tax), right, y, { align: 'right' })
 
@@ -323,17 +354,19 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   doc.setFontSize(11)
   // Label weiter links ansetzen — „Gesamtbetrag (brutto)" ist breiter als die
   // Netto-/USt-Labels und würde sonst in den Betrag laufen.
-  doc.text('Gesamtbetrag (brutto)', right - 72, y)
+  doc.text(L.gross, right - 72, y)
   doc.text(eur(data.total), right, y, { align: 'right' })
 
-  // Zahlungsziel.
+  // Zahlungsziel. Zahlen/Datum unverändert de-DE/EUR — die Sprache betrifft nur
+  // den Satzbau (payableWithin), nicht die Formatierung.
   y += 12
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(26, 26, 26)
-  const dueText = data.dueDate
-    ? `Zahlbar innerhalb von ${data.zahlungszielTage} Tagen netto. Fällig am ${deDate(data.dueDate)}.`
-    : `Zahlbar innerhalb von ${data.zahlungszielTage} Tagen netto.`
+  const dueText = L.payableWithin(
+    data.zahlungszielTage,
+    data.dueDate ? deDate(data.dueDate) : null,
+  )
   doc.text(dueText, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
 
   // Skonto als bedingter Nachlass (Rechnungsbetrag bleibt unverändert).
@@ -343,7 +376,7 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
     const pct = s.prozent.toLocaleString('de-DE', { maximumFractionDigits: 2 })
     doc.setTextColor(90, 85, 80)
     doc.text(
-      `Bei Zahlung bis ${deDate(s.date)}: ${pct} % Skonto = ${eur(s.amount)} — Zahlbetrag ${eur(s.payable)}.`,
+      L.skontoLine(deDate(s.date), pct, eur(s.amount), eur(s.payable)),
       MARGIN,
       y,
       { maxWidth: PAGE_W - MARGIN * 2 },
@@ -1178,6 +1211,8 @@ export function buildOrderConfirmationPdf(data: OrderConfirmationPdfData): Blob 
 
 /** Daten für die Lieferschein-PDF. */
 export interface DeliveryNotePdfData {
+  /** Bereits in der Kundensprache aufgelöste Beleg-Labels (de-Fallback). */
+  labels: DeliveryNotePdfLabels
   number: string
   date: string
   dealer: Dealerish
@@ -1189,19 +1224,31 @@ export interface DeliveryNotePdfData {
 /** Lieferschein als PDF-Blob erzeugen (gleicher Aufbau, ohne Preise). */
 export function buildDeliveryNotePdf(data: DeliveryNotePdfData): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const L = data.labels
 
   const meta = data.seasonLabel
-    ? [{ label: 'Saison', value: data.seasonLabel }]
+    ? [{ label: L.season, value: data.seasonLabel }]
     : []
   const headerBottom = drawHeader(doc, {
-    title: 'Lieferschein',
+    title: L.title,
     number: data.number,
     date: data.date,
     dealer: data.dealer,
+    recipientLabel: L.recipient,
+    numberLabel: L.number,
+    dateLabel: L.date,
     meta,
   })
 
-  let y = drawItemsTable(doc, data.items, headerBottom, false)
+  // Ohne Preise → unitPrice/sum werden nicht gezeichnet; leere Labels genügen.
+  let y = drawItemsTable(doc, data.items, headerBottom, false, {
+    article: L.colArticle,
+    color: L.colColor,
+    size: L.colSize,
+    quantity: L.colQty,
+    unitPrice: '',
+    sum: '',
+  })
 
   const totalQty = data.items.reduce((s, i) => s + i.quantity, 0)
   const right = PAGE_W - MARGIN
@@ -1209,7 +1256,7 @@ export function buildDeliveryNotePdf(data: DeliveryNotePdfData): Blob {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(26, 26, 26)
-  doc.text('Gesamtmenge', right - 42, y)
+  doc.text(L.totalQuantity, right - 42, y)
   doc.text(String(totalQty), right, y, { align: 'right' })
 
   if (data.notes) {

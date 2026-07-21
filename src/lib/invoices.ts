@@ -3,6 +3,11 @@ import { getMyOrgId, getMyUserId } from './org'
 import { recordedReturnsByInvoice } from './returns'
 import { openAfterReturns } from './returnsCalc'
 import type { BelegItem } from './pdf'
+import {
+  pdfLang,
+  invoicePdfLabels,
+  deliveryNotePdfLabels,
+} from './pdfLabels'
 import { addDaysIso, daysBetweenIso } from './dates'
 import {
   computeSkonto,
@@ -74,7 +79,9 @@ export async function getInvoice(id: string): Promise<InvoiceWithItems> {
   const { data, error } = await supabase
     .from('invoices')
     .select(
-      '*, dealer:dealers(name, contact_name, email, city, country), invoice_items(*)',
+      // language wird nur für die Belegsprache beim Regenerieren gebraucht (nicht
+      // Teil der PDF-Dealerish) — die Beträge/tax_note bleiben eingefroren.
+      '*, dealer:dealers(name, contact_name, email, city, country, language), invoice_items(*)',
     )
     .eq('id', id)
     .single()
@@ -327,6 +334,7 @@ export async function createDeliveryNote(
 
   const { buildDeliveryNotePdf } = await import('./pdf')
   const blob = buildDeliveryNotePdf({
+    labels: deliveryNotePdfLabels(pdfLang(ctx.taxDealer.language)),
     number: note.note_number,
     date: note.note_date,
     dealer: ctx.dealer,
@@ -447,6 +455,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
   // PDF bauen, hochladen, Pfad speichern.
   const { buildInvoicePdf } = await import('./pdf')
   const blob = buildInvoicePdf({
+    labels: invoicePdfLabels(pdfLang(ctx.taxDealer.language)),
     number: invoice.invoice_number,
     date: invoice.invoice_date,
     dueDate,
@@ -594,6 +603,7 @@ export async function createFreeInvoice(
 
   const { buildInvoicePdf } = await import('./pdf')
   const blob = buildInvoicePdf({
+    labels: invoicePdfLabels(pdfLang(dealer.language)),
     number: invoice.invoice_number,
     date: invoice.invoice_date,
     dueDate,
@@ -654,8 +664,14 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
   })
   const total = num(inv.total)
 
+  // Belegsprache aus dem Kunden (de-Fallback). language ist nicht Teil der
+  // PDF-Dealerish, kommt aber aus dem getInvoice-Select mit → hier lokal gelesen.
+  // Beträge und tax_note bleiben eingefroren; nur die Label-Sprache folgt dem Kunden.
+  const dealerLang = (inv.dealer as (Dealerish & { language?: string | null }) | null)
+    ?.language
   const { buildInvoicePdf } = await import('./pdf')
   const blob = buildInvoicePdf({
+    labels: invoicePdfLabels(pdfLang(dealerLang)),
     number: inv.invoice_number,
     date: inv.invoice_date,
     dueDate: inv.due_date,
