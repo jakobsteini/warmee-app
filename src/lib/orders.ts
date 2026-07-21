@@ -20,7 +20,7 @@ export async function listOrders(): Promise<OrderListRow[]> {
   const { data, error } = await supabase
     .from('orders')
     .select(
-      'id, org_id, dealer_id, season_id, status, assignment, notes, created_by, created_at, updated_at, dealer:dealers(name), season:seasons(label), order_items(quantity, unit_price)',
+      'id, org_id, dealer_id, season_id, order_number, status, assignment, priority, delivery_date_from, delivery_date_to, notes, created_by, created_at, updated_at, dealer:dealers(name), season:seasons(label), order_items(quantity, unit_price)',
     )
     .order('created_at', { ascending: false })
 

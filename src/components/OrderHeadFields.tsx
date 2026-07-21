@@ -130,6 +130,21 @@ export default function OrderHeadFields({
           className={inputClass}
         />
       </label>
+
+      <label className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={value.priority}
+          onChange={(e) => onChange({ priority: e.target.checked })}
+          className="mt-0.5"
+        />
+        <span className="flex flex-col">
+          <span className="text-sm text-ink">{t('order.field.priority')}</span>
+          <span className="text-xs text-muted">
+            {t('order.field.priorityHint')}
+          </span>
+        </span>
+      </label>
     </div>
   )
 }

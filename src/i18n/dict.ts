@@ -783,6 +783,10 @@ export const de = {
   'order.field.dateRangeInvalid': 'Lieferdatum „von" darf nicht nach „bis" liegen.',
   'order.field.poNumber': 'PO-Nr. / Vermerk',
   'order.field.poNumberPlaceholder': 'Kunden-Auftragsnummer oder Freitext',
+  'order.field.priority': 'Priorität',
+  'order.field.priorityHint':
+    'Wird bei der Warenverteilung bevorzugt berücksichtigt.',
+  'orders.filterPriorityOnly': 'Nur Priorität',
   'order.type.vororder': 'Vororder',
   'order.type.prompt': 'Prompt Order',
   'order.type.lager': 'Lagerorder',
@@ -1764,6 +1768,10 @@ export const en: Record<TranslationKey, string> = {
   'order.field.dateRangeInvalid': 'Delivery date "from" must not be after "to".',
   'order.field.poNumber': 'PO no. / note',
   'order.field.poNumberPlaceholder': 'Customer order number or free text',
+  'order.field.priority': 'Priority',
+  'order.field.priorityHint':
+    'Given preference during goods distribution.',
+  'orders.filterPriorityOnly': 'Priority only',
   'order.type.vororder': 'Pre-order',
   'order.type.prompt': 'Prompt order',
   'order.type.lager': 'Stock order',

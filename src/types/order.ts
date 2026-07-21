@@ -42,9 +42,11 @@ export interface OrderHeadFields {
   delivery_date_to: string | null
   /** Kunden-Auftragsnummer / Freitext (separat von notes). */
   po_number: string | null
+  /** Prioritäts-Häkchen: später bei der Warenverteilung bevorzugt (heute nur Feld). */
+  priority: boolean
 }
 
-/** Formular-Zustand der Kopfdaten (alles String — leeres Feld = nicht gesetzt). */
+/** Formular-Zustand der Kopfdaten (Strings + das Prioritäts-Boolean). */
 export interface OrderHeadForm {
   order_type: string
   shipping_method: string
@@ -53,6 +55,7 @@ export interface OrderHeadForm {
   delivery_date_from: string
   delivery_date_to: string
   po_number: string
+  priority: boolean
 }
 
 export const emptyOrderHead: OrderHeadForm = {
@@ -63,6 +66,7 @@ export const emptyOrderHead: OrderHeadForm = {
   delivery_date_from: '',
   delivery_date_to: '',
   po_number: '',
+  priority: false,
 }
 
 /** Bestehende Order-Kopfdaten → Formular (für die Bearbeitung). */
@@ -75,10 +79,11 @@ export function orderHeadToForm(o: OrderHeadFields): OrderHeadForm {
     delivery_date_from: o.delivery_date_from ?? '',
     delivery_date_to: o.delivery_date_to ?? '',
     po_number: o.po_number ?? '',
+    priority: o.priority ?? false,
   }
 }
 
-/** Formular → DB-Felder (leer → null). */
+/** Formular → DB-Felder (leer → null; priority als Boolean). */
 export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
   const orNull = (v: string) => (v.trim() === '' ? null : v.trim())
   return {
@@ -89,6 +94,7 @@ export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
     delivery_date_from: orNull(f.delivery_date_from),
     delivery_date_to: orNull(f.delivery_date_to),
     po_number: orNull(f.po_number),
+    priority: f.priority,
   }
 }
 

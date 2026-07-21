@@ -118,6 +118,7 @@ export default function Orders() {
   const [fSeason, setFSeason] = useState('')
   const [fDealer, setFDealer] = useState('')
   const [fAssignment, setFAssignment] = useState('')
+  const [fPriority, setFPriority] = useState(false)
   const [sortKey, setSortKey] = useState<OrderSortKey>('dealer')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -128,11 +129,12 @@ export default function Orders() {
           seasonId: fSeason,
           dealerId: fDealer,
           assignment: fAssignment,
+          priorityOnly: fPriority,
         }),
         sortKey,
         sortDir,
       ),
-    [orders, fSeason, fDealer, fAssignment, sortKey, sortDir],
+    [orders, fSeason, fDealer, fAssignment, fPriority, sortKey, sortDir],
   )
 
   /** Klick auf einen Spaltenkopf: gleiche Spalte → Richtung toggeln, sonst asc. */
@@ -342,6 +344,14 @@ export default function Orders() {
                   ))}
                 </select>
               </label>
+              <label className="flex items-center gap-2 pb-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={fPriority}
+                  onChange={(e) => setFPriority(e.target.checked)}
+                />
+                {t('orders.filterPriorityOnly')}
+              </label>
             </div>
             <ExportButtons
               filenameBase={t('orders.exportFilename')}
@@ -381,6 +391,14 @@ export default function Orders() {
                       className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                     >
                       <td className="px-4 py-3 font-medium whitespace-nowrap">
+                        {o.priority && (
+                          <span
+                            className="mr-1 text-accent"
+                            title={t('order.field.priority')}
+                          >
+                            ★
+                          </span>
+                        )}
                         {o.order_number ?? (
                           <span className="text-muted">{t('order.draftDash')}</span>
                         )}
