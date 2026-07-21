@@ -9,6 +9,13 @@ import { listSeasons } from '../lib/seasons'
 import { listActiveProducers } from '../lib/producers'
 import { parseDecimalField } from '../lib/paymentTerms'
 import {
+  listArticleGroups,
+  createArticleGroup,
+} from '../lib/articleGroupsData'
+import { validateGroupName } from '../lib/articleGroups'
+import type { ArticleGroup } from '../types/articleGroup'
+import ArticleGroupsManager from '../components/ArticleGroupsManager'
+import {
   listVariantsByProduct,
   createVariant,
   deleteVariant,
@@ -25,6 +32,7 @@ import type { Season } from '../types/asset'
 import type { Producer } from '../types/producer'
 import type { ProductVariant } from '../types/productVariant'
 import EmptyState from '../components/EmptyState'
+import type { TranslationKey } from '../i18n/dict'
 import { useT } from '../i18n'
 
 /** Preis (number oder numeric-String aus PostgREST) deutsch formatieren. */
@@ -60,6 +68,7 @@ interface ProductForm {
   purchase_price: string
   season_id: string
   producer_id: string
+  group_id: string
   composition: string
   size_scheme: string
   collection: string
@@ -75,6 +84,7 @@ const emptyForm: ProductForm = {
   purchase_price: '',
   season_id: '',
   producer_id: '',
+  group_id: '',
   composition: '',
   size_scheme: '',
   collection: '',
@@ -86,8 +96,16 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [producers, setProducers] = useState<Producer[]>([])
+  const [groups, setGroups] = useState<ArticleGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Gruppen-Verwaltung + Inline-Anlage im Formular.
+  const [groupManagerOpen, setGroupManagerOpen] = useState(false)
+  const [newGroupOpen, setNewGroupOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [groupBusy, setGroupBusy] = useState(false)
+  const [groupError, setGroupError] = useState<string | null>(null)
 
   const [seasonFilter, setSeasonFilter] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
@@ -109,14 +127,16 @@ export default function Products() {
     setLoading(true)
     setError(null)
     try {
-      const [prods, seas, prod] = await Promise.all([
+      const [prods, seas, prod, grps] = await Promise.all([
         listProducts(),
         listSeasons(),
         listActiveProducers(),
+        listArticleGroups(),
       ])
       setProducts(prods)
       setSeasons(seas)
       setProducers(prod)
+      setGroups(grps)
     } catch {
       setError(t('products.loadError'))
     } finally {
@@ -224,10 +244,17 @@ export default function Products() {
     [products, seasonFilter, categoryFilter],
   )
 
+  function resetGroupInline() {
+    setNewGroupOpen(false)
+    setNewGroupName('')
+    setGroupError(null)
+  }
+
   function openCreate() {
     setEditing(null)
     setForm(emptyForm)
     setFormError(null)
+    resetGroupInline()
     setFormOpen(true)
   }
 
@@ -244,18 +271,45 @@ export default function Products() {
         p.purchase_price === null ? '' : String(p.purchase_price),
       season_id: p.season_id ?? '',
       producer_id: p.producer_id ?? '',
+      group_id: p.group_id ?? '',
       composition: p.composition ?? '',
       size_scheme: p.size_scheme ?? '',
       collection: p.collection ?? '',
       zuschlag: p.zuschlag === null ? '' : String(p.zuschlag),
     })
     setFormError(null)
+    resetGroupInline()
     setFormOpen(true)
   }
 
   function closeForm() {
     setFormOpen(false)
     setEditing(null)
+    resetGroupInline()
+  }
+
+  // Inline-Anlage einer neuen Gruppe direkt aus dem Artikel-Formular: validieren
+  // (leer/Duplikat, block-statt-raten), anlegen, sofort auswählen.
+  async function addGroupInline() {
+    const parsed = validateGroupName(newGroupName, groups.map((g) => g.name))
+    if (!parsed.ok) {
+      setGroupError(t(parsed.error as TranslationKey))
+      return
+    }
+    setGroupBusy(true)
+    setGroupError(null)
+    try {
+      const created = await createArticleGroup(parsed.value)
+      setGroups((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+      )
+      setForm((f) => ({ ...f, group_id: created.id }))
+      resetGroupInline()
+    } catch {
+      setGroupError(t('products.group.saveError'))
+    } finally {
+      setGroupBusy(false)
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -293,6 +347,7 @@ export default function Products() {
       purchase_price: ekParsed.value,
       season_id: form.season_id || null,
       producer_id: form.producer_id || null,
+      group_id: form.group_id || null,
       composition: form.composition.trim() || null,
       size_scheme: form.size_scheme || null,
       collection: form.collection.trim() || null,
@@ -346,14 +401,32 @@ export default function Products() {
           </h1>
           <p className="mt-1 text-sm text-muted">{t('products.subtitle')}</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
-        >
-          {t('products.add')}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setGroupManagerOpen(true)}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:border-ink"
+          >
+            {t('products.group.manage')}
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
+          >
+            {t('products.add')}
+          </button>
+        </div>
       </div>
+
+      {groupManagerOpen && (
+        <ArticleGroupsManager
+          groups={groups}
+          products={products}
+          onChanged={load}
+          onClose={() => setGroupManagerOpen(false)}
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
@@ -598,6 +671,66 @@ export default function Products() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              {/* Artikel-Gruppe für Auswertungen — offene Liste, Inline-Anlage. */}
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">{t('products.field.group')}</span>
+                <select
+                  value={form.group_id}
+                  onChange={(e) => setForm({ ...form, group_id: e.target.value })}
+                  className={inputClass}
+                >
+                  <option value="">—</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+                {!newGroupOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewGroupOpen(true)
+                      setGroupError(null)
+                    }}
+                    className="self-start text-xs text-muted transition-colors hover:text-ink"
+                  >
+                    {t('products.group.newToggle')}
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newGroupName}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                        placeholder={t('products.group.newPlaceholder')}
+                        className={`${inputClass} flex-1`}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={addGroupInline}
+                        disabled={groupBusy}
+                        className="shrink-0 rounded-md bg-ink px-3 py-2 text-sm text-cream disabled:opacity-50"
+                      >
+                        {t('products.group.add')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetGroupInline}
+                        className="shrink-0 rounded-md border-[0.5px] border-line px-3 py-2 text-sm text-muted"
+                      >
+                        {t('products.group.cancel')}
+                      </button>
+                    </div>
+                    {groupError && (
+                      <span className="text-sm text-red-700">{groupError}</span>
+                    )}
+                  </div>
+                )}
               </label>
 
               <div className="flex gap-4">

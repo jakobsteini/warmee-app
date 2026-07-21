@@ -17,6 +17,8 @@ export interface Product {
   season_id: string | null
   /** Lieferant/Produzent des Artikels (FK auf producers). null = nicht zugeordnet. */
   producer_id: string | null
+  /** Artikel-Gruppe für Auswertungen (FK auf article_groups). null = keine Gruppe. */
+  group_id: string | null
   /** Größen-Schema (Stamm-Etikett): 'uni' | 'xs_2xl' (erweiterbar). Steuert NICHT die Bestellgrößen. */
   size_scheme: string | null
   /** Freier Kollektionsname, getrennt von season_id. */
@@ -53,6 +55,8 @@ export interface ProductInput {
   purchase_price: number | null
   season_id: string | null
   producer_id: string | null
+  /** Artikel-Gruppe für Auswertungen (FK auf article_groups). null = keine Gruppe. */
+  group_id: string | null
   /** Materialzusammensetzung (Excel: Composition), Freitext. UI-Label "Qualität". */
   composition: string | null
   /** Größen-Schema (Stamm-Etikett): 'uni' | 'xs_2xl' (erweiterbar). */
