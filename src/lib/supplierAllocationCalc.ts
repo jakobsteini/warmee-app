@@ -98,3 +98,57 @@ export function allocateByPriority(
 export function totalDemand(claims: AllocationClaim[]): number {
   return claims.reduce((s, c) => s + Math.max(0, c.demand), 0)
 }
+
+// ─── Downstream (Modul E): eingefrorene Aufteilung → Verteilung je Händler ────
+
+/** Eine eingefrorene Allokations-Zeile (supplier_order_allocations). */
+export interface FrozenAllocationRow {
+  orderId: string
+  productId: string | null
+  color: string | null
+  size: string | null
+  allocatedQuantity: number
+}
+
+/** Eine Verteil-Position je Händler (Produkt/Farbe/Größe + Menge). */
+export interface DealerPosition {
+  product_id: string | null
+  color: string | null
+  size: string | null
+  total: number
+}
+
+/**
+ * Wandelt die eingefrorene Aufteilung (je Order/Position) in die Verteilung je
+ * HÄNDLER um (die Lieferung läuft je Händler, nicht je Order — ein Händler kann
+ * mehrere Orders haben). Summiert je (Händler, Produkt/Farbe/Größe); Zeilen mit
+ * 0 Stück und Orders ohne bekannten Händler werden übersprungen. Schlüssel-Format
+ * identisch zu itemKey (Produkt||Farbe||Größe).
+ */
+export function allocationsByDealer(
+  rows: FrozenAllocationRow[],
+  dealerByOrder: Map<string, string>,
+): Map<string, Map<string, DealerPosition>> {
+  const byDealer = new Map<string, Map<string, DealerPosition>>()
+  for (const r of rows) {
+    if (r.allocatedQuantity <= 0) continue
+    const dealerId = dealerByOrder.get(r.orderId)
+    if (!dealerId) continue
+    const key = `${r.productId ?? ''}||${r.color ?? ''}||${r.size ?? ''}`
+    let group = byDealer.get(dealerId)
+    if (!group) {
+      group = new Map()
+      byDealer.set(dealerId, group)
+    }
+    const existing = group.get(key)
+    if (existing) existing.total += r.allocatedQuantity
+    else
+      group.set(key, {
+        product_id: r.productId,
+        color: r.color,
+        size: r.size,
+        total: r.allocatedQuantity,
+      })
+  }
+  return byDealer
+}

@@ -1,6 +1,10 @@
 import { supabase } from './supabase'
 import { getMyOrgId } from './org'
 import { itemKey } from './itemKey'
+import {
+  allocationsByDealer,
+  type DealerPosition,
+} from './supplierAllocationCalc'
 import { hasGoodsReceipts, receivedByKey } from './goodsReceipts'
 import type {
   Delivery,
@@ -162,51 +166,84 @@ export async function generateDeliveries(
     )
   }
 
-  // Alle Positionen bestätigter Orders dieser Saison inkl. Händler der Order.
-  // Der !inner-Join filtert auf Order-Ebene (Saison + Status); RLS scoped auf
-  // die eigene Org.
-  const { data: rawItems, error: itemsError } = await supabase
-    .from('order_items')
-    .select(
-      'product_id, color, size, quantity, orders!inner(dealer_id, season_id, status)',
+  // Aufteilung bestimmen: die beim Bestellen EINGEFRORENE Prioritäts-Aufteilung
+  // (supplier_order_allocations, Modul D) hat Vorrang — so folgt die Lieferung
+  // genau der beim Bestellen getroffenen Entscheidung. Fehlt der Snapshot
+  // (Altbestellungen vor Modul D), gilt der Fallback: die vollen Bestellmengen
+  // der Kunden-Aufträge (wie bisher).
+  let byDealer: Map<string, Map<string, DealerPosition>>
+
+  const { data: allocRaw, error: allocErr } = await supabase
+    .from('supplier_order_allocations')
+    .select('order_id, product_id, color, size, allocated_quantity')
+    .eq('production_order_id', productionOrderId)
+  if (allocErr) throw allocErr
+  const allocRows = (allocRaw ?? []) as unknown as {
+    order_id: string
+    product_id: string | null
+    color: string | null
+    size: string | null
+    allocated_quantity: number
+  }[]
+
+  if (allocRows.length > 0) {
+    const orderIds = [...new Set(allocRows.map((r) => r.order_id))]
+    const { data: ordsRaw, error: ordErr } = await supabase
+      .from('orders')
+      .select('id, dealer_id')
+      .in('id', orderIds)
+    if (ordErr) throw ordErr
+    const dealerByOrder = new Map(
+      (ordsRaw ?? []).map((o) => [
+        (o as { id: string }).id,
+        (o as { dealer_id: string }).dealer_id,
+      ]),
     )
-    .eq('orders.season_id', po.season_id)
-    .eq('orders.status', 'confirmed')
+    byDealer = allocationsByDealer(
+      allocRows.map((r) => ({
+        orderId: r.order_id,
+        productId: r.product_id,
+        color: r.color,
+        size: r.size,
+        allocatedQuantity: r.allocated_quantity,
+      })),
+      dealerByOrder,
+    )
+  } else {
+    // Fallback: Positionen bestätigter Orders dieser Saison inkl. Händler der
+    // Order. Der !inner-Join filtert auf Order-Ebene; RLS scoped auf die Org.
+    const { data: rawItems, error: itemsError } = await supabase
+      .from('order_items')
+      .select(
+        'product_id, color, size, quantity, orders!inner(dealer_id, season_id, status)',
+      )
+      .eq('orders.season_id', po.season_id)
+      .eq('orders.status', 'confirmed')
+    if (itemsError) throw itemsError
 
-  if (itemsError) throw itemsError
+    const items = (rawItems ?? []) as unknown as RawDealerItem[]
+    byDealer = new Map()
+    for (const it of items) {
+      const dealerId = it.orders?.dealer_id
+      if (!dealerId) continue
+      const color = it.color ?? null
+      const size = it.size ?? null
+      const key = itemKey(it.product_id, color, size)
+      let group = byDealer.get(dealerId)
+      if (!group) {
+        group = new Map()
+        byDealer.set(dealerId, group)
+      }
+      const existing = group.get(key)
+      if (existing) existing.total += it.quantity ?? 0
+      else group.set(key, { product_id: it.product_id, color, size, total: it.quantity ?? 0 })
+    }
+  }
 
-  const items = (rawItems ?? []) as unknown as RawDealerItem[]
-  if (items.length === 0) {
+  if (byDealer.size === 0) {
     throw new Error(
       'Keine bestätigten Orders mit Artikeln in dieser Saison gefunden.',
     )
-  }
-
-  // Je Händler die Positionen nach Produkt + Farbe + Größe zusammenfassen.
-  const byDealer = new Map<
-    string,
-    Map<
-      string,
-      { product_id: string; color: string | null; size: string | null; total: number }
-    >
-  >()
-  for (const it of items) {
-    const dealerId = it.orders?.dealer_id
-    if (!dealerId) continue
-    const color = it.color ?? null
-    const size = it.size ?? null
-    const key = itemKey(it.product_id, color, size)
-    let group = byDealer.get(dealerId)
-    if (!group) {
-      group = new Map()
-      byDealer.set(dealerId, group)
-    }
-    const existing = group.get(key)
-    if (existing) {
-      existing.total += it.quantity ?? 0
-    } else {
-      group.set(key, { product_id: it.product_id, color, size, total: it.quantity ?? 0 })
-    }
   }
 
   // Je Händler eine Lieferung samt Positionen anlegen.
@@ -261,21 +298,12 @@ export async function generateDeliveries(
  */
 async function computeShortfalls(
   productionOrderId: string,
-  byDealer: Map<
-    string,
-    Map<
-      string,
-      { product_id: string; color: string | null; size: string | null; total: number }
-    >
-  >,
+  byDealer: Map<string, Map<string, DealerPosition>>,
 ): Promise<DistributionShortfall[]> {
   if (!(await hasGoodsReceipts(productionOrderId))) return []
 
   // Verteilte Gesamtmenge je Schlüssel über alle Händler summieren.
-  const distributedByKey = new Map<
-    string,
-    { product_id: string; color: string | null; size: string | null; total: number }
-  >()
+  const distributedByKey = new Map<string, DealerPosition>()
   for (const group of byDealer.values()) {
     for (const [key, g] of group) {
       const acc = distributedByKey.get(key)
@@ -287,7 +315,9 @@ async function computeShortfalls(
   const received = await receivedByKey(productionOrderId)
 
   // Produktnamen für die betroffenen Positionen nachladen (eine Abfrage).
-  const productIds = [...distributedByKey.values()].map((g) => g.product_id)
+  const productIds = [...distributedByKey.values()]
+    .map((g) => g.product_id)
+    .filter((id): id is string => id != null)
   const nameById = new Map<string, string>()
   if (productIds.length > 0) {
     const { data: prods, error } = await supabase
@@ -306,7 +336,7 @@ async function computeShortfalls(
     const gap = g.total - recv
     if (gap > 0) {
       shortfalls.push({
-        productName: nameById.get(g.product_id) ?? '—',
+        productName: (g.product_id ? nameById.get(g.product_id) : null) ?? '—',
         color: g.color,
         size: g.size,
         ordered: g.total,
