@@ -52,6 +52,16 @@ export const de = {
   'suppliers.language.de': 'Deutsch',
   'supplierOrder.mail': 'Bestellung an Lieferant',
   'supplierOrder.mailError': 'Bestellung konnte nicht erzeugt werden.',
+  'productionOrderEdit.col.demand': 'Bedarf',
+  'productionOrderEdit.col.orderQty': 'Bestellmenge',
+  'productionOrderEdit.qtyInvalid':
+    'Bestellmenge: bitte eine ganze Zahl (oder leer für den Bedarf).',
+  'supplierOrder.allocationTitle': 'Prioritäts-Aufteilung',
+  'supplierOrder.allocationHint':
+    'Vorschlag bei knapper Bestellmenge — Häkchen zuerst, dann Saison-Priorität, dann Zufall. Übersteuerbar in einem späteren Schritt.',
+  'supplierOrder.allocationHintLocked':
+    'Eingefrorene Aufteilung der gesendeten Bestellung.',
+  'supplierOrder.allocationOf': 'bestellt {order} von {demand}',
   'suppliers.contacts.heading': 'Kontakte',
   'suppliers.contacts.hint':
     'Bis zu 3 Kontakte (Name + E-Mail), z. B. Aufsichtsperson. Leer lassen ist erlaubt.',
@@ -1103,6 +1113,15 @@ export const en: Record<TranslationKey, string> = {
   'suppliers.language.de': 'German',
   'supplierOrder.mail': 'Order to supplier',
   'supplierOrder.mailError': 'Could not create the order.',
+  'productionOrderEdit.col.demand': 'Demand',
+  'productionOrderEdit.col.orderQty': 'Order qty',
+  'productionOrderEdit.qtyInvalid':
+    'Order quantity: please enter a whole number (or leave empty for the demand).',
+  'supplierOrder.allocationTitle': 'Priority allocation',
+  'supplierOrder.allocationHint':
+    'Suggestion when the order quantity is short — priority flag first, then season priority, then random. Adjustable in a later step.',
+  'supplierOrder.allocationHintLocked': 'Frozen allocation of the sent order.',
+  'supplierOrder.allocationOf': 'ordered {order} of {demand}',
   'suppliers.contacts.heading': 'Contacts',
   'suppliers.contacts.hint':
     'Up to 3 contacts (name + email), e.g. a supervisor. Leaving them empty is fine.',

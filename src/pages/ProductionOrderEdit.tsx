@@ -6,8 +6,11 @@ import {
   updateProductionNotes,
   updateProductionStatus,
   updateProductionTransportkosten,
+  updateProductionItemOrderQuantity,
+  getAllocationPreview,
+  type AllocationPreviewPosition,
 } from '../lib/productionOrders'
-import { parseDecimalField } from '../lib/paymentTerms'
+import { parseDecimalField, parseIntField } from '../lib/paymentTerms'
 import { listSeasons } from '../lib/seasons'
 import { getProducer } from '../lib/producers'
 import {
@@ -19,6 +22,7 @@ import {
 import GoodsReceiptSection from '../components/GoodsReceiptSection'
 import {
   nextProductionStatus,
+  isSupplierOrderLocked,
   type ProductionOrder,
   type ProductionOrderItemWithProduct,
 } from '../types/productionOrder'
@@ -58,6 +62,11 @@ export default function ProductionOrderEdit() {
   const [transport, setTransport] = useState('')
   const [transportError, setTransportError] = useState<string | null>(null)
 
+  // Prioritäts-Aufteilung (Modul D): Bestellmengen-Eingaben + Vorschau.
+  const [preview, setPreview] = useState<AllocationPreviewPosition[]>([])
+  const [qtyInputs, setQtyInputs] = useState<Record<string, string>>({})
+  const [qtyError, setQtyError] = useState<string | null>(null)
+
   async function load() {
     if (!id) return
     setLoading(true)
@@ -74,6 +83,12 @@ export default function ProductionOrderEdit() {
       setTransport(ord.transportkosten != null ? String(ord.transportkosten) : '')
       setSeason(seas.find((s) => s.id === ord.season_id) ?? null)
       setProducer(ord.producer_id ? await getProducer(ord.producer_id) : null)
+      setQtyInputs(
+        Object.fromEntries(
+          its.map((i) => [i.id, i.order_quantity != null ? String(i.order_quantity) : '']),
+        ),
+      )
+      setPreview(await getAllocationPreview(id))
     } catch {
       setError(t('productionOrderEdit.loadError'))
     } finally {
@@ -129,7 +144,8 @@ export default function ProductionOrderEdit() {
           description: i.product?.name ?? i.modell ?? 'Artikel',
           color: i.color,
           size: i.size,
-          quantity: i.total_quantity ?? 0,
+          // Tatsächliche Bestellmenge (manuell), sonst der Bedarf.
+          quantity: i.order_quantity ?? i.total_quantity ?? 0,
         })),
       })
       const url = URL.createObjectURL(blob)
@@ -151,6 +167,23 @@ export default function ProductionOrderEdit() {
       setError(t('supplierOrder.mailError'))
     } finally {
       setMailBusy(false)
+    }
+  }
+
+  /** Bestellmenge einer Position speichern (leer = Bedarf; block-statt-raten). */
+  async function saveOrderQty(itemId: string) {
+    if (!order) return
+    const parsed = parseIntField(qtyInputs[itemId] ?? '')
+    if (!parsed.ok) {
+      setQtyError(t('productionOrderEdit.qtyInvalid'))
+      return
+    }
+    setQtyError(null)
+    try {
+      await updateProductionItemOrderQuantity(itemId, parsed.value)
+      await load()
+    } catch (err) {
+      setQtyError(err instanceof Error ? err.message : t('common.saveFailed'))
     }
   }
 
@@ -321,13 +354,14 @@ export default function ProductionOrderEdit() {
               <th className="px-4 py-3 font-medium">{t('common.product')}</th>
               <th className="px-4 py-3 font-medium">{t('common.color')}</th>
               <th className="px-4 py-3 font-medium">{t('common.size')}</th>
-              <th className="px-4 py-3 text-right font-medium">{t('productionOrders.col.totalPieces')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('productionOrderEdit.col.demand')}</th>
+              <th className="px-4 py-3 text-right font-medium">{t('productionOrderEdit.col.orderQty')}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr className="border-t-[0.5px] border-line bg-surface">
-                <td colSpan={4} className="px-4 py-6 text-center text-muted">
+                <td colSpan={5} className="px-4 py-6 text-center text-muted">
                   {t('common.noPositions')}
                 </td>
               </tr>
@@ -345,6 +379,23 @@ export default function ProductionOrderEdit() {
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {(i.total_quantity ?? 0).toLocaleString('de-DE')}
                   </td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {isSupplierOrderLocked(order.status) ? (
+                      (i.order_quantity ?? i.total_quantity ?? 0).toLocaleString('de-DE')
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={qtyInputs[i.id] ?? ''}
+                        onChange={(e) =>
+                          setQtyInputs((prev) => ({ ...prev, [i.id]: e.target.value }))
+                        }
+                        onBlur={() => saveOrderQty(i.id)}
+                        placeholder={String(i.total_quantity ?? 0)}
+                        className="w-24 rounded-md border-[0.5px] border-line bg-surface px-2 py-1 text-right text-sm text-ink outline-none focus:border-ink"
+                      />
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -357,10 +408,69 @@ export default function ProductionOrderEdit() {
               <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                 {totalQuantity.toLocaleString('de-DE')}
               </td>
+              <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                {preview
+                  .reduce((s, p) => s + p.orderQuantity, 0)
+                  .toLocaleString('de-DE')}
+              </td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      {qtyError && <p className="mt-2 text-sm text-red-700">{qtyError}</p>}
+
+      {/* Prioritäts-Aufteilung — nur Positionen, deren Bestellmenge < Bedarf ist. */}
+      {(() => {
+        const cut = preview.filter(
+          (p) => p.orderQuantity < p.demand && p.allocations.length > 0,
+        )
+        if (cut.length === 0) return null
+        return (
+          <div className="mt-6">
+            <h2 className="mb-1 text-lg font-medium text-ink">
+              {t('supplierOrder.allocationTitle')}
+            </h2>
+            <p className="mb-3 text-sm text-muted">
+              {isSupplierOrderLocked(order.status)
+                ? t('supplierOrder.allocationHintLocked')
+                : t('supplierOrder.allocationHint')}
+            </p>
+            <div className="flex flex-col gap-4">
+              {cut.map((p) => (
+                <div
+                  key={p.itemId}
+                  className="rounded-md border-[0.5px] border-line bg-surface p-3"
+                >
+                  <div className="mb-2 text-sm font-medium text-ink">
+                    {[p.productName, p.color, p.size].filter(Boolean).join(' · ')}
+                    {' — '}
+                    {t('supplierOrder.allocationOf', {
+                      order: p.orderQuantity,
+                      demand: p.demand,
+                    })}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {p.allocations.map((a) => (
+                      <div
+                        key={a.orderId}
+                        className={`flex justify-between text-sm ${
+                          a.allocated === 0 ? 'text-muted' : 'text-ink'
+                        }`}
+                      >
+                        <span>{a.dealerName}</span>
+                        <span className="whitespace-nowrap">
+                          {a.allocated.toLocaleString('de-DE')} / {a.demand.toLocaleString('de-DE')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

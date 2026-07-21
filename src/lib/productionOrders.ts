@@ -6,6 +6,12 @@ import {
   type BundleOrderItem,
 } from './supplierBundleCalc'
 import { isSupplierOrderLocked } from '../types/productionOrder'
+import { itemKey } from './itemKey'
+import {
+  allocateByPriority,
+  type AllocationClaim,
+  type AllocationResult,
+} from './supplierAllocationCalc'
 import type {
   ProductionOrder,
   ProductionOrderItemWithProduct,
@@ -181,6 +187,9 @@ export async function generateSupplierOrders(
           producer_id: bundle.producer_id,
           generated_at: generatedAt,
           created_by,
+          // Seed früh einfrieren → Vorschau (Entwurf) und Snapshot (ab „gesendet")
+          // liefern denselben Tie-Break bei der Prioritäts-Aufteilung.
+          priority_seed: Math.floor(Math.random() * 2147483647),
         })
         .select('id')
         .single()
@@ -267,6 +276,10 @@ export async function updateProductionStatus(
       if (numErr) throw numErr
       patch.supplier_order_number = num as string
     }
+    // Prioritäts-Aufteilung einfrieren, BEVOR der Status auf „gesendet" kippt —
+    // schlägt das Einfrieren fehl, bleibt die Bestellung Entwurf (kein „gesendet"
+    // ohne Snapshot).
+    await freezeSupplierOrderAllocation(id)
   }
 
   const { data, error } = await supabase
@@ -328,4 +341,219 @@ export async function deleteProductionOrder(id: string): Promise<void> {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+// ─── Prioritäts-Aufteilung (Modul D) ─────────────────────────────────────────
+
+/**
+ * Manuelle Bestellmenge einer Position setzen (null → es gilt der Bedarf).
+ * Snapshot-Schutz: bei gesendeter (eingefrorener) Bestellung blockt die Funktion
+ * mit sichtbarem Fehler statt stiller Änderung.
+ */
+export async function updateProductionItemOrderQuantity(
+  itemId: string,
+  orderQuantity: number | null,
+): Promise<void> {
+  const { data: item, error: itErr } = await supabase
+    .from('production_order_items')
+    .select('production_order_id')
+    .eq('id', itemId)
+    .single()
+  if (itErr) throw itErr
+
+  const { data: po, error: poErr } = await supabase
+    .from('production_orders')
+    .select('status')
+    .eq('id', item.production_order_id)
+    .single()
+  if (poErr) throw poErr
+  if (isSupplierOrderLocked(po.status)) {
+    throw new Error(
+      'Die Sammelbestellung ist gesendet und eingefroren — die Menge kann nicht mehr geändert werden.',
+    )
+  }
+
+  const { error } = await supabase
+    .from('production_order_items')
+    .update({ order_quantity: orderQuantity })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
+/** Eine Position samt Prioritäts-Aufteilung auf die beitragenden Kunden. */
+export interface AllocationPreviewPosition {
+  itemId: string
+  productId: string | null
+  productName: string
+  color: string | null
+  size: string | null
+  /** Bedarf (aggregiert aus den Aufträgen). */
+  demand: number
+  /** Genutzte Bestellmenge (order_quantity ?? demand). */
+  orderQuantity: number
+  allocations: AllocationResult[]
+}
+
+/**
+ * Prioritäts-Aufteilung einer Sammelbestellung berechnen (Vorschau bei Entwürfen;
+ * dieselbe Rechnung wird beim „gesendet" eingefroren). Delegiert an den
+ * supabase-freien Kern {@link allocateByPriority} mit dem eingefrorenen
+ * priority_seed. Datenquelle = die verbrauchten order_items (supplier_order_sources)
+ * inkl. Häkchen (orders.priority) und dealer_season_priority.
+ */
+export async function getAllocationPreview(
+  productionOrderId: string,
+): Promise<AllocationPreviewPosition[]> {
+  const { data: po, error: poErr } = await supabase
+    .from('production_orders')
+    .select('id, season_id, priority_seed')
+    .eq('id', productionOrderId)
+    .single()
+  if (poErr) throw poErr
+  const seed = po.priority_seed ?? 0
+
+  const { data: poItemsRaw, error: piErr } = await supabase
+    .from('production_order_items')
+    .select('id, product_id, color, size, total_quantity, order_quantity, product:products(name)')
+    .eq('production_order_id', productionOrderId)
+  if (piErr) throw piErr
+  const poItems = (poItemsRaw ?? []) as unknown as {
+    id: string
+    product_id: string | null
+    color: string | null
+    size: string | null
+    total_quantity: number
+    order_quantity: number | null
+    product: { name: string } | null
+  }[]
+
+  // Beitragende order_items dieser Sammelbestellung.
+  const { data: srcRows, error: srcErr } = await supabase
+    .from('supplier_order_sources')
+    .select('order_item_id')
+    .eq('production_order_id', productionOrderId)
+  if (srcErr) throw srcErr
+  const orderItemIds = (srcRows ?? []).map((r) => (r as { order_item_id: string }).order_item_id)
+
+  // Claims je Positions-Schlüssel aufbauen (leer, wenn keine Quellen).
+  const claimsByKey = new Map<string, Map<string, AllocationClaim>>()
+  if (orderItemIds.length > 0) {
+    const { data: oiRaw, error: oiErr } = await supabase
+      .from('order_items')
+      .select('product_id, color, size, quantity, order_id')
+      .in('id', orderItemIds)
+    if (oiErr) throw oiErr
+    const orderItems = (oiRaw ?? []) as unknown as {
+      product_id: string
+      color: string | null
+      size: string | null
+      quantity: number
+      order_id: string
+    }[]
+
+    const orderIds = [...new Set(orderItems.map((o) => o.order_id))]
+    const { data: ordersRaw, error: ordErr } = await supabase
+      .from('orders')
+      .select('id, dealer_id, priority, dealer:dealers(name)')
+      .in('id', orderIds)
+    if (ordErr) throw ordErr
+    const orderById = new Map(
+      ((ordersRaw ?? []) as unknown as {
+        id: string
+        dealer_id: string
+        priority: boolean
+        dealer: { name: string } | null
+      }[]).map((o) => [o.id, o]),
+    )
+
+    const dealerIds = [...new Set([...orderById.values()].map((o) => o.dealer_id))]
+    const seasonPriorityByDealer = new Map<string, number>()
+    if (dealerIds.length > 0) {
+      const { data: dspRaw, error: dspErr } = await supabase
+        .from('dealer_season_priority')
+        .select('dealer_id, priority')
+        .eq('season_id', po.season_id)
+        .in('dealer_id', dealerIds)
+      if (dspErr) throw dspErr
+      for (const d of (dspRaw ?? []) as { dealer_id: string; priority: number }[]) {
+        seasonPriorityByDealer.set(d.dealer_id, d.priority)
+      }
+    }
+
+    for (const oi of orderItems) {
+      const order = orderById.get(oi.order_id)
+      if (!order) continue
+      const key = itemKey(oi.product_id, oi.color, oi.size)
+      let byOrder = claimsByKey.get(key)
+      if (!byOrder) {
+        byOrder = new Map()
+        claimsByKey.set(key, byOrder)
+      }
+      const existing = byOrder.get(oi.order_id)
+      if (existing) {
+        existing.demand += oi.quantity ?? 0
+      } else {
+        byOrder.set(oi.order_id, {
+          orderId: oi.order_id,
+          dealerId: order.dealer_id,
+          dealerName: order.dealer?.name ?? '—',
+          priorityFlag: order.priority ?? false,
+          seasonPriority: seasonPriorityByDealer.get(order.dealer_id) ?? null,
+          demand: oi.quantity ?? 0,
+        })
+      }
+    }
+  }
+
+  return poItems.map((it) => {
+    const capacity = it.order_quantity ?? it.total_quantity
+    const claims = [...(claimsByKey.get(itemKey(it.product_id, it.color, it.size))?.values() ?? [])]
+    return {
+      itemId: it.id,
+      productId: it.product_id,
+      productName: it.product?.name ?? 'Artikel',
+      color: it.color,
+      size: it.size,
+      demand: it.total_quantity,
+      orderQuantity: capacity,
+      allocations: allocateByPriority(claims, capacity, seed),
+    }
+  })
+}
+
+/**
+ * Prioritäts-Aufteilung als Snapshot festschreiben (beim Übergang auf „gesendet").
+ * Idempotent: alte Allokation der Bestellung wird ersetzt. Nur Zuteilungen > 0
+ * werden gespeichert (ein Kunde mit 0 bekommt keine Lieferung).
+ */
+export async function freezeSupplierOrderAllocation(
+  productionOrderId: string,
+): Promise<void> {
+  const org_id = await getMyOrgId()
+  const positions = await getAllocationPreview(productionOrderId)
+
+  await supabase
+    .from('supplier_order_allocations')
+    .delete()
+    .eq('production_order_id', productionOrderId)
+
+  const rows = positions.flatMap((p) =>
+    p.allocations
+      .filter((a) => a.allocated > 0)
+      .map((a) => ({
+        org_id,
+        production_order_id: productionOrderId,
+        order_id: a.orderId,
+        product_id: p.productId,
+        color: p.color,
+        size: p.size,
+        allocated_quantity: a.allocated,
+      })),
+  )
+  if (rows.length > 0) {
+    const { error } = await supabase
+      .from('supplier_order_allocations')
+      .insert(rows)
+    if (error) throw error
+  }
 }

@@ -55,6 +55,8 @@ export interface ProductionOrder {
   status: ProductionStatus
   /** Lieferanten-Bestellnummer LB-YYYY-NNNN; NULL bis zum Übergang auf „Gesendet". */
   supplier_order_number: string | null
+  /** Eingefrorener Seed für den reproduzierbaren Tie-Break der Prioritäts-Aufteilung. */
+  priority_seed: number | null
   generated_at: string | null
   sent_at: string | null
   /** Transportkosten dieser Produktion (Ist-Fracht, Nepal ≠ Portugal); numeric(10,2). */
@@ -82,7 +84,10 @@ export interface ProductionOrderItem {
   product_id: string | null
   color: string | null
   size: string | null
+  /** Bedarf aus den Kunden-Aufträgen (aggregiert, Referenz). */
   total_quantity: number
+  /** Manuell gesetzte Bestellmenge; null → es gilt der Bedarf (total_quantity). */
+  order_quantity: number | null
   created_at: string | null
   // ─── Positions-Felder aus dem Produzenten-Import (alle nullable) ─────────
   modell: string | null
