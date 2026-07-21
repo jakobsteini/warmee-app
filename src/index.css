@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -18,7 +18,7 @@
   --color-surface: #fbf9f4; /* Sehr helles Beige — Tabellen-/Karten-/Input-Flächen (Inhalt hebt sich vom Beige ab) */
   --color-accent: #c9a17a; /* Cashmere-Tan — sparsamer Akzent (Wortmarke, Details) */
 
-  --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Manrope', 'Inter', system-ui, sans-serif;
 }
 
 html,

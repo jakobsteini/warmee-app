@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentUser } from '../context/CurrentUser'
@@ -12,18 +13,20 @@ interface NavDef {
   key: TranslationKey
 }
 
-/** Aktive Module (Baustein B – Marketing & Newsletter) */
-const navItems: NavDef[] = [
-  { to: '/dashboard', key: 'nav.dashboard' },
-  { to: '/dealers', key: 'nav.dealers' },
+/** Übersicht — einzelner Reiter ganz oben, über den Rubriken (ohne Überschrift). */
+const overviewItem: NavDef = { to: '/dashboard', key: 'nav.dashboard' }
+
+/** Rubrik NEWSLETTER (Baustein B – Marketing & Bild) */
+const newsletterItems: NavDef[] = [
   { to: '/assets', key: 'nav.assets' },
   { to: '/assets/assign', key: 'nav.assign' },
   { to: '/crop', key: 'nav.crop' },
   { to: '/newsletter', key: 'nav.newsletter' },
 ]
 
-/** Aktive Module aus Baustein A – Warenwirtschaft */
+/** Rubrik WARENWIRTSCHAFT (Baustein A) — Händler (Kundenstamm) zuerst. */
 const warenItems: NavDef[] = [
+  { to: '/dealers', key: 'nav.dealers' },
   { to: '/products', key: 'nav.products' },
   { to: '/suppliers', key: 'nav.suppliers' },
   { to: '/orders', key: 'nav.orders' },
@@ -44,6 +47,19 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
     'rounded-md px-3 py-2 text-sm transition-colors',
     isActive ? 'bg-white/[0.08] text-cream' : 'text-nav hover:text-cream',
   ].join(' ')
+
+/**
+ * Rubrik-Überschrift der Sidebar — dezent-veredelt: Cashmere-Akzent (text-accent),
+ * feine Trennlinie darüber, weites Letter-Spacing, klein aber klar abgesetzt.
+ * Beide Rubriken identisch, damit sie einheitlich „herausstechen".
+ */
+function SectionHeading({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-6 mb-1 border-t border-white/10 px-3 pt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+      {children}
+    </div>
+  )
+}
 
 export default function Layout() {
   const { session, signOut } = useAuth()
@@ -67,15 +83,19 @@ export default function Layout() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-3">
-          {navItems.map((item) => (
+          {/* Übersicht — einzeln ganz oben, ohne Rubrik. */}
+          <NavLink to={overviewItem.to} className={linkClass}>
+            {t(overviewItem.key)}
+          </NavLink>
+
+          <SectionHeading>{t('nav.section.newsletter')}</SectionHeading>
+          {newsletterItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={linkClass}>
               {t(item.key)}
             </NavLink>
           ))}
 
-          <div className="mt-6 px-3 pb-2 text-[11px] uppercase tracking-wider text-muted">
-            {t('nav.section.warehouse')}
-          </div>
+          <SectionHeading>{t('nav.section.warehouse')}</SectionHeading>
           {warenItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={linkClass}>
               {t(item.key)}
