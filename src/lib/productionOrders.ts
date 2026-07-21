@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
+import {
+  bundleOpenItems,
+  missingProducerArticleNames,
+  type BundleOrderItem,
+} from './supplierBundleCalc'
 import type {
   ProductionOrder,
   ProductionOrderItemWithProduct,
@@ -53,108 +58,176 @@ export async function listProductionOrderItems(
   return (data ?? []) as unknown as ProductionOrderItemWithProduct[]
 }
 
-/** Eine Zeile aus dem aggregierten Rohdaten-Query. */
-interface RawOrderItem {
+/** Rohzeile aus dem order_items-Join (mit Lieferant des Artikels). */
+interface RawOpenItem {
+  id: string
   product_id: string
   color: string | null
   size: string | null
   quantity: number
+  products: { producer_id: string | null; name: string } | null
+}
+
+/** Ergebnis-Zeile je erzeugter Sammelbestellung (für die UI-Rückmeldung). */
+export interface GeneratedSupplierOrder {
+  productionOrderId: string
+  producerId: string
+  producerName: string
+  positions: number
+  pieces: number
 }
 
 /**
- * Neue Produktionsbestellung aus allen bestätigten Orders einer Saison
- * generieren.
+ * Lieferanten-Sammelbestellungen aus den OFFENEN bestätigten Orders einer Saison
+ * generieren — Modul A. Bündelt je Lieferant (products.producer_id): pro
+ * Lieferant EINE production_orders (Status draft) mit nach Produkt/Farbe/Größe
+ * aggregierten Positionen. Der Bündel-Kern ist supabase-frei
+ * ({@link bundleOpenItems}); hier nur Laden/Schreiben.
  *
- * Aggregiert alle order_items der bestätigten (status = 'confirmed') Orders der
- * Saison nach Produkt + Farbe + Größe und summiert die Stückzahlen. Legt eine
- * production_orders-Zeile (Status = draft) samt aggregierten
- * production_order_items an und gibt die neue Bestellung zurück.
+ * „Offen" = order_items, die in KEINER Sammelbestellung stecken
+ * (supplier_order_sources). Die verbrauchten Positionen werden verknüpft, damit
+ * später bestätigte AB als Nachbestellung erfasst werden (kein Doppelzählen).
  *
- * `producerId` ordnet die Bestellung optional einem Produzenten zu (Nepal,
- * Portugal, …). null = noch nicht zugeordnet. Die Priorisierung/Aufteilung
- * auf mehrere Produzenten folgt in einem späteren Schritt.
+ * Hard-Block (kein stiller Verlust): Gibt es offene Positionen mit einem Artikel
+ * OHNE producer_id, wirft die Funktion mit der Liste der betroffenen Artikel —
+ * diese müssen erst einem Lieferanten zugeordnet werden.
  *
- * Wirft, wenn keine bestätigten Orders mit Positionen existieren.
+ * Wirft außerdem, wenn keine bestätigten Orders bzw. keine offenen Positionen
+ * existieren.
  */
-export async function generateProductionOrder(
+export async function generateSupplierOrders(
   seasonId: string,
-  producerId: string | null = null,
-): Promise<ProductionOrder> {
-  const [org_id, created_by] = await Promise.all([
-    getMyOrgId(),
-    getMyUserId(),
-  ])
+): Promise<GeneratedSupplierOrder[]> {
+  const [org_id, created_by] = await Promise.all([getMyOrgId(), getMyUserId()])
 
-  // Alle Positionen bestätigter Orders dieser Saison laden. Der !inner-Join
-  // filtert auf die Order-Ebene (Saison + Status); RLS scoped bereits auf die
-  // eigene Org.
+  // Positionen bestätigter Orders der Saison inkl. Lieferant des Artikels. Der
+  // !inner-Join filtert auf Order-Ebene (Saison + Status); RLS scoped auf die Org.
   const { data: rawItems, error: itemsError } = await supabase
     .from('order_items')
-    .select('product_id, color, size, quantity, orders!inner(season_id, status)')
+    .select(
+      'id, product_id, color, size, quantity, orders!inner(season_id, status), products!inner(producer_id, name)',
+    )
     .eq('orders.season_id', seasonId)
     .eq('orders.status', 'confirmed')
-
   if (itemsError) throw itemsError
 
-  const items = (rawItems ?? []) as unknown as RawOrderItem[]
-  if (items.length === 0) {
+  const raw = (rawItems ?? []) as unknown as RawOpenItem[]
+  if (raw.length === 0) {
     throw new Error(
       'Keine bestätigten Orders mit Artikeln in dieser Saison gefunden.',
     )
   }
 
-  // Nach Produkt + Farbe + Größe gruppieren und Stückzahlen summieren.
-  const groups = new Map<
-    string,
-    { product_id: string; color: string | null; size: string | null; total: number }
-  >()
-  for (const it of items) {
-    const color = it.color ?? null
-    const size = it.size ?? null
-    const key = `${it.product_id}||${color ?? ''}||${size ?? ''}`
-    const existing = groups.get(key)
-    if (existing) {
-      existing.total += it.quantity ?? 0
-    } else {
-      groups.set(key, {
-        product_id: it.product_id,
-        color,
-        size,
-        total: it.quantity ?? 0,
-      })
-    }
-  }
+  // Bereits verbrauchte Positionen (org-scoped via RLS) → „offen" ableiten.
+  const { data: consumedRows, error: consumedErr } = await supabase
+    .from('supplier_order_sources')
+    .select('order_item_id')
+  if (consumedErr) throw consumedErr
+  const consumed = new Set(
+    (consumedRows ?? []).map((r) => (r as { order_item_id: string }).order_item_id),
+  )
 
-  // Kopf-Datensatz anlegen (Status = draft).
-  const { data: order, error: orderError } = await supabase
-    .from('production_orders')
-    .insert({ org_id, season_id: seasonId, producer_id: producerId, created_by })
-    .select()
-    .single()
-
-  if (orderError) throw orderError
-
-  // Aggregierte Positionen anlegen.
-  const rows = [...groups.values()].map((g) => ({
-    production_order_id: order.id,
-    product_id: g.product_id,
-    color: g.color,
-    size: g.size,
-    total_quantity: g.total,
+  const items: BundleOrderItem[] = raw.map((r) => ({
+    id: r.id,
+    product_id: r.product_id,
+    producer_id: r.products?.producer_id ?? null,
+    product_name: r.products?.name ?? 'Artikel',
+    color: r.color,
+    size: r.size,
+    quantity: r.quantity ?? 0,
   }))
 
-  const { error: insertError } = await supabase
-    .from('production_order_items')
-    .insert(rows)
+  const result = bundleOpenItems(items, consumed)
 
-  if (insertError) {
-    // Kopf ohne Positionen ist wertlos — wieder entfernen, damit kein
-    // verwaister Entwurf zurückbleibt.
-    await supabase.from('production_orders').delete().eq('id', order.id)
-    throw insertError
+  // Hard-Block: Positionen ohne Lieferant erst zuordnen (kein Sammeltopf).
+  if (result.missingProducer.length > 0) {
+    const names = missingProducerArticleNames(result)
+    throw new Error(
+      `Folgende Artikel haben keinen Lieferanten und müssen zuerst zugeordnet werden: ${names.join(', ')}.`,
+    )
   }
 
-  return order as ProductionOrder
+  if (result.byProducer.length === 0) {
+    throw new Error(
+      'Keine offenen Auftragspositionen — für diese Saison ist bereits alles bestellt.',
+    )
+  }
+
+  // Lieferantennamen für die Rückmeldung.
+  const producerIds = result.byProducer.map((b) => b.producer_id)
+  const { data: prods, error: prodErr } = await supabase
+    .from('producers')
+    .select('id, name')
+    .in('id', producerIds)
+  if (prodErr) throw prodErr
+  const nameById = new Map(
+    (prods ?? []).map((p) => [
+      (p as { id: string }).id,
+      (p as { name: string }).name,
+    ]),
+  )
+
+  const generatedAt = new Date().toISOString()
+  const created: GeneratedSupplierOrder[] = []
+  const createdIds: string[] = []
+  try {
+    for (const bundle of result.byProducer) {
+      const { data: po, error: poErr } = await supabase
+        .from('production_orders')
+        .insert({
+          org_id,
+          season_id: seasonId,
+          producer_id: bundle.producer_id,
+          generated_at: generatedAt,
+          created_by,
+        })
+        .select('id')
+        .single()
+      if (poErr) throw poErr
+      createdIds.push(po.id)
+
+      const itemRows = bundle.positions.map((p) => ({
+        production_order_id: po.id,
+        product_id: p.product_id,
+        color: p.color,
+        size: p.size,
+        total_quantity: p.total,
+      }))
+      const { error: piErr } = await supabase
+        .from('production_order_items')
+        .insert(itemRows)
+      if (piErr) throw piErr
+
+      // Quell-Verknüpfung: diese order_items sind jetzt verbraucht. Der
+      // unique(order_item_id)-Index fängt eine parallele Doppelvergabe hart ab.
+      const sourceRows = bundle.sourceItemIds.map((oid) => ({
+        org_id,
+        production_order_id: po.id,
+        order_item_id: oid,
+      }))
+      const { error: sErr } = await supabase
+        .from('supplier_order_sources')
+        .insert(sourceRows)
+      if (sErr) throw sErr
+
+      created.push({
+        productionOrderId: po.id,
+        producerId: bundle.producer_id,
+        producerName: nameById.get(bundle.producer_id) ?? '—',
+        positions: bundle.positions.length,
+        pieces: bundle.positions.reduce((s, p) => s + p.total, 0),
+      })
+    }
+  } catch (err) {
+    // Teilweise angelegte Bestellungen wieder entfernen (Positionen + Quell-Links
+    // per ON DELETE CASCADE) — kein inkonsistenter Zustand.
+    if (createdIds.length > 0) {
+      await supabase.from('production_orders').delete().in('id', createdIds)
+    }
+    throw err
+  }
+
+  return created
 }
 
 /**

@@ -109,6 +109,7 @@ export default function Products() {
 
   const [seasonFilter, setSeasonFilter] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [onlyNoProducer, setOnlyNoProducer] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -239,9 +240,17 @@ export default function Products() {
       products.filter(
         (p) =>
           (!seasonFilter || p.season_id === seasonFilter) &&
-          (!categoryFilter || p.category === categoryFilter),
+          (!categoryFilter || p.category === categoryFilter) &&
+          (!onlyNoProducer || p.producer_id == null),
       ),
-    [products, seasonFilter, categoryFilter],
+    [products, seasonFilter, categoryFilter, onlyNoProducer],
+  )
+
+  // Anzahl Artikel ohne Lieferant — für den Filter-Toggle (Vorbedingung der
+  // Lieferanten-Sammelbestellung: alle einzubeziehenden Artikel brauchen einen).
+  const noProducerCount = useMemo(
+    () => products.filter((p) => p.producer_id == null).length,
+    [products],
   )
 
   function resetGroupInline() {
@@ -483,6 +492,20 @@ export default function Products() {
                   {categoryLabel(c)}
                 </button>
               ))}
+            </div>
+          )}
+          {noProducerCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-xs uppercase tracking-wider text-muted">
+                {t('products.field.producer')}
+              </span>
+              <button
+                type="button"
+                onClick={() => setOnlyNoProducer((v) => !v)}
+                className={pillClass(onlyNoProducer)}
+              >
+                {t('products.filterNoProducer', { count: noProducerCount })}
+              </button>
             </div>
           )}
         </div>

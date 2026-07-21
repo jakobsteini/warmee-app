@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   deleteProductionOrder,
-  generateProductionOrder,
+  generateSupplierOrders,
   listProductionOrders,
 } from '../lib/productionOrders'
 import { listSeasons } from '../lib/seasons'
@@ -63,6 +63,7 @@ export default function ProductionOrders() {
   const [seasonId, setSeasonId] = useState('')
   const [generating, setGenerating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -105,9 +106,13 @@ export default function ProductionOrders() {
     setGenerating(true)
     setFormError(null)
     try {
-      const order = await generateProductionOrder(seasonId)
+      // Bündelt je Lieferant EINE Sammelbestellung aus den offenen bestätigten AB.
+      const created = await generateSupplierOrders(seasonId)
       setFormOpen(false)
-      navigate(`/production-orders/${order.id}`)
+      setNotice(
+        t('productionOrders.generatedCount', { count: created.length }),
+      )
+      await load()
     } catch (err) {
       setFormError(
         err instanceof Error ? err.message : t('productionOrders.generateError'),
@@ -160,6 +165,12 @@ export default function ProductionOrders() {
       {error && (
         <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-4 rounded-md border-[0.5px] border-ink bg-card px-4 py-3 text-sm text-ink">
+          {notice}
         </div>
       )}
 
