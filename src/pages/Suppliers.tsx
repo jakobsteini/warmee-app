@@ -6,6 +6,7 @@ import {
 } from '../lib/producers'
 import type { Producer, ProducerInput } from '../types/producer'
 import { COUNTRIES, countryLabel } from '../lib/countries'
+import { firstInvalidContactEmail } from '../lib/supplierContacts'
 import EmptyState from '../components/EmptyState'
 import { useI18n } from '../i18n'
 
@@ -21,6 +22,12 @@ interface SupplierForm {
   address: string
   uid: string
   active: boolean
+  kontakt1_name: string
+  kontakt1_email: string
+  kontakt2_name: string
+  kontakt2_email: string
+  kontakt3_name: string
+  kontakt3_email: string
 }
 
 const emptyForm: SupplierForm = {
@@ -32,6 +39,12 @@ const emptyForm: SupplierForm = {
   address: '',
   uid: '',
   active: true,
+  kontakt1_name: '',
+  kontakt1_email: '',
+  kontakt2_name: '',
+  kontakt2_email: '',
+  kontakt3_name: '',
+  kontakt3_email: '',
 }
 
 function trimOrNull(v: string): string | null {
@@ -85,6 +98,12 @@ export default function Suppliers() {
       address: p.address ?? '',
       uid: p.uid ?? '',
       active: p.active,
+      kontakt1_name: p.kontakt1_name ?? '',
+      kontakt1_email: p.kontakt1_email ?? '',
+      kontakt2_name: p.kontakt2_name ?? '',
+      kontakt2_email: p.kontakt2_email ?? '',
+      kontakt3_name: p.kontakt3_name ?? '',
+      kontakt3_email: p.kontakt3_email ?? '',
     })
     setFormError(null)
     setFormOpen(true)
@@ -100,6 +119,17 @@ export default function Suppliers() {
       setFormError(t('common.nameRequired'))
       return
     }
+    // Block-statt-raten: eine eingetragene Kontakt-E-Mail MUSS gültig sein.
+    // Name ohne E-Mail und komplett leere Kontakte sind erlaubt.
+    const badContact = firstInvalidContactEmail({
+      kontakt1_email: form.kontakt1_email,
+      kontakt2_email: form.kontakt2_email,
+      kontakt3_email: form.kontakt3_email,
+    })
+    if (badContact !== null) {
+      setFormError(t('suppliers.contacts.emailInvalid', { n: badContact }))
+      return
+    }
     const payload: ProducerInput = {
       name: form.name.trim(),
       country: trimOrNull(form.country),
@@ -109,6 +139,12 @@ export default function Suppliers() {
       address: trimOrNull(form.address),
       uid: trimOrNull(form.uid),
       active: form.active,
+      kontakt1_name: trimOrNull(form.kontakt1_name),
+      kontakt1_email: trimOrNull(form.kontakt1_email),
+      kontakt2_name: trimOrNull(form.kontakt2_name),
+      kontakt2_email: trimOrNull(form.kontakt2_email),
+      kontakt3_name: trimOrNull(form.kontakt3_name),
+      kontakt3_email: trimOrNull(form.kontakt3_email),
     }
     setSaving(true)
     setFormError(null)
@@ -259,6 +295,65 @@ export default function Suppliers() {
                   className={inputClass}
                 />
               </label>
+
+              {/* Kontakte — bis zu 3 (Name + E-Mail), alle optional. */}
+              <div className="flex flex-col gap-2.5 rounded-md border-[0.5px] border-line p-3">
+                <span className="text-sm font-medium text-ink">
+                  {t('suppliers.contacts.heading')}
+                </span>
+                <span className="text-xs text-muted">{t('suppliers.contacts.hint')}</span>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={form.kontakt1_name}
+                    onChange={(e) => set('kontakt1_name', e.target.value)}
+                    placeholder={t('suppliers.field.contactName')}
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    type="email"
+                    inputMode="email"
+                    value={form.kontakt1_email}
+                    onChange={(e) => set('kontakt1_email', e.target.value)}
+                    placeholder={t('suppliers.field.contactEmail')}
+                    className={`${inputClass} flex-1`}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={form.kontakt2_name}
+                    onChange={(e) => set('kontakt2_name', e.target.value)}
+                    placeholder={t('suppliers.field.contactName')}
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    type="email"
+                    inputMode="email"
+                    value={form.kontakt2_email}
+                    onChange={(e) => set('kontakt2_email', e.target.value)}
+                    placeholder={t('suppliers.field.contactEmail')}
+                    className={`${inputClass} flex-1`}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={form.kontakt3_name}
+                    onChange={(e) => set('kontakt3_name', e.target.value)}
+                    placeholder={t('suppliers.field.contactName')}
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    type="email"
+                    inputMode="email"
+                    value={form.kontakt3_email}
+                    onChange={(e) => set('kontakt3_email', e.target.value)}
+                    placeholder={t('suppliers.field.contactEmail')}
+                    className={`${inputClass} flex-1`}
+                  />
+                </div>
+              </div>
 
               <div className="flex gap-4">
                 <label className="flex flex-1 flex-col gap-1.5">

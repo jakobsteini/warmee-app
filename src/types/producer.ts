@@ -18,6 +18,13 @@ export interface Producer {
   address: string | null
   /** UID-Nr. (optional). */
   uid: string | null
+  /** Bis zu 3 Kontakte (Name + E-Mail), alle optional — z. B. Aufsichtsperson. */
+  kontakt1_name: string | null
+  kontakt1_email: string | null
+  kontakt2_name: string | null
+  kontakt2_email: string | null
+  kontakt3_name: string | null
+  kontakt3_email: string | null
   created_at: string | null
 }
 
@@ -31,4 +38,10 @@ export interface ProducerInput {
   email: string | null
   address: string | null
   uid: string | null
+  kontakt1_name: string | null
+  kontakt1_email: string | null
+  kontakt2_name: string | null
+  kontakt2_email: string | null
+  kontakt3_name: string | null
+  kontakt3_email: string | null
 }

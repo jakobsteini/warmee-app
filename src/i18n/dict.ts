@@ -46,6 +46,13 @@ export const de = {
   'suppliers.field.country': 'Land',
   'suppliers.field.uid': 'UID-Nr. (optional)',
   'suppliers.field.active': 'Aktiv (für Artikel/Bestellungen wählbar)',
+  'suppliers.contacts.heading': 'Kontakte',
+  'suppliers.contacts.hint':
+    'Bis zu 3 Kontakte (Name + E-Mail), z. B. Aufsichtsperson. Leer lassen ist erlaubt.',
+  'suppliers.field.contactName': 'Name',
+  'suppliers.field.contactEmail': 'E-Mail',
+  'suppliers.contacts.emailInvalid':
+    'Kontakt {n}: bitte eine gültige E-Mail-Adresse eingeben (oder das Feld leer lassen).',
   'nav.orders': 'Orders',
   'nav.productionOrders': 'Produktionsbestellung',
   'nav.deliveries': 'Wareneingang',
@@ -1057,6 +1064,13 @@ export const en: Record<TranslationKey, string> = {
   'suppliers.field.country': 'Country',
   'suppliers.field.uid': 'VAT ID (optional)',
   'suppliers.field.active': 'Active (selectable for articles/orders)',
+  'suppliers.contacts.heading': 'Contacts',
+  'suppliers.contacts.hint':
+    'Up to 3 contacts (name + email), e.g. a supervisor. Leaving them empty is fine.',
+  'suppliers.field.contactName': 'Name',
+  'suppliers.field.contactEmail': 'Email',
+  'suppliers.contacts.emailInvalid':
+    'Contact {n}: please enter a valid email address (or leave the field empty).',
   'nav.orders': 'Orders',
   'nav.productionOrders': 'Production order',
   'nav.deliveries': 'Goods receipt',
