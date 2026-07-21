@@ -11,6 +11,7 @@ import { sortOrders, type OrderSortKey, type SortDir } from '../lib/orderListSor
 import { formatDateDE, numify, type ExportColumn } from '../lib/exportFile'
 import CreditHint from '../components/CreditHint'
 import ExportButtons from '../components/ExportButtons'
+import { validateOrderPaymentTerms } from '../lib/paymentTerms'
 import {
   lineTotal,
   ORDER_ASSIGNMENTS,
@@ -224,6 +225,11 @@ export default function Orders() {
     }
     if (!orderHeadDateRangeOk(head)) {
       setFormError(t('order.field.dateRangeInvalid'))
+      return
+    }
+    const pt = validateOrderPaymentTerms(head)
+    if (!pt.ok) {
+      setFormError(t(pt.error as TranslationKey))
       return
     }
     setSaving(true)

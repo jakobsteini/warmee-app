@@ -37,6 +37,7 @@ import {
 import type { Product } from '../types/product'
 import type { Dealer } from '../types/dealer'
 import type { Season } from '../types/asset'
+import { validateOrderPaymentTerms } from '../lib/paymentTerms'
 import { useT, useI18n } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
@@ -210,6 +211,11 @@ export default function OrderEdit() {
     if (!order) return
     if (!orderHeadDateRangeOk(head)) {
       setHeadError(t('order.field.dateRangeInvalid'))
+      return
+    }
+    const pt = validateOrderPaymentTerms(head)
+    if (!pt.ok) {
+      setHeadError(t(pt.error as TranslationKey))
       return
     }
     setHeadSaving(true)

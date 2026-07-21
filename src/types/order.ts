@@ -1,4 +1,6 @@
 import type { TranslationKey } from '../i18n/dict'
+import { parseDecimalField, parseIntField } from '../lib/paymentTerms.ts'
+import { DEFAULT_ZAHLUNGSZIEL_TAGE } from '../lib/tax.ts'
 
 /** Mögliche Order-Status (englisch gespeichert, wie in der DB-Check-Constraint). */
 export const ORDER_STATUSES = ['draft', 'submitted', 'confirmed'] as const
@@ -44,6 +46,14 @@ export interface OrderHeadFields {
   po_number: string | null
   /** Prioritäts-Häkchen: später bei der Warenverteilung bevorzugt (heute nur Feld). */
   priority: boolean
+  /** Zahlungsziel in Tagen (netto). DB-Default 30. */
+  zahlungsziel_tage: number
+  /** Skontosatz in Prozent; null = kein Skonto. numeric(5,2) (kann als string ankommen). */
+  skonto_prozent: number | string | null
+  /** Skontofrist in Tagen; null = kein Skonto. */
+  skonto_tage: number | null
+  /** Freitext-Zahlungsbedingung für Sonderfälle; null wenn leer. */
+  zahlungsbedingung_freitext: string | null
 }
 
 /** Formular-Zustand der Kopfdaten (Strings + das Prioritäts-Boolean). */
@@ -56,6 +66,10 @@ export interface OrderHeadForm {
   delivery_date_to: string
   po_number: string
   priority: boolean
+  zahlungsziel_tage: string
+  skonto_prozent: string
+  skonto_tage: string
+  zahlungsbedingung_freitext: string
 }
 
 export const emptyOrderHead: OrderHeadForm = {
@@ -67,6 +81,11 @@ export const emptyOrderHead: OrderHeadForm = {
   delivery_date_to: '',
   po_number: '',
   priority: false,
+  // Zahlungsziel-Default sichtbar vorbelegt (WARM-ME-Standard 30 Tage netto).
+  zahlungsziel_tage: '30',
+  skonto_prozent: '',
+  skonto_tage: '',
+  zahlungsbedingung_freitext: '',
 }
 
 /** Bestehende Order-Kopfdaten → Formular (für die Bearbeitung). */
@@ -80,12 +99,33 @@ export function orderHeadToForm(o: OrderHeadFields): OrderHeadForm {
     delivery_date_to: o.delivery_date_to ?? '',
     po_number: o.po_number ?? '',
     priority: o.priority ?? false,
+    // Bestand ohne Wert → Default 30 anzeigen (kein stiller Verlust).
+    zahlungsziel_tage: o.zahlungsziel_tage != null ? String(o.zahlungsziel_tage) : '30',
+    skonto_prozent:
+      o.skonto_prozent != null ? String(o.skonto_prozent).replace('.', ',') : '',
+    skonto_tage: o.skonto_tage != null ? String(o.skonto_tage) : '',
+    zahlungsbedingung_freitext: o.zahlungsbedingung_freitext ?? '',
   }
 }
 
-/** Formular → DB-Felder (leer → null; priority als Boolean). */
+/**
+ * Formular → DB-Felder (leer → null; priority als Boolean). Die Zahlungsfelder
+ * werden hier lenient gebaut; die harte Validierung (0–100, skonto_tage <=
+ * zahlungsziel, vollständig-oder-leer) läuft VORHER in der UI über
+ * `validateOrderPaymentTerms` — genau wie die Lieferzeitraum-Prüfung
+ * (`orderHeadDateRangeOk`) getrennt vom Bauen sitzt. So bleibt hier kein stiller
+ * Datenverlust: ungültige Eingaben erreichen diese Funktion nie.
+ */
 export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
   const orNull = (v: string) => (v.trim() === '' ? null : v.trim())
+
+  const ziel = parseIntField(f.zahlungsziel_tage)
+  const sp = parseDecimalField(f.skonto_prozent)
+  const st = parseIntField(f.skonto_tage)
+  const skontoAktiv =
+    sp.ok && sp.value !== null && sp.value > 0 &&
+    st.ok && st.value !== null && st.value > 0
+
   return {
     order_type: orNull(f.order_type),
     shipping_method: orNull(f.shipping_method),
@@ -95,6 +135,11 @@ export function orderHeadFromForm(f: OrderHeadForm): OrderHeadFields {
     delivery_date_to: orNull(f.delivery_date_to),
     po_number: orNull(f.po_number),
     priority: f.priority,
+    zahlungsziel_tage:
+      ziel.ok && ziel.value !== null ? ziel.value : DEFAULT_ZAHLUNGSZIEL_TAGE,
+    skonto_prozent: skontoAktiv ? (sp.value as number) : null,
+    skonto_tage: skontoAktiv ? (st.value as number) : null,
+    zahlungsbedingung_freitext: orNull(f.zahlungsbedingung_freitext),
   }
 }
 

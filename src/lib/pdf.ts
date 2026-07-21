@@ -941,6 +941,8 @@ export interface OrderConfirmationLabels {
   gross: string
   taxHint: string
   taxUncertain: string
+  /** Überschrift des Zahlungsbedingungs-Blocks. */
+  paymentTerms: string
 }
 
 /** Aufgelöste (bereits lokalisierte) Kopfdaten-Werte der AB. */
@@ -979,6 +981,11 @@ export interface OrderConfirmationPdfData {
   /** Nettosumme (= Gesamtsumme der Positionen). */
   subtotal: number
   tax: OrderConfirmationTax
+  /**
+   * Fertiger Zahlungsbedingungs-Text in der Kundensprache (aus buildPaymentTermsText,
+   * je Order editierbar). Kann mehrzeilig sein (Freitext als eigene Zeile).
+   */
+  paymentTermsText: string
 }
 
 /** AB-Positionstabelle: Foto · Artikel · Farbe · Größe · Menge · Einzelpreis · Summe. */
@@ -1204,6 +1211,24 @@ export function buildOrderConfirmationPdf(data: OrderConfirmationPdfData): Blob 
     doc.setTextColor(120, 115, 108)
     doc.text(L.taxHint, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
   }
+
+  // ── Zahlungsbedingungen (je Order/AB, immer mind. der Zahlungsziel-Satz) ──
+  y += 10
+  if (y > 268) {
+    doc.addPage()
+    y = 26
+  }
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(120, 115, 108)
+  doc.text(L.paymentTerms, MARGIN, y)
+  y += 5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(26, 26, 26)
+  // splitTextToSize bricht lange Zeilen um UND respektiert die „\n" der Freitext-Zeile.
+  const ptLines = doc.splitTextToSize(data.paymentTermsText, PAGE_W - MARGIN * 2)
+  doc.text(ptLines, MARGIN, y)
 
   drawFooter(doc)
   return doc.output('blob')

@@ -12,6 +12,7 @@ import { getDealer } from './dealers'
 import { listAssets } from './assets'
 import { listOssRates, ossRateMap } from './ossRates'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
+import { buildPaymentTermsText } from './paymentTerms'
 import { totalQuantity, totalAmount } from './orderCalc'
 import { normalizeColorKey } from './stockListCalc'
 import { urlToDataUrl } from './stockList'
@@ -57,6 +58,7 @@ const AB_TEXTS: Record<'de' | 'en', AbTexts> = {
     gross: 'Gesamtbetrag (brutto)',
     taxHint: 'Voraussichtliche Steuer — verbindlich mit der Rechnung.',
     taxUncertain: 'Die Steuer wird mit der Rechnungserstellung final ermittelt.',
+    paymentTerms: 'Zahlungsbedingungen',
     orderTypeValues: { vororder: 'Vororder', prompt: 'Prompt Order', lager: 'Lagerorder' },
     shipMethodValues: { dpd: 'DPD', dsv: 'DSV' },
   },
@@ -81,6 +83,7 @@ const AB_TEXTS: Record<'de' | 'en', AbTexts> = {
     gross: 'Total (gross)',
     taxHint: 'Estimated tax — binding with the invoice.',
     taxUncertain: 'The tax is determined when the invoice is created.',
+    paymentTerms: 'Payment terms',
     orderTypeValues: { vororder: 'Pre-order', prompt: 'Prompt order', lager: 'Stock order' },
     shipMethodValues: { dpd: 'DPD', dsv: 'DSV' },
   },
@@ -169,6 +172,18 @@ export async function buildOrderConfirmationData(
     }
   }
 
+  // Zahlungsbedingungs-Text je Order (Skonto-Betrag nur bei bekanntem Brutto —
+  // bei unsicherer Steuer nennt buildPaymentTermsText den Skonto-Satz ohne Betrag).
+  const brutto = tax.uncertain ? null : tax.gross
+  const paymentTermsText = buildPaymentTermsText({
+    zahlungszielTage: order.zahlungsziel_tage ?? 30,
+    skontoProzent: num(order.skonto_prozent),
+    skontoTage: order.skonto_tage,
+    freitext: order.zahlungsbedingung_freitext,
+    sprache: lang,
+    bruttoBetrag: brutto,
+  })
+
   return {
     number: order.order_number ?? '',
     date: order.created_at ?? new Date().toISOString(),
@@ -194,5 +209,6 @@ export async function buildOrderConfirmationData(
     totalPieces,
     subtotal,
     tax,
+    paymentTermsText,
   }
 }

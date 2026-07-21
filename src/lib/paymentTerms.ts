@@ -2,6 +2,7 @@ import {
   DEFAULT_SKONTO_PROZENT,
   DEFAULT_SKONTO_TAGE,
   DEFAULT_ZAHLUNGSZIEL_TAGE,
+  computeSkonto,
   type PaymentTerms,
 } from './tax.ts'
 
@@ -137,4 +138,160 @@ export function formatPaymentTerms(t: {
     return `${fmtNum(sp as number)}%${st}T N${zielT}T`
   }
   return `N${zielT}T`
+}
+
+// ─── Zahlungsbedingungen je Auftragsbestätigung ──────────────────────────────
+
+/**
+ * EUR-Betrag als de-DE-String (Tausenderpunkt, Komma, 2 Nachkommastellen) OHNE
+ * Währungssymbol — der Aufrufer setzt „EUR " davor. BEWUSST manuell formatiert
+ * (kein Intl/toLocaleString), damit diese reine Funktion unter `node --test`
+ * deterministisch und locale-unabhängig ist. 12.34 → „12,34", 1234.5 → „1.234,50".
+ */
+function fmtEuroAmount(n: number): string {
+  const cents = Math.round(Math.abs(n) * 100)
+  const euros = Math.floor(cents / 100)
+  const rest = cents % 100
+  const sign = n < 0 ? '-' : ''
+  const eurStr = String(euros).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${sign}${eurStr},${String(rest).padStart(2, '0')}`
+}
+
+/** Sprache der Belegtexte. */
+export type PaymentTermsLang = 'de' | 'en'
+
+/** Eingaben für den Belegtext der Zahlungsbedingungen. */
+export interface PaymentTermsTextInput {
+  /** Zahlungsziel in Tagen (netto). */
+  zahlungszielTage: number
+  /** Skontosatz in Prozent; null/0 → kein Skonto. */
+  skontoProzent: number | null
+  /** Skontofrist in Tagen; null/0 → kein Skonto. */
+  skontoTage: number | null
+  /** Freitext für Sonderfälle; wird als eigene Zeile angehängt (oder null). */
+  freitext: string | null
+  sprache: PaymentTermsLang
+  /**
+   * Bruttobetrag für den ausgewiesenen Skonto-Abzug (EUR). Fehlt er (z. B. AB mit
+   * noch unklarer Steuer → kein Brutto), wird der Skonto-Satz OHNE Betrag genannt.
+   */
+  bruttoBetrag?: number | null
+}
+
+/**
+ * Baut den Zahlungsbedingungs-Text für Belege (AB, DE/EN), z. B.:
+ *   DE: „Zahlbar innerhalb 30 Tagen netto. Bei Zahlung innerhalb 10 Tagen 2 %
+ *        Skonto (EUR 12,34)."
+ *   EN: „Payable within 30 days net. On payment within 10 days 2 % cash discount
+ *        (EUR 12,34)."
+ *
+ * Ohne Skonto (skontoProzent null/0 oder skontoTage null/0): nur der
+ * Zahlungsziel-Satz. Ein Freitext wird — sofern vorhanden — als eigene Zeile
+ * (mit „\n") angehängt. Der Skonto-Betrag kommt zentral aus computeSkonto (auf
+ * Cent gerundet); Beträge bleiben de-DE/EUR unabhängig von der Sprache
+ * (österreichisches Unternehmen, wie die übrigen Belegzahlen).
+ */
+export function buildPaymentTermsText(input: PaymentTermsTextInput): string {
+  const { zahlungszielTage, skontoProzent, skontoTage, freitext, sprache } = input
+  const de = sprache === 'de'
+
+  // Zahlungsziel-Satz (Sonderfall 0 Tage = sofort fällig).
+  let text: string
+  if (zahlungszielTage <= 0) {
+    text = de ? 'Zahlbar sofort netto.' : 'Payable immediately, net.'
+  } else {
+    text = de
+      ? `Zahlbar innerhalb ${zahlungszielTage} Tagen netto.`
+      : `Payable within ${zahlungszielTage} days net.`
+  }
+
+  // Skonto nur, wenn Satz UND Frist gesetzt sind.
+  const hasSkonto =
+    skontoProzent !== null &&
+    skontoProzent > 0 &&
+    skontoTage !== null &&
+    skontoTage > 0
+  if (hasSkonto) {
+    const pct = fmtNum(skontoProzent as number)
+    // Betrag nur ausweisen, wenn ein Brutto vorliegt (sonst Satz ohne Betrag).
+    let amountPart = ''
+    if (input.bruttoBetrag != null) {
+      const { amount } = computeSkonto(input.bruttoBetrag, skontoProzent as number)
+      amountPart = ` (EUR ${fmtEuroAmount(amount)})`
+    }
+    text += de
+      ? ` Bei Zahlung innerhalb ${skontoTage} Tagen ${pct} % Skonto${amountPart}.`
+      : ` On payment within ${skontoTage} days ${pct} % cash discount${amountPart}.`
+  }
+
+  // Freitext als eigene Zeile (Sonderfälle), falls vorhanden.
+  const extra = freitext?.trim()
+  if (extra) text += `\n${extra}`
+
+  return text
+}
+
+/**
+ * Validiert die Zahlungsbedingungs-Formularfelder einer Order (block-statt-raten,
+ * kein stiller Datenverlust) und gibt die geparsten Werte zurück. Bei Fehler
+ * einen i18n-Key, den die UI als sichtbare Meldung zeigt — statt einen unklaren
+ * Wert still zu verwerfen.
+ *
+ * Regeln:
+ *   • zahlungsziel_tage: ganze Zahl; leer → Default 30.
+ *   • skonto_prozent: leer → kein Skonto; sonst 0–100.
+ *   • skonto_tage: leer → kein Skonto; sonst ganze Zahl.
+ *   • Skonto nur vollständig (Prozent > 0 UND Tage > 0) oder gar nicht — halb
+ *     ausgefüllt ist ein Fehler (mehrdeutig).
+ *   • skonto_tage <= zahlungsziel_tage.
+ */
+export type OrderPaymentTermsParse =
+  | {
+      ok: true
+      value: {
+        zahlungsziel_tage: number
+        skonto_prozent: number | null
+        skonto_tage: number | null
+      }
+    }
+  | { ok: false; error: string }
+
+export function validateOrderPaymentTerms(form: {
+  zahlungsziel_tage: string
+  skonto_prozent: string
+  skonto_tage: string
+}): OrderPaymentTermsParse {
+  const ziel = parseIntField(form.zahlungsziel_tage)
+  if (!ziel.ok) return { ok: false, error: 'order.payment.err.zielInvalid' }
+  const zielTage = ziel.value ?? DEFAULT_ZAHLUNGSZIEL_TAGE
+
+  const sp = parseDecimalField(form.skonto_prozent)
+  if (!sp.ok) return { ok: false, error: 'order.payment.err.skontoProzentInvalid' }
+  if (sp.value !== null && (sp.value < 0 || sp.value > 100)) {
+    return { ok: false, error: 'order.payment.err.skontoRange' }
+  }
+
+  const st = parseIntField(form.skonto_tage)
+  if (!st.ok) return { ok: false, error: 'order.payment.err.skontoTageInvalid' }
+
+  const skontoAktiv = sp.value !== null && sp.value > 0
+  const tageGesetzt = st.value !== null && st.value > 0
+
+  // Halb ausgefüllt (nur Prozent oder nur Tage) → mehrdeutig, blocken.
+  if (skontoAktiv !== tageGesetzt) {
+    return { ok: false, error: 'order.payment.err.skontoIncomplete' }
+  }
+  // Skontofrist darf das Zahlungsziel nicht überschreiten.
+  if (skontoAktiv && (st.value as number) > zielTage) {
+    return { ok: false, error: 'order.payment.err.skontoTageVsZiel' }
+  }
+
+  return {
+    ok: true,
+    value: {
+      zahlungsziel_tage: zielTage,
+      skonto_prozent: skontoAktiv ? (sp.value as number) : null,
+      skonto_tage: skontoAktiv ? (st.value as number) : null,
+    },
+  }
 }

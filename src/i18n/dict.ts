@@ -786,6 +786,21 @@ export const de = {
   'order.field.priority': 'Priorität',
   'order.field.priorityHint':
     'Wird bei der Warenverteilung bevorzugt berücksichtigt.',
+  'order.payment.heading': 'Zahlungsbedingungen',
+  'order.field.zahlungsziel': 'Zahlungsziel (Tage)',
+  'order.field.skontoProzent': 'Skonto %',
+  'order.field.skontoTage': 'Skonto-Tage',
+  'order.field.zahlungsbedingungFreitext': 'Zahlungsbedingung (Freitext)',
+  'order.field.zahlungsbedingungFreitextPlaceholder':
+    'Sonderfall, z. B. „Zahlung per Vorkasse vereinbart"',
+  'order.payment.err.zielInvalid': 'Zahlungsziel: bitte eine ganze Zahl (Tage).',
+  'order.payment.err.skontoProzentInvalid': 'Skonto-Prozent: bitte eine gültige Zahl.',
+  'order.payment.err.skontoTageInvalid': 'Skonto-Tage: bitte eine ganze Zahl.',
+  'order.payment.err.skontoRange': 'Skonto-Prozent muss zwischen 0 und 100 liegen.',
+  'order.payment.err.skontoTageVsZiel':
+    'Skonto-Tage dürfen das Zahlungsziel nicht überschreiten.',
+  'order.payment.err.skontoIncomplete':
+    'Für Skonto bitte Prozent UND Tage angeben (oder beide leer lassen).',
   'orders.filterPriorityOnly': 'Nur Priorität',
   'order.type.vororder': 'Vororder',
   'order.type.prompt': 'Prompt Order',
@@ -1771,6 +1786,20 @@ export const en: Record<TranslationKey, string> = {
   'order.field.priority': 'Priority',
   'order.field.priorityHint':
     'Given preference during goods distribution.',
+  'order.payment.heading': 'Payment terms',
+  'order.field.zahlungsziel': 'Payment term (days)',
+  'order.field.skontoProzent': 'Cash discount %',
+  'order.field.skontoTage': 'Discount days',
+  'order.field.zahlungsbedingungFreitext': 'Payment terms (free text)',
+  'order.field.zahlungsbedingungFreitextPlaceholder':
+    'Special case, e.g. "payment in advance agreed"',
+  'order.payment.err.zielInvalid': 'Payment term: please enter a whole number of days.',
+  'order.payment.err.skontoProzentInvalid': 'Cash discount %: please enter a valid number.',
+  'order.payment.err.skontoTageInvalid': 'Discount days: please enter a whole number.',
+  'order.payment.err.skontoRange': 'Cash discount % must be between 0 and 100.',
+  'order.payment.err.skontoTageVsZiel': 'Discount days must not exceed the payment term.',
+  'order.payment.err.skontoIncomplete':
+    'For a cash discount enter both percent AND days (or leave both empty).',
   'orders.filterPriorityOnly': 'Priority only',
   'order.type.vororder': 'Pre-order',
   'order.type.prompt': 'Prompt order',

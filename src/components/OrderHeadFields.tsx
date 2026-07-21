@@ -8,6 +8,8 @@ import {
   orderHeadDateRangeOk,
   type OrderHeadForm,
 } from '../types/order'
+import { validateOrderPaymentTerms } from '../lib/paymentTerms'
+import type { TranslationKey } from '../i18n/dict'
 import { useT } from '../i18n'
 
 const inputClass =
@@ -27,6 +29,9 @@ export default function OrderHeadFields({
 }) {
   const t = useT()
   const rangeOk = orderHeadDateRangeOk(value)
+  // Inline-Rückmeldung für die Zahlungsbedingungen (block-statt-raten): dieselbe
+  // Prüfung, die der Speichern-Handler vor dem Schreiben erzwingt.
+  const paymentTerms = validateOrderPaymentTerms(value)
 
   return (
     <div className="flex flex-col gap-4">
@@ -130,6 +135,65 @@ export default function OrderHeadFields({
           className={inputClass}
         />
       </label>
+
+      {/* Zahlungsbedingungen — je Order/AB bestimmbar (nicht fix am Kunden). */}
+      <div className="flex flex-col gap-3 rounded-md border-[0.5px] border-line p-3">
+        <span className="text-sm font-medium text-ink">
+          {t('order.payment.heading')}
+        </span>
+        <div className="flex gap-4">
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-sm text-muted">{t('order.field.zahlungsziel')}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={value.zahlungsziel_tage}
+              onChange={(e) => onChange({ zahlungsziel_tage: e.target.value })}
+              placeholder="30"
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-sm text-muted">{t('order.field.skontoProzent')}</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={value.skonto_prozent}
+              onChange={(e) => onChange({ skonto_prozent: e.target.value })}
+              placeholder="—"
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className="text-sm text-muted">{t('order.field.skontoTage')}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={value.skonto_tage}
+              onChange={(e) => onChange({ skonto_tage: e.target.value })}
+              placeholder="—"
+              className={inputClass}
+            />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm text-muted">
+            {t('order.field.zahlungsbedingungFreitext')}
+          </span>
+          <input
+            type="text"
+            value={value.zahlungsbedingung_freitext}
+            onChange={(e) => onChange({ zahlungsbedingung_freitext: e.target.value })}
+            placeholder={t('order.field.zahlungsbedingungFreitextPlaceholder')}
+            className={inputClass}
+          />
+        </label>
+        {!paymentTerms.ok && (
+          <p className="text-sm text-red-700">
+            {t(paymentTerms.error as TranslationKey)}
+          </p>
+        )}
+      </div>
 
       <label className="flex items-start gap-2">
         <input
