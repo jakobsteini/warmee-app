@@ -2,9 +2,11 @@ import { supabase } from './supabase'
 import { getMyOrgId } from './org'
 import { itemKey } from './itemKey'
 import {
-  allocationsByDealer,
-  type DealerPosition,
-} from './supplierAllocationCalc'
+  splitByOrder,
+  type SplitRow,
+  type SplitPosition,
+  type DeliveryGroup,
+} from './deliverySplit'
 import { hasGoodsReceipts, receivedByKey } from './goodsReceipts'
 import type {
   Delivery,
@@ -171,7 +173,12 @@ export async function generateDeliveries(
   // genau der beim Bestellen getroffenen Entscheidung. Fehlt der Snapshot
   // (Altbestellungen vor Modul D), gilt der Fallback: die vollen Bestellmengen
   // der Kunden-Aufträge (wie bisher).
-  let byDealer: Map<string, Map<string, DealerPosition>>
+  // Roh-Verteilzeilen (je Position, mit Order + Händler) sammeln — der Split je
+  // Order + Hard-Block passiert im supabase-freien Kern splitByOrder. Die
+  // eingefrorene Prioritäts-Aufteilung (supplier_order_allocations, Modul D) hat
+  // Vorrang; fehlt sie (Altbestellungen), gilt der Fallback: die vollen
+  // Bestellmengen der bestätigten Orders.
+  let splitRows: SplitRow[]
 
   const { data: allocRaw, error: allocErr } = await supabase
     .from('supplier_order_allocations')
@@ -199,63 +206,69 @@ export async function generateDeliveries(
         (o as { dealer_id: string }).dealer_id,
       ]),
     )
-    byDealer = allocationsByDealer(
-      allocRows.map((r) => ({
-        orderId: r.order_id,
-        productId: r.product_id,
-        color: r.color,
-        size: r.size,
-        allocatedQuantity: r.allocated_quantity,
-      })),
-      dealerByOrder,
-    )
+    splitRows = allocRows.map((r) => ({
+      orderId: r.order_id,
+      dealerId: dealerByOrder.get(r.order_id) ?? null,
+      productId: r.product_id,
+      color: r.color,
+      size: r.size,
+      quantity: r.allocated_quantity,
+    }))
   } else {
-    // Fallback: Positionen bestätigter Orders dieser Saison inkl. Händler der
-    // Order. Der !inner-Join filtert auf Order-Ebene; RLS scoped auf die Org.
+    // Fallback: Positionen bestätigter Orders dieser Saison inkl. order_id und
+    // Händler. Der !inner-Join filtert auf Order-Ebene; RLS scoped auf die Org.
     const { data: rawItems, error: itemsError } = await supabase
       .from('order_items')
       .select(
-        'product_id, color, size, quantity, orders!inner(dealer_id, season_id, status)',
+        'order_id, product_id, color, size, quantity, orders!inner(dealer_id, season_id, status)',
       )
       .eq('orders.season_id', po.season_id)
       .eq('orders.status', 'confirmed')
     if (itemsError) throw itemsError
 
-    const items = (rawItems ?? []) as unknown as RawDealerItem[]
-    byDealer = new Map()
-    for (const it of items) {
-      const dealerId = it.orders?.dealer_id
-      if (!dealerId) continue
-      const color = it.color ?? null
-      const size = it.size ?? null
-      const key = itemKey(it.product_id, color, size)
-      let group = byDealer.get(dealerId)
-      if (!group) {
-        group = new Map()
-        byDealer.set(dealerId, group)
-      }
-      const existing = group.get(key)
-      if (existing) existing.total += it.quantity ?? 0
-      else group.set(key, { product_id: it.product_id, color, size, total: it.quantity ?? 0 })
-    }
+    const items = (rawItems ?? []) as unknown as {
+      order_id: string
+      product_id: string
+      color: string | null
+      size: string | null
+      quantity: number
+      orders: { dealer_id: string } | null
+    }[]
+    splitRows = items.map((it) => ({
+      orderId: it.order_id,
+      dealerId: it.orders?.dealer_id ?? null,
+      productId: it.product_id,
+      color: it.color,
+      size: it.size,
+      quantity: it.quantity,
+    }))
   }
 
-  if (byDealer.size === 0) {
+  const split = splitByOrder(splitRows)
+  // HARD-BLOCK statt stiller NULL: eine Position ließe sich keiner eindeutigen
+  // Order+Händler zuordnen.
+  if (!split.ok) {
+    throw new Error(
+      `Verteilung nicht möglich: ${split.unresolved} Position(en) lassen sich keiner eindeutigen Order zuordnen. Bitte die Daten prüfen.`,
+    )
+  }
+  if (split.deliveries.length === 0) {
     throw new Error(
       'Keine bestätigten Orders mit Artikeln in dieser Saison gefunden.',
     )
   }
 
-  // Je Händler eine Lieferung samt Positionen anlegen.
+  // Je Order eine Lieferung (mit eindeutigem order_id + dealer_id) anlegen.
   const createdDeliveries: string[] = []
   try {
-    for (const [dealerId, group] of byDealer) {
+    for (const g of split.deliveries) {
       const { data: delivery, error: delError } = await supabase
         .from('deliveries')
         .insert({
           org_id,
           production_order_id: productionOrderId,
-          dealer_id: dealerId,
+          dealer_id: g.dealerId,
+          order_id: g.orderId,
         })
         .select('id')
         .single()
@@ -263,12 +276,12 @@ export async function generateDeliveries(
       if (delError) throw delError
       createdDeliveries.push(delivery.id)
 
-      const rows = [...group.values()].map((g) => ({
+      const rows = [...g.positions.values()].map((p) => ({
         delivery_id: delivery.id,
-        product_id: g.product_id,
-        color: g.color,
-        size: g.size,
-        quantity: g.total,
+        product_id: p.product_id,
+        color: p.color,
+        size: p.size,
+        quantity: p.total,
       }))
 
       const { error: insErr } = await supabase.from('delivery_items').insert(rows)
@@ -285,9 +298,8 @@ export async function generateDeliveries(
 
   // Fehlmengen ermitteln (weicher Hinweis, kein Block): Ist ein Wareneingang
   // erfasst und übersteigt die verteilte Summe je Position den Eingang, wird die
-  // Lücke beziffert zurückgegeben. Die Auflösung (wer bekommt weniger) ist die
-  // noch nicht gebaute prioritätsbasierte Zuteilung — hier nur sichtbar machen.
-  const shortfalls = await computeShortfalls(productionOrderId, byDealer)
+  // Lücke beziffert zurückgegeben.
+  const shortfalls = await computeShortfalls(productionOrderId, split.deliveries)
 
   return { created: createdDeliveries.length, shortfalls }
 }
@@ -298,14 +310,14 @@ export async function generateDeliveries(
  */
 async function computeShortfalls(
   productionOrderId: string,
-  byDealer: Map<string, Map<string, DealerPosition>>,
+  deliveries: DeliveryGroup[],
 ): Promise<DistributionShortfall[]> {
   if (!(await hasGoodsReceipts(productionOrderId))) return []
 
-  // Verteilte Gesamtmenge je Schlüssel über alle Händler summieren.
-  const distributedByKey = new Map<string, DealerPosition>()
-  for (const group of byDealer.values()) {
-    for (const [key, g] of group) {
+  // Verteilte Gesamtmenge je Schlüssel über alle Orders summieren.
+  const distributedByKey = new Map<string, SplitPosition>()
+  for (const d of deliveries) {
+    for (const [key, g] of d.positions) {
       const acc = distributedByKey.get(key)
       if (acc) acc.total += g.total
       else distributedByKey.set(key, { ...g })
@@ -368,6 +380,33 @@ export async function orderedQuantities(
 
   const map = new Map<string, number>()
   for (const it of (data ?? []) as unknown as RawDealerItem[]) {
+    const key = itemKey(it.product_id, it.color ?? null, it.size ?? null)
+    map.set(key, (map.get(key) ?? 0) + (it.quantity ?? 0))
+  }
+  return map
+}
+
+/**
+ * Bestellte Mengen je Position EINER Order (nicht des ganzen Händlers). Seit dem
+ * Order→Lieferung-Split braucht der Kommissionierschein „Bestellt" je Order,
+ * damit Händler mit mehreren Orders nicht doppelt gezählt werden.
+ */
+export async function orderedQuantitiesByOrder(
+  orderId: string,
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('product_id, color, size, quantity')
+    .eq('order_id', orderId)
+  if (error) throw error
+
+  const map = new Map<string, number>()
+  for (const it of (data ?? []) as unknown as {
+    product_id: string
+    color: string | null
+    size: string | null
+    quantity: number
+  }[]) {
     const key = itemKey(it.product_id, it.color ?? null, it.size ?? null)
     map.set(key, (map.get(key) ?? 0) + (it.quantity ?? 0))
   }

@@ -437,6 +437,8 @@ export interface PickingCustomer {
   dealerName: string
   /** Ort/Land, klein unter dem Namen. */
   place: string | null
+  /** Auftragsnummer (AB-…) der Order — unterscheidet gleichnamige Seiten (Split). */
+  orderNumber: string | null
   items: PickingItem[]
 }
 
@@ -467,7 +469,9 @@ export interface PickingListPdfData {
  */
 function drawPickingHeader(
   doc: jsPDF,
-  left: { kind: 'summary' } | { kind: 'customer'; name: string; place: string | null },
+  left:
+    | { kind: 'summary' }
+    | { kind: 'customer'; name: string; place: string | null; orderNumber: string | null },
   meta: { label: string; value: string }[],
 ): number {
   // Absender.
@@ -525,6 +529,13 @@ function drawPickingHeader(
       doc.setFontSize(9)
       doc.setTextColor(90, 85, 80)
       doc.text(left.place, MARGIN, ry)
+      ry += 4.5
+    }
+    if (left.orderNumber) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(90, 85, 80)
+      doc.text(left.orderNumber, MARGIN, ry)
       ry += 4.5
     }
   }
@@ -738,7 +749,7 @@ export function buildPickingListPdf(data: PickingListPdfData): Blob {
     doc.addPage()
     const bottom = drawPickingHeader(
       doc,
-      { kind: 'customer', name: c.dealerName, place: c.place },
+      { kind: 'customer', name: c.dealerName, place: c.place, orderNumber: c.orderNumber },
       [...seasonMeta, { label: 'Datum', value: deDate(data.date) }],
     )
     drawPickingCustomerTable(doc, c.items, bottom)

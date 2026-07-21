@@ -1,7 +1,11 @@
 import { supabase } from './supabase'
 import { itemKey } from './itemKey'
 import { getReconciliation } from './goodsReceipts'
-import { listDeliveryItems, orderedQuantities } from './deliveries'
+import {
+  listDeliveryItems,
+  orderedQuantities,
+  orderedQuantitiesByOrder,
+} from './deliveries'
 import type {
   PickingCustomer,
   PickingItem,
@@ -30,7 +34,7 @@ export async function buildPickingListData(
   const { data: delRows, error: delErr } = await supabase
     .from('deliveries')
     .select(
-      'id, dealer_id, dealer:dealers(name, city, country), production_order:production_orders(season_id, season:seasons(label))',
+      'id, dealer_id, order_id, dealer:dealers(name, city, country), order:orders(order_number), production_order:production_orders(season_id, season:seasons(label))',
     )
     .eq('production_order_id', productionOrderId)
 
@@ -39,7 +43,9 @@ export async function buildPickingListData(
   const deliveries = (delRows ?? []) as unknown as {
     id: string
     dealer_id: string
+    order_id: string | null
     dealer: { name: string; city: string | null; country: string | null } | null
+    order: { order_number: string | null } | null
     production_order: {
       season_id: string
       season: { label: string } | null
@@ -76,9 +82,13 @@ export async function buildPickingListData(
       .map(async (d): Promise<PickingCustomer> => {
         const [items, ordered] = await Promise.all([
           listDeliveryItems(d.id),
-          seasonId
-            ? orderedQuantities(seasonId, d.dealer_id)
-            : Promise.resolve(new Map<string, number>()),
+          // „Bestellt" je Order, sobald der Link gesetzt ist (Split); Alt-
+          // Lieferungen ohne order_id fallen auf die Händler-Gesamtmenge zurück.
+          d.order_id
+            ? orderedQuantitiesByOrder(d.order_id)
+            : seasonId
+              ? orderedQuantities(seasonId, d.dealer_id)
+              : Promise.resolve(new Map<string, number>()),
         ])
 
         const pickItems: PickingItem[] = items.map((it) => {
@@ -97,6 +107,7 @@ export async function buildPickingListData(
         return {
           dealerName: d.dealer?.name ?? '—',
           place: place || null,
+          orderNumber: d.order?.order_number ?? null,
           items: pickItems,
         }
       }),

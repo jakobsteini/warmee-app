@@ -3,9 +3,7 @@ import assert from 'node:assert/strict'
 import {
   allocateByPriority,
   totalDemand,
-  allocationsByDealer,
   type AllocationClaim,
-  type FrozenAllocationRow,
 } from './supplierAllocationCalc.ts'
 
 function claim(p: Partial<AllocationClaim> & { orderId: string }): AllocationClaim {
@@ -103,47 +101,4 @@ test('negative Kapazität wird wie 0 behandelt', () => {
   assert.deepEqual(alloc(allocateByPriority(claims, -5, 1)), { a: 0 })
 })
 
-// ─── allocationsByDealer (Modul E) ───────────────────────────────────────────
-
-function row(p: Partial<FrozenAllocationRow> & { orderId: string }): FrozenAllocationRow {
-  return {
-    orderId: p.orderId,
-    productId: p.productId ?? 'A',
-    color: p.color ?? null,
-    size: p.size ?? null,
-    allocatedQuantity: p.allocatedQuantity ?? 1,
-  }
-}
-
-test('allocationsByDealer: zwei Händler getrennt', () => {
-  const rows = [
-    row({ orderId: 'o1', allocatedQuantity: 3 }),
-    row({ orderId: 'o2', allocatedQuantity: 4 }),
-  ]
-  const dealerByOrder = new Map([['o1', 'd1'], ['o2', 'd2']])
-  const res = allocationsByDealer(rows, dealerByOrder)
-  assert.equal(res.get('d1')?.get('A||||')?.total, 3)
-  assert.equal(res.get('d2')?.get('A||||')?.total, 4)
-})
-
-test('allocationsByDealer: mehrere Orders desselben Händlers werden summiert', () => {
-  const rows = [
-    row({ orderId: 'o1', allocatedQuantity: 3 }),
-    row({ orderId: 'o2', allocatedQuantity: 2 }),
-  ]
-  const dealerByOrder = new Map([['o1', 'd1'], ['o2', 'd1']])
-  const res = allocationsByDealer(rows, dealerByOrder)
-  assert.equal(res.get('d1')?.get('A||||')?.total, 5)
-})
-
-test('allocationsByDealer: 0-Mengen und unbekannte Orders werden übersprungen', () => {
-  const rows = [
-    row({ orderId: 'o1', allocatedQuantity: 0 }),
-    row({ orderId: 'ox', allocatedQuantity: 5 }), // kein Händler
-    row({ orderId: 'o2', allocatedQuantity: 2 }),
-  ]
-  const dealerByOrder = new Map([['o1', 'd1'], ['o2', 'd1']])
-  const res = allocationsByDealer(rows, dealerByOrder)
-  assert.equal(res.size, 1)
-  assert.equal(res.get('d1')?.get('A||||')?.total, 2)
-})
+// (Der Order→Lieferung-Split wird in deliverySplit.test.ts geprüft.)
