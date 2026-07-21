@@ -35,6 +35,16 @@ export function nextProductionStatus(
     : null
 }
 
+/**
+ * Snapshot-Sperre der Lieferanten-Sammelbestellung: nur im Status „Entwurf"
+ * (draft) sind Mengen/Positionen editierbar. Ab „Gesendet" (sent) und weiter ist
+ * die Bestellung eingefroren — die Nummer ist vergeben, die Bestellung ist raus.
+ * Zentrale Regel, damit spätere Editier-/Löschpfade sie nicht neu herleiten.
+ */
+export function isSupplierOrderLocked(status: string): boolean {
+  return status !== 'draft'
+}
+
 /** Eine Produktionsbestellung (snake_case wie in der DB). */
 export interface ProductionOrder {
   id: string
@@ -43,6 +53,8 @@ export interface ProductionOrder {
   /** Produzent (Nepal, Portugal, …). Nullable, bis die Zuordnung erfolgt. */
   producer_id: string | null
   status: ProductionStatus
+  /** Lieferanten-Bestellnummer LB-YYYY-NNNN; NULL bis zum Übergang auf „Gesendet". */
+  supplier_order_number: string | null
   generated_at: string | null
   sent_at: string | null
   /** Transportkosten dieser Produktion (Ist-Fracht, Nepal ≠ Portugal); numeric(10,2). */

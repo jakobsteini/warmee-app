@@ -159,7 +159,7 @@ export default function ProductionOrderEdit() {
       <div className="mt-4 mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-medium text-ink">
-            {t('productionOrders.title')}
+            {order.supplier_order_number ?? t('productionOrders.title')}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {t('productionOrderEdit.meta', {

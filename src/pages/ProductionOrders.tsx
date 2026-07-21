@@ -135,8 +135,9 @@ export default function ProductionOrders() {
     try {
       await deleteProductionOrder(order.id)
       await load()
-    } catch {
-      setError(t('productionOrders.deleteError'))
+    } catch (err) {
+      // Snapshot-Sperre (gesendete Bestellung) trägt eine eigene Meldung.
+      setError(err instanceof Error ? err.message : t('productionOrders.deleteError'))
     }
   }
 
@@ -189,6 +190,7 @@ export default function ProductionOrders() {
           <table className="w-full text-left text-sm">
             <thead className="bg-card text-muted">
               <tr>
+                <th className="px-4 py-3 font-medium">{t('productionOrders.col.number')}</th>
                 <th className="px-4 py-3 font-medium">{t('common.season')}</th>
                 <th className="px-4 py-3 font-medium">{t('productionOrders.col.producer')}</th>
                 <th className="px-4 py-3 font-medium">{t('productionOrders.col.generatedAt')}</th>
@@ -206,7 +208,10 @@ export default function ProductionOrders() {
                   onClick={() => navigate(`/production-orders/${o.id}`)}
                   className="cursor-pointer border-t-[0.5px] border-line bg-surface text-ink transition-colors hover:bg-card"
                 >
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-4 py-3 font-medium whitespace-nowrap">
+                    {o.supplier_order_number ?? '—'}
+                  </td>
+                  <td className="px-4 py-3">
                     {o.season?.label ?? seasonLabel.get(o.season_id) ?? '—'}
                   </td>
                   <td className="px-4 py-3 text-muted">

@@ -5,6 +5,7 @@ import {
   missingProducerArticleNames,
   type BundleOrderItem,
 } from './supplierBundleCalc'
+import { isSupplierOrderLocked } from '../types/productionOrder'
 import type {
   ProductionOrder,
   ProductionOrderItemWithProduct,
@@ -21,7 +22,7 @@ export async function listProductionOrders(): Promise<ProductionOrderListRow[]> 
   const { data, error } = await supabase
     .from('production_orders')
     .select(
-      'id, org_id, season_id, producer_id, status, generated_at, sent_at, notes, created_by, created_at, season:seasons(label), producer:producers(name), production_order_items(total_quantity)',
+      'id, org_id, season_id, producer_id, status, supplier_order_number, generated_at, sent_at, notes, created_by, created_at, season:seasons(label), producer:producers(name), production_order_items(total_quantity)',
     )
     .order('created_at', { ascending: false })
 
@@ -238,9 +239,34 @@ export async function updateProductionStatus(
   id: string,
   status: ProductionStatus,
 ): Promise<ProductionOrder> {
-  const patch: { status: ProductionStatus; sent_at?: string } = { status }
+  const patch: {
+    status: ProductionStatus
+    sent_at?: string
+    supplier_order_number?: string
+  } = { status }
+
+  // Beim Übergang auf „Gesendet": sent_at setzen (falls leer) und eine lückenlose
+  // Nummer ziehen (nur wenn noch keine — idempotent, erneutes 'sent' vergibt keine
+  // zweite Nummer). Race-Sicherheit wie bei der Auftrags-/Rechnungsnummer:
+  // max+1 aus der DB (next_supplier_order_number) + Unique-Index fängt eine
+  // kollidierende Parallelvergabe ab.
   if (status === 'sent') {
-    patch.sent_at = new Date().toISOString()
+    const { data: cur, error: curErr } = await supabase
+      .from('production_orders')
+      .select('sent_at, supplier_order_number')
+      .eq('id', id)
+      .single()
+    if (curErr) throw curErr
+    if (!cur.sent_at) patch.sent_at = new Date().toISOString()
+    if (!cur.supplier_order_number) {
+      const org_id = await getMyOrgId()
+      const { data: num, error: numErr } = await supabase.rpc(
+        'next_supplier_order_number',
+        { p_org_id: org_id },
+      )
+      if (numErr) throw numErr
+      patch.supplier_order_number = num as string
+    }
   }
 
   const { data, error } = await supabase
@@ -278,8 +304,25 @@ export async function updateProductionTransportkosten(
   if (error) throw error
 }
 
-/** Produktionsbestellung löschen (Positionen per ON DELETE CASCADE mit). */
+/**
+ * Produktionsbestellung löschen (Positionen + Quell-Links per ON DELETE CASCADE
+ * mit). Snapshot-Schutz: eine gesendete (oder weitere) Bestellung ist eingefroren
+ * und kann NICHT gelöscht werden — sonst verlöre man Nummer und die
+ * AB-Verknüpfung still. Nur Entwürfe sind löschbar (danach wieder bündelbar).
+ */
 export async function deleteProductionOrder(id: string): Promise<void> {
+  const { data: po, error: getErr } = await supabase
+    .from('production_orders')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (getErr) throw getErr
+  if (isSupplierOrderLocked(po.status)) {
+    throw new Error(
+      'Eine gesendete Sammelbestellung ist eingefroren und kann nicht gelöscht werden.',
+    )
+  }
+
   const { error } = await supabase
     .from('production_orders')
     .delete()
