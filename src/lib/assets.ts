@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
+import {
+  ORDERED_STATUSES,
+  dealerImageAssets,
+  orderedProductIds,
+} from './dealerImages'
 import type {
   Asset,
   AssetFileMeta,
@@ -111,6 +116,83 @@ export async function listAssets(
       variant: variant ?? null,
     }
   })
+}
+
+/**
+ * Bildmaterial je Händler (Teil A): die Bilder zu den Artikeln, die DIESER
+ * Händler bestellt hat — nicht das ganze Saison-Bildmaterial.
+ *
+ * Weg: Orders des Händlers (Status submitted/confirmed, SAISONÜBERGREIFEND) →
+ * order_items.product_id → assets mit dieser product_id. Dedupe + Sortierung
+ * übernimmt der supabase-freie Kern (dealerImages.ts). RLS scoped alles auf die
+ * eigene Org. Leere Bestellung → leere Liste, KEIN Fehler.
+ */
+export async function listDealerOrderedImages(
+  dealerId: string,
+): Promise<AssetWithMeta[]> {
+  // 1) Reale Orders des Händlers (keine Entwürfe), saisonübergreifend.
+  const { data: orders, error: ordersError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('dealer_id', dealerId)
+    .in('status', ORDERED_STATUSES as unknown as string[])
+  if (ordersError) throw ordersError
+
+  const orderIds = (orders ?? []).map((o) => o.id as string)
+  if (orderIds.length === 0) return []
+
+  // 2) Bestellte Artikel (distinct product_id) über den Kern ableiten.
+  const { data: items, error: itemsError } = await supabase
+    .from('order_items')
+    .select('product_id')
+    .in('order_id', orderIds)
+  if (itemsError) throw itemsError
+
+  const productIds = orderedProductIds(
+    (items ?? []) as { product_id: string | null }[],
+  )
+  if (productIds.length === 0) return []
+
+  // 3) Bilder zu diesen Artikeln laden (nur Fotos; Videos filtert auch der Kern).
+  const { data, error } = await supabase
+    .from('assets')
+    .select(
+      '*, product:products(id, name, style, category), variant:product_variants(id, name)',
+    )
+    .in('product_id', productIds)
+    .eq('asset_kind', 'photo')
+  if (error) throw error
+
+  const rows = (data ?? []) as (Asset & {
+    product: AssetProductRef | null
+    variant: AssetVariantRef | null
+  })[]
+
+  // Signed-URLs gebündelt (privater Bucket).
+  const paths = rows.map((r) => r.storage_path)
+  const urlByPath = new Map<string, string>()
+  if (paths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrls(paths, SIGNED_URL_TTL)
+    for (const s of signed ?? []) {
+      if (s.signedUrl && s.path) urlByPath.set(s.path, s.signedUrl)
+    }
+  }
+
+  const mapped: AssetWithMeta[] = rows.map((r) => {
+    const { product, variant, ...asset } = r
+    return {
+      ...asset,
+      dealer_ids: [],
+      url: urlByPath.get(r.storage_path) ?? null,
+      product: product ?? null,
+      variant: variant ?? null,
+    }
+  })
+
+  // Dedupe + deterministische Reihenfolge im Kern.
+  return dealerImageAssets(mapped, productIds)
 }
 
 /**

@@ -9,6 +9,10 @@ import type { DealerEmailRole } from '../types/dealerEmail'
 import type { Dealer } from '../types/dealer'
 import { signedDocumentUrl } from '../lib/dealerDocuments'
 import { listDealerAliases } from '../lib/dealerAliases'
+import { listDealerOrderedImages } from '../lib/assets'
+import { downloadDealerImagesZip } from '../lib/dealerImageZip'
+import { groupImagesByArticle } from '../lib/dealerImages'
+import type { AssetWithMeta } from '../types/asset'
 import CollectionBadge from '../components/CollectionBadge'
 import DealerEditModal from '../components/DealerEditModal'
 import { listSeasons } from '../lib/seasons'
@@ -619,6 +623,9 @@ export default function DealerDetail() {
         )}
       </Section>
 
+      {/* ── Bildmaterial (nur zu den bestellten Artikeln) ── */}
+      <DealerImagesSection dealerId={dealer.id} dealerName={dealer.name} />
+
       {/* ── Rechnungen ── */}
       <Section title={t('dealerDetail.section.invoices')} count={data.invoices.length}>
         {data.invoices.length === 0 ? (
@@ -810,6 +817,122 @@ export default function DealerDetail() {
         />
       )}
     </div>
+  )
+}
+
+// ─── Bildmaterial je Händler (Teil A) ───────────────────────────────────────
+
+/**
+ * Bildmaterial-Sektion: lädt die Bilder zu den bestellten Artikeln des Händlers
+ * (eigener, verzögerter Fetch, unabhängig von loadDealerDetail) und bietet
+ * Vorschau + ZIP-Download. Leere Bestellung → schlichte Leerzeile, kein Fehler.
+ */
+function DealerImagesSection({
+  dealerId,
+  dealerName,
+}: {
+  dealerId: string
+  dealerName: string
+}) {
+  const t = useT()
+  const [images, setImages] = useState<AssetWithMeta[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError(null)
+    listDealerOrderedImages(dealerId)
+      .then((imgs) => {
+        if (alive) setImages(imgs)
+      })
+      .catch(() => {
+        if (alive) setError(t('dealerImages.loadError'))
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealerId])
+
+  async function handleDownload() {
+    setBusy(true)
+    setNotice(null)
+    setError(null)
+    try {
+      const { skipped } = await downloadDealerImagesZip(images, dealerName)
+      if (skipped > 0) setNotice(t('dealerImages.skipped', { count: skipped }))
+    } catch {
+      setError(t('dealerImages.downloadError'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const groups = groupImagesByArticle(images)
+
+  return (
+    <Section title={t('dealerDetail.section.images')} count={images.length}>
+      {loading ? (
+        <EmptyRow>{t('common.loading')}</EmptyRow>
+      ) : error && images.length === 0 ? (
+        <EmptyRow>{error}</EmptyRow>
+      ) : images.length === 0 ? (
+        <EmptyRow>{t('dealerImages.empty')}</EmptyRow>
+      ) : (
+        <div className="p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">{t('dealerImages.hint')}</p>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={busy}
+              className="shrink-0 rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? t('dealerImages.downloading') : t('dealerImages.download')}
+            </button>
+          </div>
+
+          {(notice || error) && (
+            <p className="mb-4 text-xs text-amber-700">{error ?? notice}</p>
+          )}
+
+          <div className="flex flex-col gap-6">
+            {groups.map((g) => (
+              <div key={g.product?.id ?? '∅'}>
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+                  {g.product?.name ?? '—'}
+                  <span className="ml-2 tabular-nums">{g.assets.length}</span>
+                </h3>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                  {g.assets.map((a) => (
+                    <div
+                      key={a.id}
+                      className="aspect-square overflow-hidden rounded-md border-[0.5px] border-line bg-card"
+                    >
+                      {a.url && (
+                        <img
+                          src={a.url}
+                          alt={a.filename}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Section>
   )
 }
 
