@@ -40,6 +40,7 @@ import {
   type DeliveryNote,
   type DeliveryNoteWithItems,
   type Dealerish,
+  type FreeDeliveryNoteInput,
   type FreeInvoiceInput,
   type Invoice,
   type InvoiceListRow,
@@ -449,6 +450,139 @@ export async function createDeliveryNote(
     .single()
   if (upErr) throw upErr
   return updated as DeliveryNote
+}
+
+/**
+ * Freien Lieferschein erstellen (FALL B, ohne Order): delivery_id = null, mit
+ * manuell erfassten Positionen (eigene delivery_note_items). Keine Order-
+ * Snapshots (Versandart null); Nummernkreis + PDF wie beim order-basierten LS.
+ */
+export async function createFreeDeliveryNote(
+  input: FreeDeliveryNoteInput,
+): Promise<DeliveryNote> {
+  const org_id = await getMyOrgId()
+  const created_by = await getMyUserId()
+
+  const items = input.items
+    .map((i) => ({
+      description: i.description.trim(),
+      color: i.color,
+      size: i.size,
+      quantity: i.quantity,
+    }))
+    .filter((i) => i.description !== '' && i.quantity > 0)
+  if (items.length === 0) {
+    throw new Error('Bitte mindestens eine Position mit Menge erfassen.')
+  }
+
+  const { data: dealer, error: dealerErr } = await supabase
+    .from('dealers')
+    .select('name, contact_name, email, city, country, language')
+    .eq('id', input.dealer_id)
+    .single()
+  if (dealerErr) throw dealerErr
+  const lang = pdfLang((dealer as { language: string | null }).language)
+  const dealerish: Dealerish = {
+    name: dealer.name,
+    contact_name: dealer.contact_name,
+    email: dealer.email,
+    city: dealer.city,
+    country: dealer.country,
+  }
+
+  const { data: number, error: numErr } = await supabase.rpc(
+    'next_delivery_note_number',
+    { p_org_id: org_id },
+  )
+  if (numErr) throw numErr
+
+  const { data: note, error: insErr } = await supabase
+    .from('delivery_notes')
+    .insert({
+      org_id,
+      delivery_id: null,
+      dealer_id: input.dealer_id,
+      note_number: number as string,
+      delivery_type: input.delivery_type,
+      notes: input.notes,
+      created_by,
+    })
+    .select()
+    .single()
+  if (insErr) throw insErr
+
+  const { error: itErr } = await supabase.from('delivery_note_items').insert(
+    items.map((i) => ({
+      delivery_note_id: note.id,
+      product_id: null,
+      description: i.description,
+      color: i.color,
+      size: i.size,
+      quantity: i.quantity,
+    })),
+  )
+  if (itErr) throw itErr
+
+  const { buildDeliveryNotePdf } = await import('./pdf')
+  const blob = buildDeliveryNotePdf({
+    labels: deliveryNotePdfLabels(lang),
+    number: note.note_number,
+    date: note.note_date,
+    dealer: dealerish,
+    seasonLabel: null,
+    shipping: null,
+    items: items.map((i) => ({
+      description: i.description,
+      color: i.color,
+      size: i.size,
+      quantity: i.quantity,
+    })),
+    notes: input.notes,
+  })
+  const path = await uploadPdf(org_id, `lieferschein-${safeName(note.note_number)}.pdf`, blob)
+  const { data: updated, error: upErr } = await supabase
+    .from('delivery_notes')
+    .update({ pdf_path: path })
+    .eq('id', note.id)
+    .select()
+    .single()
+  if (upErr) throw upErr
+  return updated as DeliveryNote
+}
+
+/**
+ * Lieferschein eigenständig versenden (Entwurf → Versendet): sperrt den Beleg
+ * und legt ihn ins unveränderbare Archiv. Für freie Lieferscheine (FALL B) und
+ * Kommissions-LS, die OHNE Rechnung an den Kunden gehen. Ein order-basierter LS
+ * kippt zusätzlich über die Cross-Doc-Sperre beim Rechnungsversand — beide Wege
+ * archivieren idempotent.
+ */
+export async function sendDeliveryNote(id: string): Promise<DeliveryNote> {
+  const { data: cur, error: curErr } = await supabase
+    .from('delivery_notes')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (curErr) throw curErr
+  if (isDeliveryNoteLocked(cur.status)) {
+    throw new Error(
+      'Dieser Lieferschein ist bereits versendet oder storniert.',
+    )
+  }
+
+  // Archiv ZUERST (BAO §132), dann Status kippen — schlägt es fehl, bleibt der
+  // LS Entwurf (retry-sicher, kein „versendet ohne Archiv").
+  await archiveDeliveryNoteById(id)
+
+  const sent_by = await getMyUserId()
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .update({ status: 'sent', sent_at: new Date().toISOString(), sent_by })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as DeliveryNote
 }
 
 /** Lieferschein inkl. eingefrorener Positionen + Händler (Detailansicht). */

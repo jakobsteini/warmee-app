@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listDealers } from '../lib/dealers'
-import { createFreeInvoice } from '../lib/invoices'
+import { createFreeInvoice, createFreeDeliveryNote } from '../lib/invoices'
 import { formatEUR, parsePrice } from '../lib/money'
 import { applyVat, VAT_RATE_PERCENT } from '../lib/tax'
 import type { Dealer } from '../types/dealer'
 import { useT } from '../i18n'
+
+/** Beleg-Modus für FALL B (ohne Order). */
+type DocMode = 'invoice' | 'note' | 'both'
 
 /** Eine Positionszeile im Formular (Strings, damit Tippen flüssig bleibt). */
 interface Row {
@@ -32,10 +35,14 @@ export default function InvoiceNew() {
   const t = useT()
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [dealerId, setDealerId] = useState('')
+  const [mode, setMode] = useState<DocMode>('invoice')
   const [rows, setRows] = useState<Row[]>([emptyRow()])
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const withInvoice = mode === 'invoice' || mode === 'both'
+  const withNote = mode === 'note' || mode === 'both'
 
   useEffect(() => {
     ;(async () => {
@@ -74,17 +81,38 @@ export default function InvoiceNew() {
     if (!canSubmit) return
     setSaving(true)
     setError(null)
+    const trimmedNotes = notes.trim() === '' ? null : notes.trim()
     try {
-      const invoice = await createFreeInvoice({
-        dealer_id: dealerId,
-        items: validRows.map((r) => ({
-          description: r.description.trim(),
-          quantity: qtyOf(r),
-          unit_price: priceOf(r),
-        })),
-        notes: notes.trim() === '' ? null : notes.trim(),
-      })
-      navigate(`/invoices/${invoice.id}`)
+      // Freier Lieferschein zuerst (falls gewünscht) — Positionen ohne Preise.
+      if (withNote) {
+        const note = await createFreeDeliveryNote({
+          dealer_id: dealerId,
+          delivery_type: 'sale',
+          items: validRows.map((r) => ({
+            description: r.description.trim(),
+            color: null,
+            size: null,
+            quantity: qtyOf(r),
+          })),
+          notes: trimmedNotes,
+        })
+        if (!withInvoice) {
+          navigate(`/delivery-notes/${note.id}`)
+          return
+        }
+      }
+      if (withInvoice) {
+        const invoice = await createFreeInvoice({
+          dealer_id: dealerId,
+          items: validRows.map((r) => ({
+            description: r.description.trim(),
+            quantity: qtyOf(r),
+            unit_price: priceOf(r),
+          })),
+          notes: trimmedNotes,
+        })
+        navigate(`/invoices/${invoice.id}`)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : t('invoices.createError'))
       setSaving(false)
@@ -136,6 +164,27 @@ export default function InvoiceNew() {
         <p className="mt-1 text-xs text-muted">{t('invoiceNew.dealerHint')}</p>
       </div>
 
+      {/* Beleg-Modus (FALL B) */}
+      <div className="mb-6">
+        <label className="mb-1.5 block text-sm text-muted">{t('docNew.mode')}</label>
+        <div className="flex flex-wrap gap-2">
+          {(['both', 'note', 'invoice'] as DocMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+                mode === m
+                  ? 'bg-ink text-cream'
+                  : 'border-[0.5px] border-line text-ink hover:bg-card'
+              }`}
+            >
+              {t(`docNew.mode.${m}` as Parameters<typeof t>[0])}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Positionen */}
       <div className="mb-6">
         <div className="mb-2 flex items-center justify-between">
@@ -155,10 +204,14 @@ export default function InvoiceNew() {
               <tr>
                 <th className="px-3 py-2 font-medium">{t('invoiceNew.description')}</th>
                 <th className="w-20 px-3 py-2 text-right font-medium">{t('common.quantity')}</th>
-                <th className="w-32 px-3 py-2 text-right font-medium">
-                  {t('common.unitPrice')}
-                </th>
-                <th className="w-32 px-3 py-2 text-right font-medium">{t('common.lineSum')}</th>
+                {withInvoice && (
+                  <>
+                    <th className="w-32 px-3 py-2 text-right font-medium">
+                      {t('common.unitPrice')}
+                    </th>
+                    <th className="w-32 px-3 py-2 text-right font-medium">{t('common.lineSum')}</th>
+                  </>
+                )}
                 <th className="w-10 px-3 py-2" />
               </tr>
             </thead>
@@ -187,21 +240,25 @@ export default function InvoiceNew() {
                       className={`${fieldClass} w-full text-right`}
                     />
                   </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={r.unitPrice}
-                      onChange={(e) =>
-                        updateRow(idx, { unitPrice: e.target.value })
-                      }
-                      placeholder="0,00"
-                      className={`${fieldClass} w-full text-right`}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap text-ink">
-                    {formatEUR(qtyOf(r) * priceOf(r))}
-                  </td>
+                  {withInvoice && (
+                    <>
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={r.unitPrice}
+                          onChange={(e) =>
+                            updateRow(idx, { unitPrice: e.target.value })
+                          }
+                          placeholder="0,00"
+                          className={`${fieldClass} w-full text-right`}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap text-ink">
+                        {formatEUR(qtyOf(r) * priceOf(r))}
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-2 text-center">
                     <button
                       type="button"
@@ -221,21 +278,23 @@ export default function InvoiceNew() {
         <p className="mt-1 text-xs text-muted">{t('invoiceNew.priceHint')}</p>
       </div>
 
-      {/* Summen */}
-      <div className="mb-6 ml-auto max-w-xs rounded-md border-[0.5px] border-line bg-surface px-5 py-4 text-sm">
-        <div className="flex justify-between py-1">
-          <span className="text-muted">{t('invoiceNew.net')}</span>
-          <span className="text-ink">{formatEUR(vat.net)}</span>
+      {/* Summen (nur wenn eine Rechnung erzeugt wird) */}
+      {withInvoice && (
+        <div className="mb-6 ml-auto max-w-xs rounded-md border-[0.5px] border-line bg-surface px-5 py-4 text-sm">
+          <div className="flex justify-between py-1">
+            <span className="text-muted">{t('invoiceNew.net')}</span>
+            <span className="text-ink">{formatEUR(vat.net)}</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-muted">{t('common.vat', { percent: VAT_RATE_PERCENT })}</span>
+            <span className="text-ink">{formatEUR(vat.tax)}</span>
+          </div>
+          <div className="mt-1 flex justify-between border-t-[0.5px] border-line py-1 pt-2 font-medium">
+            <span className="text-ink">{t('invoiceNew.gross')}</span>
+            <span className="text-ink">{formatEUR(vat.gross)}</span>
+          </div>
         </div>
-        <div className="flex justify-between py-1">
-          <span className="text-muted">{t('common.vat', { percent: VAT_RATE_PERCENT })}</span>
-          <span className="text-ink">{formatEUR(vat.tax)}</span>
-        </div>
-        <div className="mt-1 flex justify-between border-t-[0.5px] border-line py-1 pt-2 font-medium">
-          <span className="text-ink">{t('invoiceNew.gross')}</span>
-          <span className="text-ink">{formatEUR(vat.gross)}</span>
-        </div>
-      </div>
+      )}
 
       {/* Notiz */}
       <div className="mb-6">
@@ -264,7 +323,7 @@ export default function InvoiceNew() {
           disabled={!canSubmit}
           className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? t('invoiceNew.creating') : t('invoices.create')}
+          {saving ? t('invoiceNew.creating') : t(`docNew.submit.${mode}` as Parameters<typeof t>[0])}
         </button>
       </div>
     </div>

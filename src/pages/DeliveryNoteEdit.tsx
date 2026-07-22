@@ -5,6 +5,7 @@ import {
   getBelegArchiv,
   getInvoiceCreationDefaults,
   createInvoiceFromDeliveryNote,
+  sendDeliveryNote,
   deleteDeliveryNoteItem,
   updateDeliveryNoteItemQuantity,
   updateDeliveryNoteNotes,
@@ -169,6 +170,17 @@ export default function DeliveryNoteEdit() {
     navigate(`/invoices/${invoice.id}`)
   }
 
+  async function handleSend() {
+    if (!note) return
+    if (!window.confirm(t('deliveryNoteEdit.sendConfirm'))) return
+    try {
+      await sendDeliveryNote(note.id)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('common.statusChangeError'))
+    }
+  }
+
   async function handleNotesBlur() {
     if (!note || notes === (note.notes ?? '')) return
     try {
@@ -203,10 +215,10 @@ export default function DeliveryNoteEdit() {
   return (
     <div className="mx-auto max-w-4xl">
       <Link
-        to={`/deliveries/${note.delivery_id}`}
+        to={note.delivery_id ? `/deliveries/${note.delivery_id}` : '/deliveries'}
         className="text-sm text-muted hover:text-ink"
       >
-        {t('deliveryNoteEdit.back')}
+        {note.delivery_id ? t('deliveryNoteEdit.back') : t('deliveryNoteEdit.backList')}
       </Link>
 
       <div className="mt-4 mb-6 flex items-start justify-between gap-3">
@@ -237,6 +249,15 @@ export default function DeliveryNoteEdit() {
             </button>
           )}
           {!locked && (
+            <button
+              type="button"
+              onClick={handleSend}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+            >
+              {t('deliveryNoteEdit.send')}
+            </button>
+          )}
+          {!locked && note.delivery_id && (
             <button
               type="button"
               onClick={handleOpenInvoiceFromNote}

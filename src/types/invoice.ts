@@ -107,6 +107,22 @@ export interface InvoiceWithItems extends Invoice {
   invoice_items: InvoiceItem[]
 }
 
+/** Eine manuell erfasste Position eines freien Lieferscheins (FALL B). */
+export interface FreeDeliveryNoteItemInput {
+  description: string
+  color: string | null
+  size: string | null
+  quantity: number
+}
+
+/** Eingaben zum Erstellen eines freien Lieferscheins (ohne Order). */
+export interface FreeDeliveryNoteInput {
+  dealer_id: string
+  delivery_type: 'sale' | 'kommission'
+  items: FreeDeliveryNoteItemInput[]
+  notes: string | null
+}
+
 /** Eine manuell erfasste Position einer freien Rechnung (#7). */
 export interface FreeInvoiceItemInput {
   description: string
@@ -156,7 +172,8 @@ export function isDeliveryNoteLocked(status: string): boolean {
 export interface DeliveryNote {
   id: string
   org_id: string
-  delivery_id: string
+  /** Zugrundeliegende Lieferung — null beim freien Lieferschein (FALL B). */
+  delivery_id: string | null
   dealer_id: string
   note_number: string
   note_date: string
