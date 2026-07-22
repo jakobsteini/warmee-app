@@ -13,7 +13,8 @@ import {
   deliveryNotePdfLabels,
 } from './pdfLabels'
 import { correctionTotals } from './correctionCalc'
-import type { Return } from '../types/return'
+import { returnTotal } from './returnsCalc'
+import type { Return, CreateFreeCorrectionInput } from '../types/return'
 import { addDaysIso, daysBetweenIso } from './dates'
 import {
   computeSkonto,
@@ -1526,6 +1527,149 @@ export async function issueInvoiceCorrection(returnId: string): Promise<Return> 
     orgId: org_id,
     documentType: 'correction',
     documentId: returnId,
+    belegnummer: correctionNumber,
+    dealerName: dealerish.name,
+    belegDatum: ret.return_date,
+    blob,
+  })
+
+  return updated as Return
+}
+
+/**
+ * Freie Rechnungskorrektur OHNE Bezug (S7b): eine ankerlose returns-Zeile
+ * (invoice_id + delivery_note_id null) mit manuell erfassten Positionen, direkt
+ * mit RK-Nummer + PDF (Minusbeträge) + Archiv. Steuersatz aus dem Kunden
+ * abgeleitet (wie freie Rechnung). Die Nummer wird nach der Steuerprüfung
+ * gezogen (kein verbrauchter RK-Kreis bei Steuerblock).
+ */
+export async function createFreeCorrection(
+  input: CreateFreeCorrectionInput,
+): Promise<Return> {
+  const org_id = await getMyOrgId()
+  const created_by = await getMyUserId()
+
+  const lines = input.lines
+    .map((l) => ({
+      description: l.description.trim(),
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+    }))
+    .filter((l) => l.description !== '' && l.quantity > 0)
+  if (lines.length === 0) {
+    throw new Error('Bitte mindestens eine Position mit Menge erfassen.')
+  }
+
+  const { data: dealer, error: dealerErr } = await supabase
+    .from('dealers')
+    .select('name, contact_name, email, city, country, customer_group, country_iso2, uid, language')
+    .eq('id', input.dealer_id)
+    .single()
+  if (dealerErr) throw dealerErr
+  const dealerish: Dealerish = {
+    name: dealer.name,
+    contact_name: dealer.contact_name,
+    email: dealer.email,
+    city: dealer.city,
+    country: dealer.country,
+  }
+
+  const subtotal = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0)
+  // Steuer aus der Kundenkategorie ableiten (blockt VOR der Nummernvergabe).
+  const { tax_rate, tax_note } = await deriveInvoiceTax(
+    {
+      customer_group: (dealer.customer_group ?? 'b2b') as CustomerGroup,
+      country_iso2: dealer.country_iso2 ?? null,
+      uid: dealer.uid ?? null,
+      language: dealer.language ?? null,
+    },
+    subtotal,
+  )
+  const amounts = returnTotal(lines, tax_rate)
+
+  const { data: number, error: numErr } = await supabase.rpc(
+    'next_correction_number',
+    { p_org_id: org_id },
+  )
+  if (numErr) throw numErr
+  const correctionNumber = number as string
+
+  const { data: created, error: insErr } = await supabase
+    .from('returns')
+    .insert({
+      org_id,
+      invoice_id: null,
+      delivery_note_id: null,
+      dealer_id: input.dealer_id,
+      return_date: input.return_date,
+      reason: input.reason ?? null,
+      subtotal_net: amounts.net,
+      tax_rate,
+      tax_amount: amounts.tax,
+      total_amount: amounts.gross,
+      tax_note,
+      status: 'recorded',
+      credit_note_number: correctionNumber,
+      created_by,
+    })
+    .select()
+    .single()
+  if (insErr) throw insErr
+  const ret = created as unknown as Return
+
+  const { error: itErr } = await supabase.from('return_items').insert(
+    lines.map((l) => ({
+      return_id: ret.id,
+      invoice_item_id: null,
+      delivery_note_item_id: null,
+      description: l.description,
+      product_id: null,
+      color: null,
+      size: null,
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+      line_total: Math.round(l.quantity * l.unit_price * 100) / 100,
+    })),
+  )
+  if (itErr) throw itErr
+
+  const totals = correctionTotals(amounts.net, amounts.tax, amounts.gross)
+  const { buildCorrectionPdf } = await import('./pdf')
+  const blob = buildCorrectionPdf({
+    labels: correctionPdfLabels(pdfLang((dealer as { language: string | null }).language)),
+    number: correctionNumber,
+    date: ret.return_date,
+    dealer: dealerish,
+    originalInvoiceNumber: null,
+    items: lines.map((l) => ({
+      description: l.description,
+      color: null,
+      size: null,
+      quantity: l.quantity,
+      unitPrice: l.unit_price,
+      lineTotal: Math.round(l.quantity * l.unit_price * 100) / 100,
+    })),
+    subtotal: totals.net,
+    tax: totals.tax,
+    taxRate: tax_rate,
+    total: totals.gross,
+    taxNote: tax_note,
+    reason: ret.reason,
+  })
+
+  const path = await uploadPdf(org_id, `rechnungskorrektur-${safeName(correctionNumber)}.pdf`, blob)
+  const { data: updated, error: upErr } = await supabase
+    .from('returns')
+    .update({ pdf_path: path })
+    .eq('id', ret.id)
+    .select()
+    .single()
+  if (upErr) throw upErr
+
+  await archiveDocument({
+    orgId: org_id,
+    documentType: 'correction',
+    documentId: ret.id,
     belegnummer: correctionNumber,
     dealerName: dealerish.name,
     belegDatum: ret.return_date,

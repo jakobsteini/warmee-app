@@ -200,6 +200,8 @@ export function invoicePdfLabels(lang: PdfLang): InvoicePdfLabels {
 export interface CorrectionPdfLabels extends InvoicePdfLabels {
   /** Bezug auf die ursprüngliche Rechnung. */
   reference: (invoiceNumber: string) => string
+  /** Hinweis bei einer freien Korrektur ohne Rechnungsbezug. */
+  freeCorrection: string
   /** Überschrift des Korrekturbetrags. */
   correctionAmount: string
 }
@@ -209,12 +211,14 @@ const CORRECTION_LABELS: Record<PdfLang, CorrectionPdfLabels> = {
     ...INVOICE_LABELS.de,
     title: 'Rechnungskorrektur',
     reference: (n) => `Korrektur zu Rechnung ${n}`,
+    freeCorrection: 'Rechnungskorrektur ohne Belegbezug',
     correctionAmount: 'Korrekturbetrag (brutto)',
   },
   en: {
     ...INVOICE_LABELS.en,
     title: 'Invoice correction',
     reference: (n) => `Correction to invoice ${n}`,
+    freeCorrection: 'Invoice correction without reference',
     correctionAmount: 'Correction amount (gross)',
   },
 }

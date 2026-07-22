@@ -27,6 +27,7 @@ import DunningSettings from './pages/DunningSettings'
 import OssRates from './pages/OssRates'
 import Suppliers from './pages/Suppliers'
 import Commission from './pages/Commission'
+import CorrectionNew from './pages/CorrectionNew'
 import DefectReturns from './pages/DefectReturns'
 import Analytics from './pages/Analytics'
 
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/new" element={<InvoiceNew />} />
+            <Route path="/corrections/new" element={<CorrectionNew />} />
             <Route path="/invoices/:id" element={<InvoiceEdit />} />
             <Route path="/oss-rates" element={<OssRates />} />
             <Route path="/open-payments" element={<OpenPayments />} />

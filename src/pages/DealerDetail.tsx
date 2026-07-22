@@ -445,10 +445,13 @@ export default function DealerDetail() {
           <ul className="divide-y divide-line">
             {data.returns.map((r) => {
               const cancelled = r.status === 'cancelled'
-              // LS-verankerte Kommissions-Rücksendung (keine Rechnung).
+              // Rechnungs-verankert → Rechnungsnummer; LS-verankert (Kommission) →
+              // Kommission; ohne Anker → freie Rechnungskorrektur.
               const invNo = r.invoice_id
                 ? (invoiceNumberById.get(r.invoice_id) ?? r.invoice_id.slice(0, 8))
-                : t('deliveryNote.kommission')
+                : r.delivery_note_id
+                  ? t('deliveryNote.kommission')
+                  : t('correction.free')
               return (
                 <li
                   key={r.id}

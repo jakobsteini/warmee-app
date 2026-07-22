@@ -137,6 +137,13 @@ export default function Invoices() {
         <div className="flex items-center gap-3">
           <button
             type="button"
+            onClick={() => navigate('/corrections/new')}
+            className="whitespace-nowrap rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+          >
+            {t('invoices.freeCorrection')}
+          </button>
+          <button
+            type="button"
             onClick={() => navigate('/invoices/new')}
             className="whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
           >

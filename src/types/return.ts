@@ -43,6 +43,8 @@ export interface ReturnItem {
   invoice_item_id: string | null
   /** … Lieferschein-Position (LS-Retoure). Genau eine der beiden ist gesetzt. */
   delivery_note_item_id: string | null
+  /** Freitext-Bezeichnung (freie Korrektur); null bei verankerten Zeilen. */
+  description: string | null
   product_id: string | null
   color: string | null
   size: string | null
@@ -130,4 +132,20 @@ export interface CreateDeliveryNoteReturnInput {
   return_date?: string
   reason?: string | null
   lines: CreateDeliveryNoteReturnLine[]
+}
+
+/** Eine manuell erfasste Zeile einer freien Rechnungskorrektur (S7b). */
+export interface FreeCorrectionLine {
+  description: string
+  quantity: number
+  /** Netto-Einzelpreis (positiv; auf dem Beleg als Minus ausgewiesen). */
+  unit_price: number
+}
+
+/** Eingaben zum Erstellen einer freien Rechnungskorrektur (ohne Bezug). */
+export interface CreateFreeCorrectionInput {
+  dealer_id: string
+  return_date?: string
+  reason?: string | null
+  lines: FreeCorrectionLine[]
 }

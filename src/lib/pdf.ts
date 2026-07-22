@@ -452,8 +452,8 @@ export interface CorrectionPdfData {
   number: string
   date: string
   dealer: Dealerish
-  /** Nummer der ursprünglichen Rechnung (Bezugszeile). */
-  originalInvoiceNumber: string
+  /** Nummer der ursprünglichen Rechnung (Bezugszeile); null bei freier Korrektur. */
+  originalInvoiceNumber: string | null
   /** Korrigierte Positionen (Preise positiv — was gutgeschrieben wird). */
   items: BelegItem[]
   /** Beträge bereits als MINUS (correctionTotals). */
@@ -516,14 +516,18 @@ export function buildCorrectionPdf(data: CorrectionPdfData): Blob {
   doc.text(L.correctionAmount, right - 72, y)
   doc.text(eur(data.total), right, y, { align: 'right' })
 
-  // Bezug auf die ursprüngliche Rechnung.
+  // Bezug auf die ursprüngliche Rechnung — nur bei verankerter Korrektur.
   y += 12
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(26, 26, 26)
-  doc.text(L.reference(data.originalInvoiceNumber), MARGIN, y, {
-    maxWidth: PAGE_W - MARGIN * 2,
-  })
+  if (data.originalInvoiceNumber) {
+    doc.text(L.reference(data.originalInvoiceNumber), MARGIN, y, {
+      maxWidth: PAGE_W - MARGIN * 2,
+    })
+  } else {
+    doc.text(L.freeCorrection, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+  }
 
   if (data.reason && data.reason.trim()) {
     y += 6
