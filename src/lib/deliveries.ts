@@ -533,3 +533,17 @@ export async function deleteDelivery(id: string): Promise<void> {
   const { error } = await supabase.from('deliveries').delete().eq('id', id)
   if (error) throw error
 }
+
+/**
+ * Eine einzelne Kommissionier-Position (delivery_item) löschen — z. B. wenn der
+ * Artikel im Lager fehlt und nicht geliefert wird. Wirkt nur auf den
+ * Kommissionierschein/die künftige Beleg-Erzeugung; bereits erzeugte Belege sind
+ * eigene Snapshots und bleiben unberührt.
+ */
+export async function deleteDeliveryItem(itemId: string): Promise<void> {
+  const { error } = await supabase
+    .from('delivery_items')
+    .delete()
+    .eq('id', itemId)
+  if (error) throw error
+}

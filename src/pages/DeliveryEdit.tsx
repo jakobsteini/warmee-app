@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
+  deleteDeliveryItem,
   getDelivery,
   itemKey,
   listDeliveryItems,
@@ -159,10 +160,25 @@ export default function DeliveryEdit() {
     }
   }
 
+  // FALL A „Lieferschein + Rechnung": zuerst den Lieferschein erzeugen (nur wenn
+  // noch keiner aktiv ist — kein doppelter LS), dann die Rechnung. So folgt die
+  // Rechnung immer einem Lieferschein.
   async function handleConfirmCreateInvoice(options: InvoiceCreateOptions) {
     if (!id) return
+    const hasActiveNote = deliveryNotes.some((n) => n.status !== 'cancelled')
+    if (!hasActiveNote) await createDeliveryNote(id)
     const invoice = await createInvoice(id, options)
     navigate(`/invoices/${invoice.id}`)
+  }
+
+  async function handleDeleteItem(itemId: string, name: string) {
+    if (!window.confirm(t('deliveryEdit.deleteItemConfirm', { name }))) return
+    try {
+      await deleteDeliveryItem(itemId)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('deliveryEdit.qtySaveError'))
+    }
   }
 
   async function handleCancelNote(noteId: string, number: string) {
@@ -342,7 +358,7 @@ export default function DeliveryEdit() {
               onClick={handleCreateDeliveryNote}
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
             >
-              {t('deliveryEdit.createNote')}
+              {t('deliveryEdit.createNoteOnly')}
             </button>
             <button
               type="button"
@@ -351,7 +367,7 @@ export default function DeliveryEdit() {
               onClick={handleOpenCreateInvoice}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {t('invoices.create')}
+              {t('deliveryEdit.createNoteAndInvoice')}
             </button>
           </div>
         </div>
@@ -461,12 +477,13 @@ export default function DeliveryEdit() {
               <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.ordered')}</th>
               <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.delivered')}</th>
               <th className="px-4 py-3 text-right font-medium">{t('deliveryEdit.col.difference')}</th>
+              <th className="px-4 py-3 print:hidden" />
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr className="border-t-[0.5px] border-line bg-surface">
-                <td colSpan={6} className="px-4 py-6 text-center text-muted">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted">
                   {t('common.noPositions')}
                 </td>
               </tr>
@@ -511,6 +528,17 @@ export default function DeliveryEdit() {
                       {diff > 0 ? '+' : ''}
                       {diff.toLocaleString('de-DE')}
                     </td>
+                    <td className="px-4 py-2 text-right print:hidden">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDeleteItem(i.id, i.product?.name ?? '—')
+                        }
+                        className="text-muted transition-colors hover:text-red-700"
+                      >
+                        {t('deliveryEdit.deleteItem')}
+                      </button>
+                    </td>
                   </tr>
                 )
               })
@@ -533,6 +561,7 @@ export default function DeliveryEdit() {
                   'de-DE',
                 )}
               </td>
+              <td className="print:hidden" />
             </tr>
           </tfoot>
         </table>
