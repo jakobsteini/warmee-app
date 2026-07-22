@@ -25,9 +25,15 @@ import type {
  *
  * Gibt `null` zurück, wenn es noch keine Verteilung gibt (keine Lieferungen) —
  * dann ist ein Kommissionierschein sinnlos.
+ *
+ * Mit `onlyDeliveryId` wird der Beleg auf EINEN Kunden (eine Lieferung)
+ * eingeschränkt — der Per-Kunde-Nachdruck. Das Deckblatt zeigt weiterhin den
+ * Pool-Abgleich der ganzen Produktionsbestellung als Kontext; danach folgt nur
+ * die eine Kundenseite.
  */
 export async function buildPickingListData(
   productionOrderId: string,
+  onlyDeliveryId?: string,
 ): Promise<PickingListPdfData | null> {
   // Lieferungen der Produktionsbestellung (= je Kunde eine), inkl. Händler und
   // Saison. Reihenfolge nach Händlername für einen vorhersehbaren Stapel.
@@ -54,8 +60,15 @@ export async function buildPickingListData(
 
   if (deliveries.length === 0) return null
 
-  const seasonId = deliveries[0].production_order?.season_id ?? null
-  const seasonLabel = deliveries[0].production_order?.season?.label ?? null
+  // Per-Kunde-Nachdruck: auf die eine Lieferung einschränken (Deckblatt bleibt
+  // der Pool-Abgleich der ganzen Produktionsbestellung als Kontext).
+  const selected = onlyDeliveryId
+    ? deliveries.filter((d) => d.id === onlyDeliveryId)
+    : deliveries
+  if (selected.length === 0) return null
+
+  const seasonId = selected[0].production_order?.season_id ?? null
+  const seasonLabel = selected[0].production_order?.season?.label ?? null
 
   // Abgleich (Deckblatt) — dieselbe Quelle wie die Bildschirm-Tabelle.
   const reconciliation = await getReconciliation(productionOrderId)
@@ -76,7 +89,7 @@ export async function buildPickingListData(
 
   // Je Kunde: Positionen + bestellte Mengen (beide wie auf DeliveryEdit).
   const customers: PickingCustomer[] = await Promise.all(
-    deliveries
+    selected
       .slice()
       .sort((a, b) => (a.dealer?.name ?? '').localeCompare(b.dealer?.name ?? '', 'de'))
       .map(async (d): Promise<PickingCustomer> => {

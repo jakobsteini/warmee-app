@@ -22,6 +22,7 @@ import {
 } from '../lib/invoices'
 import InvoiceCreateDialog from '../components/InvoiceCreateDialog'
 import type { FrozenInvoiceTerms } from '../lib/paymentTerms'
+import { buildPickingListData } from '../lib/pickingList'
 import { isDeliveryDischarged } from '../lib/inventory'
 import DeliveryDischargeModal from '../components/DeliveryDischargeModal'
 import {
@@ -219,6 +220,34 @@ export default function DeliveryEdit() {
     return { orderedSum, deliveredSum }
   }, [items, ordered])
 
+  async function handleDownloadPicking() {
+    if (!delivery) return
+    try {
+      const data = await buildPickingListData(
+        delivery.production_order_id,
+        delivery.id,
+      )
+      if (!data) {
+        setError(t('pickingList.empty'))
+        return
+      }
+      const { buildPickingListPdf } = await import('../lib/pdf')
+      const blob = buildPickingListPdf(data)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const stamp = new Date().toISOString().slice(0, 10)
+      const name = (delivery.dealer?.name ?? '').replace(/[^a-zA-Z0-9-]/g, '_')
+      a.href = url
+      a.download = `kommissionierschein${name ? `-${name}` : ''}-${stamp}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError(t('pickingList.error'))
+    }
+  }
+
   async function handleAdvanceStatus() {
     if (!delivery) return
     const next = nextDeliveryStatus(delivery.status)
@@ -315,6 +344,13 @@ export default function DeliveryEdit() {
             className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
           >
             {t('common.printPdf')}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPicking}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+          >
+            {t('deliveryEdit.pickingList')}
           </button>
           <button
             type="button"
