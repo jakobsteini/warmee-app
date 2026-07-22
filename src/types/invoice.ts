@@ -48,6 +48,8 @@ export interface Invoice {
   skonto_tage: number | null
   /** numeric(10,2) – kann als number oder string ankommen. */
   subtotal: number | string
+  /** Frachtkosten netto (steuerwirksam, dem Netto zugeschlagen); 0 = keine. numeric(10,2). */
+  frachtkosten: number | string
   tax_rate: number | string
   tax_amount: number | string
   total: number | string

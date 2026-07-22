@@ -307,6 +307,40 @@ export function resolveInvoicePaymentTerms(
   }
 }
 
+/**
+ * Manuelle Überschreibungen der Zahlungskonditionen bei der Rechnungserstellung
+ * (S3). Jedes Feld optional: fehlt es, gilt der aus AB/Händler abgeleitete
+ * Standard. `0` ist ein gültiger Wert (z. B. „kein Skonto", „sofort fällig") und
+ * wird NICHT als „nicht gesetzt" behandelt.
+ */
+export interface InvoiceTermOverrides {
+  zahlungsziel_tage?: number
+  skonto_prozent?: number
+  skonto_tage?: number
+  zahlungsbedingung_freitext?: string | null
+}
+
+/**
+ * Standard-Konditionen mit den manuellen Überschreibungen zusammenführen und die
+ * einzufrierenden Konditionen zurückgeben. Rein (keine Supabase-Abhängigkeit),
+ * damit unter `node --test` prüfbar.
+ */
+export function applyInvoiceTermOverrides(
+  defaults: FrozenInvoiceTerms,
+  overrides?: InvoiceTermOverrides,
+): FrozenInvoiceTerms {
+  if (!overrides) return defaults
+  const freitextSet = overrides.zahlungsbedingung_freitext !== undefined
+  return {
+    zahlungsziel_tage: overrides.zahlungsziel_tage ?? defaults.zahlungsziel_tage,
+    skonto_prozent: overrides.skonto_prozent ?? defaults.skonto_prozent,
+    skonto_tage: overrides.skonto_tage ?? defaults.skonto_tage,
+    freitext: freitextSet
+      ? overrides.zahlungsbedingung_freitext?.trim() || null
+      : defaults.freitext,
+  }
+}
+
 export function validateOrderPaymentTerms(form: {
   zahlungsziel_tage: string
   skonto_prozent: string

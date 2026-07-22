@@ -17,7 +17,10 @@ import {
 } from './tax'
 import {
   resolveInvoicePaymentTerms,
+  applyInvoiceTermOverrides,
   type InvoiceOrderTerms,
+  type InvoiceTermOverrides,
+  type FrozenInvoiceTerms,
 } from './paymentTerms'
 import { shippingDisplay } from './shipping'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
@@ -640,16 +643,42 @@ export async function updateDeliveryNoteNotes(
 // ─── Rechnung ────────────────────────────────────────────────────────────────
 
 /**
+ * Vorbelegung für die Rechnungserstellung: die aus AB/Händler abgeleiteten
+ * Zahlungskonditionen (Session 2), die der Nutzer im Dialog überschreiben kann.
+ * Frachtkosten sind separat und starten bei 0.
+ */
+export async function getInvoiceCreationDefaults(
+  deliveryId: string,
+): Promise<FrozenInvoiceTerms> {
+  const ctx = await loadDeliveryContext(deliveryId)
+  return resolveInvoicePaymentTerms(ctx.orderTerms, effectivePaymentTerms(ctx.terms))
+}
+
+/**
  * Rechnung aus einer Lieferung erzeugen: fortlaufende Nummer (YYYY-0001),
- * Positionen aus den Lieferpositionen (Großhandelspreis), Regelbesteuerung
- * mit 20 % USt. Die Nummer wird mit dem Datensatz sofort committet — auch wenn
+ * Positionen aus den Lieferpositionen (Großhandelspreis), Steuer aus der
+ * Kategorie. Die Nummer wird mit dem Datensatz sofort committet — auch wenn
  * die PDF-Erzeugung fehlschlägt, entsteht keine Lücke.
+ *
+ * `options` (S3): manuelle Überschreibung der Zahlungskonditionen/Skonto und
+ * die Frachtkosten. Frachtkosten sind STEUERWIRKSAM — sie werden dem Warennetto
+ * zugeschlagen und mit DEM Steuersatz der Rechnung besteuert (Fracht folgt der
+ * Hauptleistung). Ohne options gilt alles wie bisher (Fracht 0, Konditionen aus
+ * AB/Händler).
  *
  * Wirft, wenn bereits eine aktive (nicht stornierte) Rechnung zur Lieferung
  * existiert. Nach einer Stornierung wird die neue Rechnung als Ersatz mit der
  * stornierten verknüpft (cancelled_by).
  */
-export async function createInvoice(deliveryId: string): Promise<Invoice> {
+export interface InvoiceCreateOptions extends InvoiceTermOverrides {
+  /** Frachtkosten netto (steuerwirksam). Default 0. */
+  frachtkosten?: number
+}
+
+export async function createInvoice(
+  deliveryId: string,
+  options?: InvoiceCreateOptions,
+): Promise<Invoice> {
   const org_id = await getMyOrgId()
   const created_by = await getMyUserId()
 
@@ -675,10 +704,14 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     (s, i) => s + i.quantity * i.wholesale_price,
     0,
   )
+  // Frachtkosten (manuell, steuerwirksam): dem Warennetto zuschlagen → die USt
+  // rechnet auf (Netto + Fracht) mit dem Steuersatz der Rechnung. Negatives wird
+  // auf 0 geklemmt (keine negative Fracht).
+  const frachtkosten = Math.max(0, options?.frachtkosten ?? 0)
   // Steuer aus der Kategorie ableiten + einfrieren. Blockt VOR der Nummernvergabe
   // (country fehlt / ossMissing / review) → keine verbrauchte Rechnungsnummer.
   const { tax_rate, tax_amount, total, tax_note, tax_category } =
-    await deriveInvoiceTax(ctx.taxDealer, subtotal)
+    await deriveInvoiceTax(ctx.taxDealer, subtotal + frachtkosten)
 
   const { data: number, error: numErr } = await supabase.rpc(
     'next_invoice_number',
@@ -694,6 +727,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
       dealer_id: ctx.dealer_id,
       invoice_number: number as string,
       subtotal,
+      frachtkosten,
       tax_rate,
       tax_amount,
       total,
@@ -711,9 +745,11 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
   // daraus berechnete Fälligkeit wird als konkretes due_date EINGEFROREN (unten im
   // update) — spätere Änderungen an Order/Händler verschieben gestellte Rechnungen
   // NICHT rückwirkend.
-  const terms = resolveInvoicePaymentTerms(
-    ctx.orderTerms,
-    effectivePaymentTerms(ctx.terms),
+  // Standard aus AB/Händler, dann die manuellen Überschreibungen (S3) darüber —
+  // die zusammengeführten Werte werden eingefroren.
+  const terms = applyInvoiceTermOverrides(
+    resolveInvoicePaymentTerms(ctx.orderTerms, effectivePaymentTerms(ctx.terms)),
+    options,
   )
   const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
 
@@ -755,6 +791,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
       lineTotal: i.quantity * i.wholesale_price,
     })),
     subtotal,
+    frachtkosten,
     tax: tax_amount,
     taxRate: tax_rate,
     total,
@@ -979,6 +1016,8 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
       lineTotal: num(i.line_total),
     })),
     subtotal: num(inv.subtotal),
+    // Eingefrorene Fracht (Altbelege 0 → keine Zeile, zahlengleich).
+    frachtkosten: num(inv.frachtkosten),
     tax: num(inv.tax_amount),
     taxRate: num(inv.tax_rate),
     total,

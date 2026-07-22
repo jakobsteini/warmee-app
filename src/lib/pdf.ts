@@ -272,6 +272,12 @@ export interface InvoicePdfData {
   items: BelegItem[]
   /** Nettobetrag (Summe der Positionen ohne USt). */
   subtotal: number
+  /**
+   * Frachtkosten netto (eingefroren aus invoices.frachtkosten). > 0 → eigene
+   * Zeile zwischen Netto und USt; die USt ist bereits auf (Netto + Fracht)
+   * gerechnet. 0/undefined → keine Zeile (Altbelege, Layout unverändert).
+   */
+  frachtkosten?: number
   /** Ausgewiesene Umsatzsteuer (Betrag, aus dem eingefrorenen tax_amount). */
   tax: number
   /**
@@ -346,6 +352,16 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
   doc.text(L.subtotal, right - 42, y)
   doc.setTextColor(26, 26, 26)
   doc.text(eur(data.subtotal), right, y, { align: 'right' })
+
+  // Frachtkosten als eigene Netto-Zeile (nur wenn > 0). Die USt weiter unten ist
+  // bereits auf (Netto + Fracht) gerechnet — Altbelege mit 0 zeigen keine Zeile.
+  if (data.frachtkosten && data.frachtkosten > 0) {
+    y += 5
+    doc.setTextColor(90, 85, 80)
+    doc.text(L.freight, right - 42, y)
+    doc.setTextColor(26, 26, 26)
+    doc.text(eur(data.frachtkosten), right, y, { align: 'right' })
+  }
 
   y += 5
   doc.setTextColor(90, 85, 80)

@@ -37,6 +37,8 @@ export interface InvoicePdfLabels {
   colUnit: string
   colSum: string
   subtotal: string
+  /** Frachtkosten-Label (eigene Netto-Zeile; nur wenn > 0). */
+  freight: string
   /** USt-/VAT-Label; der Satz wird in pdf.ts als „(X %)" angehängt. */
   vat: string
   gross: string
@@ -84,6 +86,7 @@ const INVOICE_LABELS: Record<PdfLang, InvoicePdfLabels> = {
     colUnit: 'Einzelpreis',
     colSum: 'Summe',
     subtotal: 'Nettobetrag',
+    freight: 'Frachtkosten',
     vat: 'USt',
     gross: 'Gesamtbetrag (brutto)',
     payableWithin: (days, due) =>
@@ -106,6 +109,7 @@ const INVOICE_LABELS: Record<PdfLang, InvoicePdfLabels> = {
     colUnit: 'Unit price',
     colSum: 'Sum',
     subtotal: 'Net amount',
+    freight: 'Freight',
     vat: 'VAT',
     gross: 'Total (gross)',
     payableWithin: (days, due) =>

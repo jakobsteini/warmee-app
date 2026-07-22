@@ -397,6 +397,16 @@ export default function InvoiceEdit() {
                 {formatEUR(invoice.subtotal)}
               </td>
             </tr>
+            {Number(invoice.frachtkosten) > 0 && (
+              <tr className="bg-surface text-ink">
+                <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
+                  {t('invoiceEdit.freight')}
+                </td>
+                <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                  {formatEUR(invoice.frachtkosten)}
+                </td>
+              </tr>
+            )}
             <tr className="bg-surface text-ink">
               <td colSpan={5} className="px-4 py-2.5 text-right text-muted">
                 {t('common.vat', { percent: VAT_RATE_PERCENT })}

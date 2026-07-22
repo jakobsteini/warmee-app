@@ -14,9 +14,13 @@ import {
   cancelDeliveryNote,
   createDeliveryNote,
   createInvoice,
+  getInvoiceCreationDefaults,
   listDeliveryDocuments,
   signedPdfUrl,
+  type InvoiceCreateOptions,
 } from '../lib/invoices'
+import InvoiceCreateDialog from '../components/InvoiceCreateDialog'
+import type { FrozenInvoiceTerms } from '../lib/paymentTerms'
 import { isDeliveryDischarged } from '../lib/inventory'
 import DeliveryDischargeModal from '../components/DeliveryDischargeModal'
 import {
@@ -75,6 +79,8 @@ export default function DeliveryEdit() {
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [docBusy, setDocBusy] = useState(false)
   const [docError, setDocError] = useState<string | null>(null)
+  const [invoiceDefaults, setInvoiceDefaults] =
+    useState<FrozenInvoiceTerms | null>(null)
 
   async function loadDocs(deliveryId: string) {
     const docs = await listDeliveryDocuments(deliveryId)
@@ -135,20 +141,28 @@ export default function DeliveryEdit() {
     }
   }
 
-  async function handleCreateInvoice() {
+  // Rechnung erzeugen ist ab S3 zweistufig: erst den Dialog mit den (aus AB/
+  // Händler abgeleiteten) Konditionen + Frachtkosten öffnen, dann bestätigen.
+  async function handleOpenCreateInvoice() {
     if (!id) return
     setDocBusy(true)
     setDocError(null)
     try {
-      const invoice = await createInvoice(id)
-      navigate(`/invoices/${invoice.id}`)
+      const defaults = await getInvoiceCreationDefaults(id)
+      setInvoiceDefaults(defaults)
     } catch (err) {
       setDocError(
-        err instanceof Error ? err.message : t('invoices.createError'),
+        err instanceof Error ? err.message : t('invoiceCreate.loadError'),
       )
     } finally {
       setDocBusy(false)
     }
+  }
+
+  async function handleConfirmCreateInvoice(options: InvoiceCreateOptions) {
+    if (!id) return
+    const invoice = await createInvoice(id, options)
+    navigate(`/invoices/${invoice.id}`)
   }
 
   async function handleCancelNote(noteId: string, number: string) {
@@ -334,7 +348,7 @@ export default function DeliveryEdit() {
               type="button"
               disabled={docBusy || hasActiveInvoice}
               title={hasActiveInvoice ? t('deliveryEdit.invoiceExists') : undefined}
-              onClick={handleCreateInvoice}
+              onClick={handleOpenCreateInvoice}
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {t('invoices.create')}
@@ -532,6 +546,14 @@ export default function DeliveryEdit() {
             setDischargeOpen(false)
             setDischarged(true)
           }}
+        />
+      )}
+
+      {invoiceDefaults && (
+        <InvoiceCreateDialog
+          defaults={invoiceDefaults}
+          onConfirm={handleConfirmCreateInvoice}
+          onClose={() => setInvoiceDefaults(null)}
         />
       )}
     </div>
