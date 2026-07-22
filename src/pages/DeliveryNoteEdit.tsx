@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   getDeliveryNote,
   getBelegArchiv,
+  getInvoiceCreationDefaults,
+  createInvoiceFromDeliveryNote,
   deleteDeliveryNoteItem,
   updateDeliveryNoteItemQuantity,
   updateDeliveryNoteNotes,
   signedArchiveUrl,
   signedPdfUrl,
+  type InvoiceCreateOptions,
 } from '../lib/invoices'
 import {
   isDeliveryNoteLocked,
@@ -15,6 +18,8 @@ import {
   type DeliveryNoteWithItems,
 } from '../types/invoice'
 import { deliveryNoteTotalQuantity } from '../lib/deliveryNoteCalc'
+import InvoiceCreateDialog from '../components/InvoiceCreateDialog'
+import type { FrozenInvoiceTerms } from '../lib/paymentTerms'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
 
@@ -35,10 +40,13 @@ function formatDate(iso: string | null): string {
 
 export default function DeliveryNoteEdit() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const t = useT()
   const [note, setNote] = useState<DeliveryNoteWithItems | null>(null)
   const [notes, setNotes] = useState('')
   const [archive, setArchive] = useState<BelegArchivEntry | null>(null)
+  const [invoiceDefaults, setInvoiceDefaults] =
+    useState<FrozenInvoiceTerms | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -104,6 +112,25 @@ export default function DeliveryNoteEdit() {
     }
   }
 
+  // Retour-Variante 1: Rechnung aus dem (ggf. bereinigten) Lieferschein. Öffnet
+  // den Konditionen-/Frachtdialog; bei Bestätigung wird die Rechnung aus den
+  // LS-Positionen erzeugt und angezeigt.
+  async function handleOpenInvoiceFromNote() {
+    if (!note?.delivery_id) return
+    try {
+      const defaults = await getInvoiceCreationDefaults(note.delivery_id)
+      setInvoiceDefaults(defaults)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('invoiceCreate.loadError'))
+    }
+  }
+
+  async function handleConfirmInvoiceFromNote(options: InvoiceCreateOptions) {
+    if (!note) return
+    const invoice = await createInvoiceFromDeliveryNote(note.id, options)
+    navigate(`/invoices/${invoice.id}`)
+  }
+
   async function handleNotesBlur() {
     if (!note || notes === (note.notes ?? '')) return
     try {
@@ -148,12 +175,29 @@ export default function DeliveryNoteEdit() {
         <div>
           <h1 className="text-2xl font-medium text-ink">
             {t('deliveryNoteEdit.title', { number: note.note_number })}
+            {note.delivery_type === 'kommission' && (
+              <span className="ml-2 align-middle rounded-full bg-card px-2 py-0.5 text-xs text-muted">
+                {t('deliveryNote.kommission')}
+              </span>
+            )}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {formatDate(note.note_date)} · {t(deliveryNoteStatusKey(note.status))}
+            {note.delivery_type === 'kommission' && !locked
+              ? ` · ${t('deliveryNoteEdit.kommissionOpen')}`
+              : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {!locked && (
+            <button
+              type="button"
+              onClick={handleOpenInvoiceFromNote}
+              className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90"
+            >
+              {t('deliveryNoteEdit.invoiceFromNote')}
+            </button>
+          )}
           {archive && (
             <button
               type="button"
@@ -277,6 +321,14 @@ export default function DeliveryNoteEdit() {
           />
         )}
       </label>
+
+      {invoiceDefaults && (
+        <InvoiceCreateDialog
+          defaults={invoiceDefaults}
+          onConfirm={handleConfirmInvoiceFromNote}
+          onClose={() => setInvoiceDefaults(null)}
+        />
+      )}
     </div>
   )
 }

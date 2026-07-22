@@ -125,12 +125,14 @@ export default function DeliveryEdit() {
     }
   }
 
-  async function handleCreateDeliveryNote() {
+  async function handleCreateDeliveryNote(
+    deliveryType: 'sale' | 'kommission' = 'sale',
+  ) {
     if (!id) return
     setDocBusy(true)
     setDocError(null)
     try {
-      const note = await createDeliveryNote(id)
+      const note = await createDeliveryNote(id, deliveryType)
       await loadDocs(id)
       await openPdf(note.pdf_path)
     } catch (err) {
@@ -355,10 +357,19 @@ export default function DeliveryEdit() {
             <button
               type="button"
               disabled={docBusy}
-              onClick={handleCreateDeliveryNote}
+              onClick={() => handleCreateDeliveryNote('sale')}
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
             >
               {t('deliveryEdit.createNoteOnly')}
+            </button>
+            <button
+              type="button"
+              disabled={docBusy}
+              title={t('deliveryEdit.createKommissionHint')}
+              onClick={() => handleCreateDeliveryNote('kommission')}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+            >
+              {t('deliveryEdit.createKommission')}
             </button>
             <button
               type="button"
@@ -385,6 +396,11 @@ export default function DeliveryEdit() {
               >
                 <span className="text-ink">
                   {t('deliveryEdit.deliveryNoteLabel', { number: n.note_number })}
+                  {n.delivery_type === 'kommission' && (
+                    <span className="ml-2 rounded-full bg-card px-2 py-0.5 text-xs text-muted">
+                      {t('deliveryNote.kommission')}
+                    </span>
+                  )}
                   <span className="ml-2 text-muted">
                     {formatDate(n.note_date)} ·{' '}
                     {t(deliveryNoteStatusKey(n.status))}

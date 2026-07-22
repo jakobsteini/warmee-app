@@ -160,6 +160,8 @@ export interface DeliveryNote {
   dealer_id: string
   note_number: string
   note_date: string
+  /** Verkauf ('sale', Standard) oder Kommissionslieferung ('kommission'). */
+  delivery_type: 'sale' | 'kommission'
   /** Eingefrorene Versandart aus der Order (Snapshot); null bei Altbelegen/ohne Order. */
   shipping_method: string | null
   shipping_method_freitext: string | null

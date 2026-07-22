@@ -213,6 +213,7 @@ export const de = {
   'deliveryNote.status.draft': 'Entwurf',
   'deliveryNote.status.sent': 'Versendet',
   'deliveryNote.status.cancelled': 'Storniert',
+  'deliveryNote.kommission': 'Kommission',
 
   // ─── Offene Posten ───────────────────────────────────────────────────────
   'openPayments.title': 'Offene Posten',
@@ -577,6 +578,8 @@ export const de = {
   'deliveryEdit.documentsDescFallback': 'den Händler',
   'deliveryEdit.createNote': 'Lieferschein erstellen',
   'deliveryEdit.createNoteOnly': 'Nur Lieferschein',
+  'deliveryEdit.createKommission': 'Kommissions-Lieferschein',
+  'deliveryEdit.createKommissionHint': 'Offener Lieferschein für Kommissionsware — bleibt bearbeitbar, bis er fakturiert wird.',
   'deliveryEdit.createNoteAndInvoice': 'Lieferschein + Rechnung',
   'deliveryEdit.deleteItem': 'Entfernen',
   'deliveryEdit.deleteItemConfirm': 'Position „{name}" von der Lieferung entfernen? Bereits erzeugte Belege bleiben unverändert.',
@@ -607,6 +610,8 @@ export const de = {
   'deliveryNoteEdit.editError': 'Die Änderung konnte nicht gespeichert werden.',
   'deliveryNoteEdit.lockedSent': 'Dieser Lieferschein ist versendet — nur noch ansehen oder stornieren.',
   'deliveryNoteEdit.lockedCancelled': 'Dieser Lieferschein ist storniert.',
+  'deliveryNoteEdit.invoiceFromNote': 'Rechnung aus Lieferschein',
+  'deliveryNoteEdit.kommissionOpen': 'Kommission offen',
 
   // ─── Orders ──────────────────────────────────────────────────────────────
   'orders.title': 'Orders',
@@ -1305,6 +1310,7 @@ export const en: Record<TranslationKey, string> = {
   'deliveryNote.status.draft': 'Draft',
   'deliveryNote.status.sent': 'Sent',
   'deliveryNote.status.cancelled': 'Cancelled',
+  'deliveryNote.kommission': 'Consignment',
 
   'openPayments.title': 'Open payments',
   'openPayments.subtitle': 'All sent invoices that are not yet paid. An invoice is overdue once its due date has passed.',
@@ -1665,6 +1671,8 @@ export const en: Record<TranslationKey, string> = {
   'deliveryEdit.documentsDescFallback': 'the dealer',
   'deliveryEdit.createNote': 'Create delivery note',
   'deliveryEdit.createNoteOnly': 'Delivery note only',
+  'deliveryEdit.createKommission': 'Consignment note',
+  'deliveryEdit.createKommissionHint': 'Open delivery note for consignment goods — stays editable until invoiced.',
   'deliveryEdit.createNoteAndInvoice': 'Delivery note + invoice',
   'deliveryEdit.deleteItem': 'Remove',
   'deliveryEdit.deleteItemConfirm': 'Remove item “{name}” from the delivery? Documents already generated stay unchanged.',
@@ -1694,6 +1702,8 @@ export const en: Record<TranslationKey, string> = {
   'deliveryNoteEdit.editError': 'The change could not be saved.',
   'deliveryNoteEdit.lockedSent': 'This delivery note has been sent — view or cancel only.',
   'deliveryNoteEdit.lockedCancelled': 'This delivery note has been cancelled.',
+  'deliveryNoteEdit.invoiceFromNote': 'Invoice from delivery note',
+  'deliveryNoteEdit.kommissionOpen': 'Consignment open',
 
   // ─── Orders ──────────────────────────────────────────────────────────────
   'orders.title': 'Orders',

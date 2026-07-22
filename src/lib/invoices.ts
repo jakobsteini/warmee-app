@@ -359,6 +359,7 @@ function safeName(number: string): string {
  */
 export async function createDeliveryNote(
   deliveryId: string,
+  deliveryType: 'sale' | 'kommission' = 'sale',
 ): Promise<DeliveryNote> {
   const org_id = await getMyOrgId()
   const created_by = await getMyUserId()
@@ -386,6 +387,7 @@ export async function createDeliveryNote(
       delivery_id: deliveryId,
       dealer_id: ctx.dealer_id,
       note_number: number as string,
+      delivery_type: deliveryType,
       shipping_method: ctx.orderShipping?.method ?? null,
       shipping_method_freitext: ctx.orderShipping?.freitext ?? null,
       created_by,
@@ -688,9 +690,27 @@ export interface InvoiceCreateOptions extends InvoiceTermOverrides {
   frachtkosten?: number
 }
 
-export async function createInvoice(
+/** Rechnungs-Quellposition (Netto-Einzelpreis = Großhandelspreis). */
+interface InvoiceSourceItem {
+  product_id: string | null
+  description: string
+  color: string | null
+  size: string | null
+  quantity: number
+  wholesale_price: number
+}
+
+/**
+ * Interner Kern der Rechnungserzeugung. Dealer/Steuer/Konditionen/Versand kommen
+ * aus der Lieferung (loadDeliveryContext); die POSITIONEN kommen entweder aus der
+ * Lieferung (Standard) oder aus einem `itemsOverride` — so kann die Kommissions-
+ * Rechnung aus den (bereinigten) Lieferschein-Positionen erzeugt werden (S6a,
+ * Retour-Variante 1), ohne die bewährte Standard-Erzeugung zu verändern.
+ */
+async function createInvoiceInternal(
   deliveryId: string,
-  options?: InvoiceCreateOptions,
+  options: InvoiceCreateOptions | undefined,
+  itemsOverride: InvoiceSourceItem[] | undefined,
 ): Promise<Invoice> {
   const org_id = await getMyOrgId()
   const created_by = await getMyUserId()
@@ -709,11 +729,12 @@ export async function createInvoice(
   }
 
   const ctx = await loadDeliveryContext(deliveryId)
-  if (ctx.items.length === 0) {
+  const items = itemsOverride ?? ctx.items
+  if (items.length === 0) {
     throw new Error('Die Lieferung enthält keine Positionen.')
   }
 
-  const subtotal = ctx.items.reduce(
+  const subtotal = items.reduce(
     (s, i) => s + i.quantity * i.wholesale_price,
     0,
   )
@@ -766,7 +787,7 @@ export async function createInvoice(
   )
   const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
 
-  const itemRows = ctx.items.map((i) => ({
+  const itemRows = items.map((i) => ({
     invoice_id: invoice.id,
     product_id: i.product_id,
     description: i.description,
@@ -795,7 +816,7 @@ export async function createInvoice(
     date: invoice.invoice_date,
     dueDate,
     dealer: ctx.dealer,
-    items: ctx.items.map((i) => ({
+    items: items.map((i) => ({
       description: i.description,
       color: i.color,
       size: i.size,
@@ -834,6 +855,74 @@ export async function createInvoice(
     .single()
   if (upErr) throw upErr
   return updated as Invoice
+}
+
+/**
+ * Rechnung aus einer Lieferung erzeugen (Standardweg): Positionen = die
+ * Lieferpositionen. `options` (S3) überschreibt Konditionen/Fracht. Verhalten
+ * unverändert zum bisherigen createInvoice (itemsOverride = undefined).
+ */
+export async function createInvoice(
+  deliveryId: string,
+  options?: InvoiceCreateOptions,
+): Promise<Invoice> {
+  return createInvoiceInternal(deliveryId, options, undefined)
+}
+
+/**
+ * Rechnung aus einem LIEFERSCHEIN erzeugen (S6a, Kommission-Retour Variante 1):
+ * die Positionen kommen aus den (ggf. im Entwurf bereinigten) Lieferschein-
+ * Positionen — „Rechnung aus dem bereinigten LS". Netto-Einzelpreis = aktueller
+ * Großhandelspreis des Produkts. Danach wird die Rechnung wie üblich versendet
+ * (setInvoiceStatus) — das sperrt den Kommissions-LS und archiviert beide.
+ */
+export async function createInvoiceFromDeliveryNote(
+  noteId: string,
+  options?: InvoiceCreateOptions,
+): Promise<Invoice> {
+  const { data: note, error: noteErr } = await supabase
+    .from('delivery_notes')
+    .select('delivery_id, status')
+    .eq('id', noteId)
+    .single()
+  if (noteErr) throw noteErr
+  if (note.status === 'cancelled') {
+    throw new Error('Der Lieferschein ist storniert.')
+  }
+  if (!note.delivery_id) {
+    throw new Error('Der Lieferschein hat keine zugeordnete Lieferung.')
+  }
+
+  const { data: rows, error: itErr } = await supabase
+    .from('delivery_note_items')
+    .select('product_id, description, color, size, quantity, product:products(wholesale_price)')
+    .eq('delivery_note_id', noteId)
+    .order('created_at', { ascending: true })
+  if (itErr) throw itErr
+
+  const items: InvoiceSourceItem[] = (rows ?? []).map((r) => {
+    const row = r as unknown as {
+      product_id: string | null
+      description: string
+      color: string | null
+      size: string | null
+      quantity: number
+      product: { wholesale_price: number | string | null } | null
+    }
+    return {
+      product_id: row.product_id,
+      description: row.description,
+      color: row.color,
+      size: row.size,
+      quantity: row.quantity ?? 0,
+      wholesale_price: num(row.product?.wholesale_price ?? 0),
+    }
+  })
+  if (items.length === 0) {
+    throw new Error('Der Lieferschein enthält keine Positionen.')
+  }
+
+  return createInvoiceInternal(note.delivery_id as string, options, items)
 }
 
 /**
