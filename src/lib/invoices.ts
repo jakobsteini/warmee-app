@@ -23,14 +23,15 @@ import { shippingDisplay } from './shipping'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
 import { listOssRates, ossRateMap } from './ossRates'
 import type { CustomerGroup } from '../types/dealer'
-import type {
-  DeliveryNote,
-  Dealerish,
-  FreeInvoiceInput,
-  Invoice,
-  InvoiceListRow,
-  InvoiceStatus,
-  InvoiceWithItems,
+import {
+  isInvoiceLocked,
+  type DeliveryNote,
+  type Dealerish,
+  type FreeInvoiceInput,
+  type Invoice,
+  type InvoiceListRow,
+  type InvoiceStatus,
+  type InvoiceWithItems,
 } from '../types/invoice'
 
 const BUCKET = 'invoices'
@@ -790,6 +791,21 @@ export async function setInvoiceStatus(
   id: string,
   status: Extract<InvoiceStatus, 'sent'>,
 ): Promise<Invoice> {
+  // Nur ein Entwurf kann versendet werden. Ab Versand ist die Rechnung
+  // eingefroren (read-only) — Korrektur nur über Storno + Neubeleg. Sichtbarer
+  // Fehler statt stiller Doppel-Versendung.
+  const { data: cur, error: curErr } = await supabase
+    .from('invoices')
+    .select('status, delivery_id')
+    .eq('id', id)
+    .single()
+  if (curErr) throw curErr
+  if (isInvoiceLocked(cur.status)) {
+    throw new Error(
+      'Diese Rechnung ist bereits versendet oder storniert und kann nicht erneut versendet werden.',
+    )
+  }
+
   const { data, error } = await supabase
     .from('invoices')
     .update({ status })
@@ -797,6 +813,21 @@ export async function setInvoiceStatus(
     .select()
     .single()
   if (error) throw error
+
+  // Cross-Doc-Sperre: sobald die Rechnung versendet ist, wird der zugehörige
+  // Lieferschein derselben Lieferung ebenfalls gesperrt (nur offene Entwürfe
+  // kippen — versendete/stornierte bleiben unberührt). Idempotent über
+  // .eq('status','draft').
+  if (cur.delivery_id) {
+    const sent_by = await getMyUserId()
+    const { error: lockErr } = await supabase
+      .from('delivery_notes')
+      .update({ status: 'sent', sent_at: new Date().toISOString(), sent_by })
+      .eq('delivery_id', cur.delivery_id)
+      .eq('status', 'draft')
+    if (lockErr) throw lockErr
+  }
+
   return data as Invoice
 }
 
@@ -811,6 +842,21 @@ export async function markInvoicePaid(
   paidAt: string,
   paidAmount: number,
 ): Promise<Invoice> {
+  // Zahlungserfassung ist ein legitimer Folgeschritt NACH dem Versand — daher
+  // KEINE isInvoiceLocked-Sperre (die würde „versendet" blocken). Nur eine
+  // stornierte Rechnung darf nicht als bezahlt markiert werden.
+  const { data: cur, error: curErr } = await supabase
+    .from('invoices')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (curErr) throw curErr
+  if (cur.status === 'cancelled') {
+    throw new Error(
+      'Eine stornierte Rechnung kann nicht als bezahlt markiert werden.',
+    )
+  }
+
   const { data, error } = await supabase
     .from('invoices')
     .update({ status: 'paid', paid_at: paidAt, paid_amount: paidAmount })
@@ -827,6 +873,19 @@ export async function markInvoicePaid(
  * werden.
  */
 export async function cancelInvoice(id: string): Promise<Invoice> {
+  // Storno ist der Ausweg aus jedem aktiven Zustand (Entwurf/Versendet/Bezahlt)
+  // — die Nummer bleibt erhalten (kein Löschen). Nur ein bereits stornierter
+  // Beleg wird nicht ein zweites Mal storniert.
+  const { data: cur, error: curErr } = await supabase
+    .from('invoices')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (curErr) throw curErr
+  if (cur.status === 'cancelled') {
+    throw new Error('Diese Rechnung ist bereits storniert.')
+  }
+
   const { data, error } = await supabase
     .from('invoices')
     .update({ status: 'cancelled' })
@@ -835,4 +894,39 @@ export async function cancelInvoice(id: string): Promise<Invoice> {
     .single()
   if (error) throw error
   return data as Invoice
+}
+
+/**
+ * Lieferschein stornieren (Storno statt Löschen). Die Nummer bleibt erhalten;
+ * Metadaten (Zeitpunkt/Benutzer/Grund) werden festgehalten. Ein bereits
+ * stornierter Lieferschein wird nicht erneut storniert. Der Grund ist optional.
+ */
+export async function cancelDeliveryNote(
+  id: string,
+  reason: string | null,
+): Promise<DeliveryNote> {
+  const cancelled_by = await getMyUserId()
+  const { data: cur, error: curErr } = await supabase
+    .from('delivery_notes')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (curErr) throw curErr
+  if (cur.status === 'cancelled') {
+    throw new Error('Dieser Lieferschein ist bereits storniert.')
+  }
+
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      cancelled_by,
+      cancelled_reason: reason,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as DeliveryNote
 }

@@ -18,6 +18,20 @@ export function invoiceStatusLabel(status: string): string {
   return INVOICE_STATUS_LABELS[status as InvoiceStatus] ?? status
 }
 
+/**
+ * Beleg-Sperre der Rechnung: nur im Status „Entwurf" (draft) ist der Beleg
+ * offen. Ab „Versendet" (sent) ist die Rechnung eingefroren (read-only) und kann
+ * nur noch storniert werden; „Bezahlt"/„Storniert" sind ebenfalls gesperrt.
+ * Zentrale Regel (direkte Kopie des isSupplierOrderLocked-Musters), damit spätere
+ * Editier-/Statuspfade sie nicht neu herleiten — unbekannter Status → gesperrt
+ * (sicher). Ausnahme: die Zahlungserfassung (markInvoicePaid) ist ein legitimer
+ * Folgeschritt NACH dem Versand und nutzt daher NICHT dieses Prädikat, sondern
+ * blockt nur bei stornierten Rechnungen.
+ */
+export function isInvoiceLocked(status: string): boolean {
+  return status !== 'draft'
+}
+
 /** Eine Rechnung (snake_case wie in der DB). */
 export interface Invoice {
   id: string
@@ -106,6 +120,36 @@ export interface FreeInvoiceInput {
   notes: string | null
 }
 
+/**
+ * Lieferschein-Status (englisch gespeichert, wie in der DB-Check-Constraint).
+ * Flow: Entwurf → Versendet → Storniert. Ein versendeter Lieferschein ist
+ * unveränderlich (read-only ab Versand) und kann nur noch storniert werden. Wird
+ * auch quer gesperrt, sobald aus der zugehörigen Lieferung eine Rechnung erzeugt
+ * UND versendet wurde.
+ */
+export const DELIVERY_NOTE_STATUSES = ['draft', 'sent', 'cancelled'] as const
+export type DeliveryNoteStatus = (typeof DELIVERY_NOTE_STATUSES)[number]
+
+/** Deutsche UI-Labels für die Lieferschein-Status. */
+export const DELIVERY_NOTE_STATUS_LABELS: Record<DeliveryNoteStatus, string> = {
+  draft: 'Entwurf',
+  sent: 'Versendet',
+  cancelled: 'Storniert',
+}
+
+export function deliveryNoteStatusLabel(status: string): string {
+  return DELIVERY_NOTE_STATUS_LABELS[status as DeliveryNoteStatus] ?? status
+}
+
+/**
+ * Beleg-Sperre des Lieferscheins: nur im Status „Entwurf" (draft) ist der Beleg
+ * offen. Ab „Versendet" (sent) eingefroren — read-only, nur noch Storno. Direkte
+ * Kopie des isSupplierOrderLocked-Musters; unbekannter Status → gesperrt (sicher).
+ */
+export function isDeliveryNoteLocked(status: string): boolean {
+  return status !== 'draft'
+}
+
 /** Ein Lieferschein-Kopf (snake_case wie in der DB). */
 export interface DeliveryNote {
   id: string
@@ -119,6 +163,16 @@ export interface DeliveryNote {
   shipping_method_freitext: string | null
   notes: string | null
   pdf_path: string | null
+  /** Beleg-Status (Entwurf → Versendet → Storniert). Sperr-Trigger = 'sent'. */
+  status: DeliveryNoteStatus
+  /** Versandzeitpunkt; null solange Entwurf. */
+  sent_at: string | null
+  /** Wer versendet hat; null solange Entwurf. */
+  sent_by: string | null
+  /** Storno-Metadaten (Storno statt Löschen); null bei aktiven Belegen. */
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancelled_reason: string | null
   created_by: string | null
   created_at: string | null
   updated_at: string | null

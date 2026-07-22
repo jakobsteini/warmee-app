@@ -11,6 +11,7 @@ import {
   type DeliveryDetail,
 } from '../lib/deliveries'
 import {
+  cancelDeliveryNote,
   createDeliveryNote,
   createInvoice,
   listDeliveryDocuments,
@@ -37,6 +38,11 @@ function deliveryStatusKey(status: string): TranslationKey {
 /** Rechnungs-Status → Übersetzungs-Key. */
 function invoiceStatusKey(status: string): TranslationKey {
   return `invoice.status.${status}` as TranslationKey
+}
+
+/** Lieferschein-Status → Übersetzungs-Key. */
+function deliveryNoteStatusKey(status: string): TranslationKey {
+  return `deliveryNote.status.${status}` as TranslationKey
 }
 
 /** Datum (ISO) als deutsches Kurzdatum, oder „—". */
@@ -139,6 +145,27 @@ export default function DeliveryEdit() {
     } catch (err) {
       setDocError(
         err instanceof Error ? err.message : t('invoices.createError'),
+      )
+    } finally {
+      setDocBusy(false)
+    }
+  }
+
+  async function handleCancelNote(noteId: string, number: string) {
+    const reason = window.prompt(
+      t('deliveryEdit.cancelNotePrompt', { number }),
+    )
+    // Abbruch im Dialog (null) → nichts tun; leere Eingabe = Storno ohne Grund.
+    if (reason === null) return
+    if (!id) return
+    setDocBusy(true)
+    setDocError(null)
+    try {
+      await cancelDeliveryNote(noteId, reason.trim() || null)
+      await loadDocs(id)
+    } catch (err) {
+      setDocError(
+        err instanceof Error ? err.message : t('deliveryEdit.cancelNoteError'),
       )
     } finally {
       setDocBusy(false)
@@ -328,15 +355,30 @@ export default function DeliveryEdit() {
               >
                 <span className="text-ink">
                   {t('deliveryEdit.deliveryNoteLabel', { number: n.note_number })}
-                  <span className="ml-2 text-muted">{formatDate(n.note_date)}</span>
+                  <span className="ml-2 text-muted">
+                    {formatDate(n.note_date)} ·{' '}
+                    {t(deliveryNoteStatusKey(n.status))}
+                  </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => openPdf(n.pdf_path)}
-                  className="text-muted transition-colors hover:text-ink"
-                >
-                  {t('common.openPdf')}
-                </button>
+                <span className="flex items-center gap-3">
+                  {n.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      disabled={docBusy}
+                      onClick={() => handleCancelNote(n.id, n.note_number)}
+                      className="text-muted transition-colors hover:text-ink disabled:opacity-50"
+                    >
+                      {t('deliveryEdit.cancelNote')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openPdf(n.pdf_path)}
+                    className="text-muted transition-colors hover:text-ink"
+                  >
+                    {t('common.openPdf')}
+                  </button>
+                </span>
               </li>
             ))}
             {invoices.map((inv) => (
