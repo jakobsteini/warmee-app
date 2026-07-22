@@ -1,6 +1,9 @@
 import { supabase } from './supabase'
 import { getMyOrgId, getMyUserId } from './org'
-import { recordedReturnsByInvoice } from './returns'
+import {
+  recordedReturnsByInvoice,
+  returnedQuantitiesByDeliveryNote,
+} from './returns'
 import { openAfterReturns } from './returnsCalc'
 import type { BelegItem } from './pdf'
 import {
@@ -895,13 +898,21 @@ export async function createInvoiceFromDeliveryNote(
 
   const { data: rows, error: itErr } = await supabase
     .from('delivery_note_items')
-    .select('product_id, description, color, size, quantity, product:products(wholesale_price)')
+    .select('id, product_id, description, color, size, quantity, product:products(wholesale_price)')
     .eq('delivery_note_id', noteId)
     .order('created_at', { ascending: true })
   if (itErr) throw itErr
 
-  const items: InvoiceSourceItem[] = (rows ?? []).map((r) => {
+  // LS-verankerte Rücksendungen (Kommission Variante 2) mindern die zu
+  // fakturierende Menge je Position — „Rechnung nur über die verkauften Artikel".
+  // Bei Variante 1 (LS-Positionen direkt reduziert) gibt es keine LS-Retouren →
+  // dann ändert das nichts. Beide Wege fakturieren so die BEHALTENE Menge.
+  const returned = await returnedQuantitiesByDeliveryNote(noteId)
+
+  const items: InvoiceSourceItem[] = []
+  for (const r of rows ?? []) {
     const row = r as unknown as {
+      id: string
       product_id: string | null
       description: string
       color: string | null
@@ -909,17 +920,21 @@ export async function createInvoiceFromDeliveryNote(
       quantity: number
       product: { wholesale_price: number | string | null } | null
     }
-    return {
+    const kept = (row.quantity ?? 0) - (returned.get(row.id) ?? 0)
+    if (kept <= 0) continue
+    items.push({
       product_id: row.product_id,
       description: row.description,
       color: row.color,
       size: row.size,
-      quantity: row.quantity ?? 0,
+      quantity: kept,
       wholesale_price: num(row.product?.wholesale_price ?? 0),
-    }
-  })
+    })
+  }
   if (items.length === 0) {
-    throw new Error('Der Lieferschein enthält keine Positionen.')
+    throw new Error(
+      'Nach Abzug der Rücksendungen bleiben keine zu fakturierenden Positionen.',
+    )
   }
 
   return createInvoiceInternal(note.delivery_id as string, options, items)

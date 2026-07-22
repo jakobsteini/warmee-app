@@ -69,10 +69,14 @@ async function loadCommissionData(): Promise<CommissionData> {
       .not('paid_at', 'is', null)
       .neq('status', 'cancelled'),
     // Recorded Retouren mit der Lieferung der verankerten Rechnung (→ Saison).
+    // NUR rechnungs-verankerte Retouren zählen zur Provision — LS-verankerte
+    // Kommissions-Rücksendungen (invoice_id null, Betrag 0) sind keine
+    // Geld-Gutschrift und bleiben außen vor.
     supabase
       .from('returns')
       .select('dealer_id, total_amount, return_date, created_at, status, invoice:invoices(delivery_id)')
-      .eq('status', 'recorded'),
+      .eq('status', 'recorded')
+      .not('invoice_id', 'is', null),
   ])
 
   if (ordersRes.error) throw ordersRes.error

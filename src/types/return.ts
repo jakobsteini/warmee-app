@@ -6,8 +6,10 @@ export type { ReturnStatus }
 export interface Return {
   id: string
   org_id: string
-  /** Verankerung an der Rechnung. */
-  invoice_id: string
+  /** Verankerung an der Rechnung (XOR mit delivery_note_id). Null bei LS-Retoure. */
+  invoice_id: string | null
+  /** Verankerung am Lieferschein (Kommission, nie fakturiert). Null bei Rechnungs-Retoure. */
+  delivery_note_id: string | null
   dealer_id: string
   return_date: string
   reason: string | null
@@ -35,7 +37,10 @@ export interface Return {
 export interface ReturnItem {
   id: string
   return_id: string
-  invoice_item_id: string
+  /** Herkunft = Rechnungsposition (Rechnungs-Retoure) ODER … */
+  invoice_item_id: string | null
+  /** … Lieferschein-Position (LS-Retoure). Genau eine der beiden ist gesetzt. */
+  delivery_note_item_id: string | null
   product_id: string | null
   color: string | null
   size: string | null
@@ -85,4 +90,42 @@ export interface CreateReturnInput {
   return_date?: string
   reason?: string | null
   lines: CreateReturnLine[]
+}
+
+/**
+ * Eine Lieferschein-Position mit noch retournierbarer Menge (LS-Retoure,
+ * Kommission Variante 2). Mengen ohne Beträge — die Ware wurde nie fakturiert.
+ */
+export interface DeliveryNoteReturnableLine {
+  delivery_note_item_id: string
+  description: string
+  product_id: string | null
+  color: string | null
+  size: string | null
+  /** Gelieferte Menge laut Lieferschein-Position. */
+  delivered_quantity: number
+  /** Bereits (recorded) zurückgesendet. */
+  returned_quantity: number
+  /** Noch retournierbar. */
+  remaining_quantity: number
+}
+
+/** Kontext für die LS-Retouren-Erfassung. */
+export interface DeliveryNoteReturnContext {
+  lines: DeliveryNoteReturnableLine[]
+  returns: ReturnWithItems[]
+}
+
+/** Eine zu erfassende LS-Retouren-Zeile. */
+export interface CreateDeliveryNoteReturnLine {
+  delivery_note_item_id: string
+  quantity: number
+}
+
+/** Eingaben zum Erfassen einer LS-Retoure (Kommission Variante 2). */
+export interface CreateDeliveryNoteReturnInput {
+  delivery_note_id: string
+  return_date?: string
+  reason?: string | null
+  lines: CreateDeliveryNoteReturnLine[]
 }

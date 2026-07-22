@@ -1075,6 +1075,13 @@ export const de = {
   'returns.cancelConfirm': 'Retoure stornieren',
   'returns.cancelledWithReason': 'Storniert: {reason}',
   'returns.loadError': 'Retouren konnten nicht geladen werden.',
+  'lsReturns.record': 'Rücksendung erfassen',
+  'lsReturns.dialogTitle': 'Rücksendung erfassen',
+  'lsReturns.forNote': 'Lieferschein {number}',
+  'lsReturns.colReturn': 'Rücksendung',
+  'lsReturns.confirm': 'Rücksendung erfassen',
+  'lsReturns.sectionTitle': 'Rücksendungen (Kommission)',
+  'lsReturns.lineSummary': '{date} · {qty} Stück zurück',
 
   // ─── Lager (Bestand) ─────────────────────────────────────────────────────
   'inventory.title': 'Lager',
@@ -2165,6 +2172,13 @@ export const en: Record<TranslationKey, string> = {
   'returns.cancelConfirm': 'Cancel return',
   'returns.cancelledWithReason': 'Cancelled: {reason}',
   'returns.loadError': 'Could not load returns.',
+  'lsReturns.record': 'Record return',
+  'lsReturns.dialogTitle': 'Record return',
+  'lsReturns.forNote': 'Delivery note {number}',
+  'lsReturns.colReturn': 'Return',
+  'lsReturns.confirm': 'Record return',
+  'lsReturns.sectionTitle': 'Returns (consignment)',
+  'lsReturns.lineSummary': '{date} · {qty} pcs returned',
 
   // ─── Inventory (stock) ───────────────────────────────────────────────────
   'inventory.title': 'Inventory',

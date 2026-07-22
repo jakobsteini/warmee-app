@@ -18,7 +18,17 @@ import {
   type DeliveryNoteWithItems,
 } from '../types/invoice'
 import { deliveryNoteTotalQuantity } from '../lib/deliveryNoteCalc'
+import {
+  loadDeliveryNoteReturnContext,
+  createDeliveryNoteReturn,
+  cancelReturn,
+} from '../lib/returns'
+import type { DeliveryNoteReturnContext, ReturnWithItems } from '../types/return'
 import InvoiceCreateDialog from '../components/InvoiceCreateDialog'
+import {
+  DeliveryNoteReturnCaptureDialog,
+  CancelReturnDialog,
+} from '../components/ReturnDialog'
 import type { FrozenInvoiceTerms } from '../lib/paymentTerms'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
@@ -47,6 +57,9 @@ export default function DeliveryNoteEdit() {
   const [archive, setArchive] = useState<BelegArchivEntry | null>(null)
   const [invoiceDefaults, setInvoiceDefaults] =
     useState<FrozenInvoiceTerms | null>(null)
+  const [returnCtx, setReturnCtx] = useState<DeliveryNoteReturnContext | null>(null)
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<ReturnWithItems | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,19 +67,44 @@ export default function DeliveryNoteEdit() {
     if (!id) return
     setLoading(true)
     try {
-      const [n, arch] = await Promise.all([
+      const [n, arch, rctx] = await Promise.all([
         getDeliveryNote(id),
         getBelegArchiv('delivery_note', id).catch(() => null),
+        loadDeliveryNoteReturnContext(id).catch(() => null),
       ])
       setNote(n)
       setNotes(n.notes ?? '')
       setArchive(arch)
+      setReturnCtx(rctx)
       setError(null)
     } catch {
       setError(t('deliveryNoteEdit.loadError'))
     } finally {
       setLoading(false)
     }
+  }
+
+  async function reloadReturns() {
+    if (!id) return
+    setReturnCtx(await loadDeliveryNoteReturnContext(id).catch(() => null))
+  }
+
+  async function handleCreateReturn(payload: {
+    lines: { delivery_note_item_id: string; quantity: number }[]
+    return_date: string
+    reason: string | null
+  }) {
+    if (!id) return
+    await createDeliveryNoteReturn({ delivery_note_id: id, ...payload })
+    await reloadReturns()
+    setReturnDialogOpen(false)
+  }
+
+  async function handleCancelReturn(reason: string) {
+    if (!cancelTarget) return
+    await cancelReturn(cancelTarget.id, reason)
+    await reloadReturns()
+    setCancelTarget(null)
   }
 
   useEffect(() => {
@@ -189,6 +227,15 @@ export default function DeliveryNoteEdit() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {!locked && (
+            <button
+              type="button"
+              onClick={() => setReturnDialogOpen(true)}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+            >
+              {t('lsReturns.record')}
+            </button>
+          )}
           {!locked && (
             <button
               type="button"
@@ -322,11 +369,68 @@ export default function DeliveryNoteEdit() {
         )}
       </label>
 
+      {returnCtx && returnCtx.returns.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-medium text-ink">
+            {t('lsReturns.sectionTitle')}
+          </h2>
+          <ul className="divide-y divide-line rounded-md border-[0.5px] border-line">
+            {returnCtx.returns.map((r) => {
+              const cancelled = r.status === 'cancelled'
+              const qty = r.return_items.reduce((s, i) => s + i.quantity, 0)
+              return (
+                <li
+                  key={r.id}
+                  className={`flex items-center justify-between gap-3 px-4 py-2.5 text-sm ${
+                    cancelled ? 'text-muted' : 'text-ink'
+                  }`}
+                >
+                  <span>
+                    {t('lsReturns.lineSummary', {
+                      date: formatDate(r.return_date),
+                      qty,
+                    })}
+                    {cancelled && ` · ${t('returns.status.cancelled')}`}
+                    {r.reason ? ` · ${r.reason}` : ''}
+                  </span>
+                  {!cancelled && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelTarget(r)}
+                      className="text-muted transition-colors hover:text-red-700"
+                    >
+                      {t('returns.cancel')}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
       {invoiceDefaults && (
         <InvoiceCreateDialog
           defaults={invoiceDefaults}
           onConfirm={handleConfirmInvoiceFromNote}
           onClose={() => setInvoiceDefaults(null)}
+        />
+      )}
+
+      {returnDialogOpen && returnCtx && (
+        <DeliveryNoteReturnCaptureDialog
+          noteNumber={note.note_number}
+          lines={returnCtx.lines}
+          onConfirm={handleCreateReturn}
+          onClose={() => setReturnDialogOpen(false)}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelReturnDialog
+          amount={0}
+          onConfirm={handleCancelReturn}
+          onClose={() => setCancelTarget(null)}
         />
       )}
     </div>

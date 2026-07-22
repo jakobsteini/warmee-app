@@ -2,7 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { formatEUR } from '../lib/money'
 import { returnTotal, canReturnQuantity } from '../lib/returnsCalc'
 import { VAT_RATE_PERCENT } from '../lib/tax'
-import type { ReturnableLine, CreateReturnLine } from '../types/return'
+import type {
+  ReturnableLine,
+  CreateReturnLine,
+  DeliveryNoteReturnableLine,
+  CreateDeliveryNoteReturnLine,
+} from '../types/return'
 import { useT } from '../i18n'
 
 const inputClass =
@@ -225,6 +230,176 @@ export function ReturnCaptureDialog({
               className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {busy ? t('common.saving') : t('returns.confirm')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface CreateLsReturnPayload {
+  lines: CreateDeliveryNoteReturnLine[]
+  return_date: string
+  reason: string | null
+}
+
+/**
+ * Lieferschein-Rücksendung erfassen (Kommission Variante 2): je LS-Position mit
+ * Restmenge eine Rücksende-Menge eingeben (harte Prüfung über returnsCalc), plus
+ * Datum und optionalen Grund. REINE MENGEN — keine Beträge (Ware nie fakturiert).
+ * Der Lieferschein bleibt unverändert.
+ */
+export function DeliveryNoteReturnCaptureDialog({
+  noteNumber,
+  lines,
+  onConfirm,
+  onClose,
+}: {
+  noteNumber: string
+  lines: DeliveryNoteReturnableLine[]
+  onConfirm: (payload: CreateLsReturnPayload) => Promise<void>
+  onClose: () => void
+}) {
+  const t = useT()
+  const [qty, setQty] = useState<Record<string, string>>({})
+  const [returnDate, setReturnDate] = useState(todayIso())
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    const out: CreateDeliveryNoteReturnLine[] = []
+    for (const l of lines) {
+      const raw = (qty[l.delivery_note_item_id] ?? '').trim()
+      if (raw === '') continue
+      const n = Number(raw)
+      if (!canReturnQuantity(l.remaining_quantity, n)) {
+        setError(
+          t('returns.qtyExceeds', {
+            label: l.description,
+            remaining: l.remaining_quantity,
+          }),
+        )
+        return
+      }
+      out.push({ delivery_note_item_id: l.delivery_note_item_id, quantity: n })
+    }
+    if (out.length === 0) {
+      setError(t('returns.selectAtLeastOne'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await onConfirm({ lines: out, return_date: returnDate, reason: reason.trim() || null })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('common.saveFailed'))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 px-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-cream p-6 shadow-xl">
+        <h2 className="text-lg font-medium text-ink">{t('lsReturns.dialogTitle')}</h2>
+        <p className="mb-4 text-sm text-muted">
+          {t('lsReturns.forNote', { number: noteNumber })}
+        </p>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="overflow-x-auto rounded-md border-[0.5px] border-line">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-card text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-medium">{t('common.article')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.color')}</th>
+                  <th className="px-3 py-2 font-medium">{t('common.size')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('returns.colRemaining')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('lsReturns.colReturn')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l) => {
+                  const returnable = l.remaining_quantity > 0
+                  return (
+                    <tr
+                      key={l.delivery_note_item_id}
+                      className={`border-t-[0.5px] border-line ${
+                        returnable ? 'bg-surface text-ink' : 'bg-card text-muted'
+                      }`}
+                    >
+                      <td className="px-3 py-2 font-medium">{l.description}</td>
+                      <td className="px-3 py-2">{l.color ?? '—'}</td>
+                      <td className="px-3 py-2">{l.size ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {returnable ? (
+                          l.remaining_quantity
+                        ) : (
+                          <span className="text-xs">{t('returns.noneReturnable')}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {returnable && (
+                          <input
+                            type="number"
+                            min={1}
+                            max={l.remaining_quantity}
+                            step={1}
+                            value={qty[l.delivery_note_item_id] ?? ''}
+                            onChange={(e) =>
+                              setQty((q) => ({ ...q, [l.delivery_note_item_id]: e.target.value }))
+                            }
+                            className={`${inputClass} w-20 text-right`}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted">{t('returns.date')}</span>
+            <input
+              type="date"
+              value={returnDate}
+              max={todayIso()}
+              onChange={(e) => setReturnDate(e.target.value)}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted">{t('returns.reason')}</span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder={t('returns.reasonPlaceholder')}
+              className={`${inputClass} resize-none`}
+            />
+          </label>
+
+          {error && <p className="text-sm text-red-700">{error}</p>}
+
+          <div className="mt-1 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? t('common.saving') : t('lsReturns.confirm')}
             </button>
           </div>
         </form>

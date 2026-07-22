@@ -445,8 +445,10 @@ export default function DealerDetail() {
           <ul className="divide-y divide-line">
             {data.returns.map((r) => {
               const cancelled = r.status === 'cancelled'
-              const invNo =
-                invoiceNumberById.get(r.invoice_id) ?? r.invoice_id.slice(0, 8)
+              // LS-verankerte Kommissions-Rücksendung (keine Rechnung).
+              const invNo = r.invoice_id
+                ? (invoiceNumberById.get(r.invoice_id) ?? r.invoice_id.slice(0, 8))
+                : t('deliveryNote.kommission')
               return (
                 <li
                   key={r.id}

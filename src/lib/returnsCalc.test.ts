@@ -141,3 +141,20 @@ test('offener Rest (Modul 3): voll retourniert → 0 (wird ausgeblendet)', () =>
   const gross = returnTotal([{ quantity: 5, unit_price: '19.90' }]).gross // 119,40
   assert.equal(openAfterReturns('119.40', gross), 0)
 })
+
+// ─── S6b: LS-verankerte Retoure nutzt denselben Mengen-Kern ──────────────────
+// remainingReturnable ist key-agnostisch: der „invoice_item_id"-Schlüssel trägt
+// bei LS-Retouren die delivery_note_item_id. Restmengen rechnen identisch.
+test('remainingReturnable: generischer Schlüssel gilt auch für LS-Positionen', () => {
+  const lsItems: ReturnableItem[] = [
+    { id: 'dni-1', quantity: 8 },
+    { id: 'dni-2', quantity: 3 },
+  ]
+  const existing: ExistingReturn[] = [
+    { status: 'recorded', items: [{ invoice_item_id: 'dni-1', quantity: 5 }] },
+    { status: 'cancelled', items: [{ invoice_item_id: 'dni-2', quantity: 3 }] },
+  ]
+  const rem = remainingReturnable(lsItems, existing)
+  assert.equal(rem.get('dni-1'), 3) // 8 − 5 recorded
+  assert.equal(rem.get('dni-2'), 3) // Storno zählt nicht
+})
