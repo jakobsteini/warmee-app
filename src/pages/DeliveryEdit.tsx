@@ -373,6 +373,13 @@ export default function DeliveryEdit() {
                   )}
                   <button
                     type="button"
+                    onClick={() => navigate(`/delivery-notes/${n.id}`)}
+                    className="text-muted transition-colors hover:text-ink"
+                  >
+                    {t('common.open')}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => openPdf(n.pdf_path)}
                     className="text-muted transition-colors hover:text-ink"
                   >

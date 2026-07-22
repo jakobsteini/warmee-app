@@ -25,7 +25,9 @@ import { listOssRates, ossRateMap } from './ossRates'
 import type { CustomerGroup } from '../types/dealer'
 import {
   isInvoiceLocked,
+  isDeliveryNoteLocked,
   type DeliveryNote,
+  type DeliveryNoteWithItems,
   type Dealerish,
   type FreeInvoiceInput,
   type Invoice,
@@ -33,6 +35,7 @@ import {
   type InvoiceStatus,
   type InvoiceWithItems,
 } from '../types/invoice'
+import { belegItemsFromNoteItems } from './deliveryNoteCalc'
 
 const BUCKET = 'invoices'
 /** Gültigkeit der Signed-URLs für den PDF-Download (privater Bucket). */
@@ -385,6 +388,25 @@ export async function createDeliveryNote(
     .single()
   if (insErr) throw insErr
 
+  // Positionen EINFRIEREN (Snapshot, wie invoice_items): der Lieferschein wird
+  // damit unabhängig von den delivery_items der Lieferung und im Entwurf
+  // bereinigbar. Die Werte sind identisch zur bisherigen Live-Ableitung →
+  // zahlengleich.
+  const itemRows = ctx.items.map((i) => ({
+    delivery_note_id: note.id,
+    product_id: i.product_id,
+    description: i.description,
+    color: i.color,
+    size: i.size,
+    quantity: i.quantity,
+  }))
+  if (itemRows.length > 0) {
+    const { error: itErr } = await supabase
+      .from('delivery_note_items')
+      .insert(itemRows)
+    if (itErr) throw itErr
+  }
+
   const belegItems: BelegItem[] = ctx.items.map((i) => ({
     description: i.description,
     color: i.color,
@@ -413,6 +435,206 @@ export async function createDeliveryNote(
     .single()
   if (upErr) throw upErr
   return updated as DeliveryNote
+}
+
+/** Lieferschein inkl. eingefrorener Positionen + Händler (Detailansicht). */
+export async function getDeliveryNote(
+  id: string,
+): Promise<DeliveryNoteWithItems> {
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .select(
+      '*, dealer:dealers(name, contact_name, email, city, country), delivery_note_items(*)',
+    )
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  const note = data as unknown as DeliveryNoteWithItems
+  // Positionen stabil nach Anlage sortieren (wie beim Erzeugen).
+  note.delivery_note_items = [...(note.delivery_note_items ?? [])].sort((a, b) =>
+    (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+  )
+  return note
+}
+
+/** Kontext für die PDF-Neuerzeugung eines Lieferscheins (aus den Snapshots). */
+interface DeliveryNoteRegenContext {
+  note_number: string
+  note_date: string
+  dealer: Dealerish
+  dealerLanguage: string | null
+  seasonLabel: string | null
+  shipping_method: string | null
+  shipping_method_freitext: string | null
+  notes: string | null
+  items: { description: string; color: string | null; size: string | null; quantity: number }[]
+}
+
+async function loadDeliveryNoteRegenContext(
+  id: string,
+): Promise<DeliveryNoteRegenContext> {
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .select(
+      'note_number, note_date, shipping_method, shipping_method_freitext, notes, ' +
+        'dealer:dealers(name, contact_name, email, city, country, language), ' +
+        'delivery:deliveries(production_order:production_orders(season:seasons(label))), ' +
+        'delivery_note_items(description, color, size, quantity, created_at)',
+    )
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  const d = data as unknown as {
+    note_number: string
+    note_date: string
+    shipping_method: string | null
+    shipping_method_freitext: string | null
+    notes: string | null
+    dealer:
+      | (Dealerish & { language: string | null })
+      | null
+    delivery: { production_order: { season: { label: string } | null } | null } | null
+    delivery_note_items: {
+      description: string
+      color: string | null
+      size: string | null
+      quantity: number
+      created_at: string | null
+    }[]
+  }
+  const items = [...(d.delivery_note_items ?? [])].sort((a, b) =>
+    (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+  )
+  return {
+    note_number: d.note_number,
+    note_date: d.note_date,
+    dealer: {
+      name: d.dealer?.name ?? 'Unbekannt',
+      contact_name: d.dealer?.contact_name ?? null,
+      email: d.dealer?.email ?? null,
+      city: d.dealer?.city ?? null,
+      country: d.dealer?.country ?? null,
+    },
+    dealerLanguage: d.dealer?.language ?? null,
+    seasonLabel: d.delivery?.production_order?.season?.label ?? null,
+    shipping_method: d.shipping_method,
+    shipping_method_freitext: d.shipping_method_freitext,
+    notes: d.notes,
+    items: items.map((i) => ({
+      description: i.description,
+      color: i.color,
+      size: i.size,
+      quantity: i.quantity,
+    })),
+  }
+}
+
+/**
+ * Lieferschein-PDF aus den EINGEFRORENEN Positionen + Kopf-Snapshots neu bauen
+ * und im Storage (gleicher Pfad = Überschreiben) ablegen. Wird nach jeder
+ * Bereinigung im Entwurf aufgerufen, damit die PDF den aktuellen Stand zeigt.
+ */
+async function regenerateDeliveryNotePdf(id: string): Promise<void> {
+  const org_id = await getMyOrgId()
+  const ctx = await loadDeliveryNoteRegenContext(id)
+  const lang = pdfLang(ctx.dealerLanguage)
+  const shippingText =
+    ctx.shipping_method || ctx.shipping_method_freitext
+      ? shippingDisplay(ctx.shipping_method, ctx.shipping_method_freitext, lang)
+      : null
+
+  const { buildDeliveryNotePdf } = await import('./pdf')
+  const blob = buildDeliveryNotePdf({
+    labels: deliveryNotePdfLabels(lang),
+    number: ctx.note_number,
+    date: ctx.note_date,
+    dealer: ctx.dealer,
+    seasonLabel: ctx.seasonLabel,
+    shipping: shippingText,
+    items: belegItemsFromNoteItems(ctx.items),
+    notes: ctx.notes,
+  })
+  const path = await uploadPdf(
+    org_id,
+    `lieferschein-${safeName(ctx.note_number)}.pdf`,
+    blob,
+  )
+  const { error } = await supabase
+    .from('delivery_notes')
+    .update({ pdf_path: path })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Status des Eltern-Lieferscheins einer Position laden; wirft bei gesperrt. */
+async function assertDeliveryNoteDraft(noteId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .select('status')
+    .eq('id', noteId)
+    .single()
+  if (error) throw error
+  if (isDeliveryNoteLocked(data.status)) {
+    throw new Error(
+      'Der Lieferschein ist versendet oder storniert und kann nicht mehr geändert werden.',
+    )
+  }
+}
+
+/** Eine eingefrorene Lieferschein-Position im Entwurf löschen (Ware fehlt). */
+export async function deleteDeliveryNoteItem(itemId: string): Promise<void> {
+  const { data: item, error: itErr } = await supabase
+    .from('delivery_note_items')
+    .select('delivery_note_id')
+    .eq('id', itemId)
+    .single()
+  if (itErr) throw itErr
+  await assertDeliveryNoteDraft(item.delivery_note_id)
+
+  const { error } = await supabase
+    .from('delivery_note_items')
+    .delete()
+    .eq('id', itemId)
+  if (error) throw error
+  await regenerateDeliveryNotePdf(item.delivery_note_id)
+}
+
+/** Menge einer Lieferschein-Position im Entwurf ändern. */
+export async function updateDeliveryNoteItemQuantity(
+  itemId: string,
+  quantity: number,
+): Promise<void> {
+  const { data: item, error: itErr } = await supabase
+    .from('delivery_note_items')
+    .select('delivery_note_id')
+    .eq('id', itemId)
+    .single()
+  if (itErr) throw itErr
+  await assertDeliveryNoteDraft(item.delivery_note_id)
+
+  const { error } = await supabase
+    .from('delivery_note_items')
+    .update({ quantity })
+    .eq('id', itemId)
+  if (error) throw error
+  await regenerateDeliveryNotePdf(item.delivery_note_id)
+}
+
+/** Notiz eines Lieferscheins im Entwurf setzen (erscheint auf der PDF). */
+export async function updateDeliveryNoteNotes(
+  id: string,
+  notes: string | null,
+): Promise<DeliveryNote> {
+  await assertDeliveryNoteDraft(id)
+  const { data, error } = await supabase
+    .from('delivery_notes')
+    .update({ notes })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  await regenerateDeliveryNotePdf(id)
+  return data as DeliveryNote
 }
 
 // ─── Rechnung ────────────────────────────────────────────────────────────────

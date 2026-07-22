@@ -178,6 +178,28 @@ export interface DeliveryNote {
   updated_at: string | null
 }
 
+/**
+ * Eine eingefrorene Lieferschein-Position (snake_case wie in der DB). Snapshot
+ * beim Erzeugen des Lieferscheins — unabhängig von den delivery_items der
+ * Lieferung, damit der Beleg im Entwurf bereinigt werden kann.
+ */
+export interface DeliveryNoteItem {
+  id: string
+  delivery_note_id: string
+  product_id: string | null
+  description: string
+  color: string | null
+  size: string | null
+  quantity: number
+  created_at: string | null
+}
+
+/** Ein Lieferschein inkl. Kopf und eingefrorenen Positionen (Detailansicht). */
+export interface DeliveryNoteWithItems extends DeliveryNote {
+  dealer: Dealerish | null
+  delivery_note_items: DeliveryNoteItem[]
+}
+
 /** Händlerdaten, wie sie auf Beleg-PDFs gebraucht werden. */
 export interface Dealerish {
   name: string

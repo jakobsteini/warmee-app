@@ -575,6 +575,22 @@ export const de = {
   'deliveryEdit.col.delivered': 'Geliefert',
   'deliveryEdit.col.difference': 'Differenz',
 
+  // ─── Lieferschein-Detail (Entwurf bereinigen) ────────────────────────────
+  'deliveryNoteEdit.back': 'Zurück zur Lieferung',
+  'deliveryNoteEdit.backList': 'Zurück zu den Lieferungen',
+  'deliveryNoteEdit.title': 'Lieferschein {number}',
+  'deliveryNoteEdit.loadError': 'Der Lieferschein konnte nicht geladen werden.',
+  'deliveryNoteEdit.notFound': 'Lieferschein nicht gefunden.',
+  'deliveryNoteEdit.positions': 'Positionen',
+  'deliveryNoteEdit.colQty': 'Menge',
+  'deliveryNoteEdit.total': 'Gesamtmenge',
+  'deliveryNoteEdit.deleteItem': 'Entfernen',
+  'deliveryNoteEdit.deleteItemConfirm': 'Position „{name}" vom Lieferschein entfernen?',
+  'deliveryNoteEdit.notesPlaceholder': 'Notiz auf dem Lieferschein',
+  'deliveryNoteEdit.editError': 'Die Änderung konnte nicht gespeichert werden.',
+  'deliveryNoteEdit.lockedSent': 'Dieser Lieferschein ist versendet — nur noch ansehen oder stornieren.',
+  'deliveryNoteEdit.lockedCancelled': 'Dieser Lieferschein ist storniert.',
+
   // ─── Orders ──────────────────────────────────────────────────────────────
   'orders.title': 'Orders',
   'orders.subtitle': 'Ordererfassung – Bestellungen je Händler und Saison.',
@@ -1629,6 +1645,21 @@ export const en: Record<TranslationKey, string> = {
   'deliveryEdit.col.ordered': 'Ordered',
   'deliveryEdit.col.delivered': 'Delivered',
   'deliveryEdit.col.difference': 'Difference',
+
+  'deliveryNoteEdit.back': 'Back to delivery',
+  'deliveryNoteEdit.backList': 'Back to deliveries',
+  'deliveryNoteEdit.title': 'Delivery note {number}',
+  'deliveryNoteEdit.loadError': 'Could not load the delivery note.',
+  'deliveryNoteEdit.notFound': 'Delivery note not found.',
+  'deliveryNoteEdit.positions': 'Items',
+  'deliveryNoteEdit.colQty': 'Qty',
+  'deliveryNoteEdit.total': 'Total quantity',
+  'deliveryNoteEdit.deleteItem': 'Remove',
+  'deliveryNoteEdit.deleteItemConfirm': 'Remove item “{name}” from the delivery note?',
+  'deliveryNoteEdit.notesPlaceholder': 'Note on the delivery note',
+  'deliveryNoteEdit.editError': 'The change could not be saved.',
+  'deliveryNoteEdit.lockedSent': 'This delivery note has been sent — view or cancel only.',
+  'deliveryNoteEdit.lockedCancelled': 'This delivery note has been cancelled.',
 
   // ─── Orders ──────────────────────────────────────────────────────────────
   'orders.title': 'Orders',
