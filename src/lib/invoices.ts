@@ -29,6 +29,8 @@ import type { CustomerGroup } from '../types/dealer'
 import {
   isInvoiceLocked,
   isDeliveryNoteLocked,
+  type BelegArchivEntry,
+  type BelegArchivType,
   type DeliveryNote,
   type DeliveryNoteWithItems,
   type Dealerish,
@@ -39,6 +41,7 @@ import {
   type InvoiceWithItems,
 } from '../types/invoice'
 import { belegItemsFromNoteItems } from './deliveryNoteCalc'
+import { archiveFileName } from './belegArchiveCalc'
 
 const BUCKET = 'invoices'
 /** Gültigkeit der Signed-URLs für den PDF-Download (privater Bucket). */
@@ -533,12 +536,12 @@ async function loadDeliveryNoteRegenContext(
 }
 
 /**
- * Lieferschein-PDF aus den EINGEFRORENEN Positionen + Kopf-Snapshots neu bauen
- * und im Storage (gleicher Pfad = Überschreiben) ablegen. Wird nach jeder
- * Bereinigung im Entwurf aufgerufen, damit die PDF den aktuellen Stand zeigt.
+ * Lieferschein-PDF aus den EINGEFRORENEN Positionen + Kopf-Snapshots bauen
+ * (Blob + Kontext). Einzige Quelle für Neudruck UND Archiv.
  */
-async function regenerateDeliveryNotePdf(id: string): Promise<void> {
-  const org_id = await getMyOrgId()
+async function frozenDeliveryNotePdfBlob(
+  id: string,
+): Promise<{ blob: Blob; ctx: DeliveryNoteRegenContext }> {
   const ctx = await loadDeliveryNoteRegenContext(id)
   const lang = pdfLang(ctx.dealerLanguage)
   const shippingText =
@@ -557,6 +560,16 @@ async function regenerateDeliveryNotePdf(id: string): Promise<void> {
     items: belegItemsFromNoteItems(ctx.items),
     notes: ctx.notes,
   })
+  return { blob, ctx }
+}
+
+/**
+ * Lieferschein-PDF neu erzeugen und im Storage (gleicher Pfad = Überschreiben)
+ * ablegen. Wird nach jeder Bereinigung im Entwurf aufgerufen.
+ */
+async function regenerateDeliveryNotePdf(id: string): Promise<void> {
+  const org_id = await getMyOrgId()
+  const { blob, ctx } = await frozenDeliveryNotePdfBlob(id)
   const path = await uploadPdf(
     org_id,
     `lieferschein-${safeName(ctx.note_number)}.pdf`,
@@ -971,15 +984,14 @@ export async function createFreeInvoice(
   return updated as Invoice
 }
 
-/** PDF einer bestehenden Rechnung neu erzeugen (z. B. nach fehlgeschlagenem Upload). */
-export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
-  const org_id = await getMyOrgId()
-  const inv = await getInvoice(id)
-
-  // Konditionen aus den EINGEFRORENEN Rechnungswerten, damit das neu erzeugte
-  // PDF dem Original entspricht. Zahlungsziel aus dem eingefrorenen due_date
-  // zurückgerechnet. Altbestände ohne Snapshot (skonto_*/due_date null) fallen
-  // pro Feld auf den WARM-ME-Standard zurück — genau so wurden sie gedruckt.
+/**
+ * Rechnungs-PDF aus den EINGEFRORENEN Rechnungswerten bauen (Blob). Einzige
+ * Quelle der PDF-Erzeugung für Neudruck UND Archiv — so ist die archivierte PDF
+ * identisch zur nachdruckbaren. Zahlungsziel aus dem eingefrorenen due_date
+ * zurückgerechnet; Altbestände ohne Snapshot fallen pro Feld auf den WARM-ME-
+ * Standard zurück (genau so wurden sie gedruckt).
+ */
+async function frozenInvoicePdfBlob(inv: InvoiceWithItems): Promise<Blob> {
   const terms = effectivePaymentTerms({
     skonto_prozent: inv.skonto_prozent,
     skonto_tage: inv.skonto_tage,
@@ -988,14 +1000,10 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
       : null,
   })
   const total = num(inv.total)
-
-  // Belegsprache aus dem Kunden (de-Fallback). language ist nicht Teil der
-  // PDF-Dealerish, kommt aber aus dem getInvoice-Select mit → hier lokal gelesen.
-  // Beträge und tax_note bleiben eingefroren; nur die Label-Sprache folgt dem Kunden.
   const dealerLang = (inv.dealer as (Dealerish & { language?: string | null }) | null)
     ?.language
   const { buildInvoicePdf } = await import('./pdf')
-  const blob = buildInvoicePdf({
+  return buildInvoicePdf({
     labels: invoicePdfLabels(pdfLang(dealerLang)),
     number: inv.invoice_number,
     date: inv.invoice_date,
@@ -1024,10 +1032,16 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
     taxNote: inv.tax_note ?? null,
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(inv.invoice_date, total, terms),
-    // Eingefrorener Freitext bleibt (Snapshot); Altbelege haben null → keine Zeile.
     paymentTermsFreitext: inv.zahlungsbedingung_freitext ?? null,
     notes: inv.notes,
   })
+}
+
+/** PDF einer bestehenden Rechnung neu erzeugen (z. B. nach fehlgeschlagenem Upload). */
+export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
+  const org_id = await getMyOrgId()
+  const inv = await getInvoice(id)
+  const blob = await frozenInvoicePdfBlob(inv)
   const path = await uploadPdf(
     org_id,
     `rechnung-${safeName(inv.invoice_number)}.pdf`,
@@ -1041,6 +1055,129 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
     .single()
   if (error) throw error
   return data as Invoice
+}
+
+// ─── Beleg-Archiv (S4, BAO §132 — unveränderbar) ─────────────────────────────
+
+const ARCHIVE_BUCKET = 'belege-archiv'
+
+/** Prüft, ob für einen Beleg bereits ein Archiveintrag existiert. */
+async function isArchived(
+  documentType: BelegArchivType,
+  documentId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('belege_archiv')
+    .select('id')
+    .eq('document_type', documentType)
+    .eq('document_id', documentId)
+    .maybeSingle()
+  if (error) throw error
+  return !!data
+}
+
+/**
+ * Eine finale PDF unveränderbar ins Archiv legen: write-once in den Bucket
+ * belege-archiv (upsert:false) + Metadaten-Zeile. Idempotent — existiert bereits
+ * ein Eintrag zum Beleg, passiert nichts (kein Überschreiben).
+ */
+async function archiveDocument(params: {
+  orgId: string
+  documentType: BelegArchivType
+  documentId: string
+  belegnummer: string
+  dealerName: string | null
+  belegDatum: string | null
+  blob: Blob
+}): Promise<void> {
+  if (await isArchived(params.documentType, params.documentId)) return
+
+  const filename = archiveFileName(
+    params.belegnummer,
+    params.dealerName,
+    params.belegDatum,
+  )
+  const path = `${params.orgId}/${params.documentType}/${filename}`
+  // Write-once: kein upsert → ein bereits vorhandenes Objekt wird NICHT ersetzt.
+  const { error: upErr } = await supabase.storage
+    .from(ARCHIVE_BUCKET)
+    .upload(path, params.blob, {
+      contentType: 'application/pdf',
+      upsert: false,
+    })
+  // Existiert die Datei schon (paralleler Lauf), gilt das Archiv als vorhanden.
+  if (upErr && !/exists/i.test(upErr.message)) throw upErr
+
+  const created_by = await getMyUserId()
+  const { error: insErr } = await supabase.from('belege_archiv').insert({
+    org_id: params.orgId,
+    document_type: params.documentType,
+    document_id: params.documentId,
+    belegnummer: params.belegnummer,
+    dealer_name: params.dealerName,
+    beleg_datum: params.belegDatum,
+    storage_path: path,
+    content_type: 'application/pdf',
+    file_size: params.blob.size,
+    created_by,
+  })
+  // Unique-Index (org, type, id): ein paralleler Zweit-Insert ist ok (bereits da).
+  if (insErr && !/duplicate|unique/i.test(insErr.message)) throw insErr
+}
+
+/** Eine Rechnung ins Archiv legen (aus den eingefrorenen Werten). */
+export async function archiveInvoiceById(invoiceId: string): Promise<void> {
+  const org_id = await getMyOrgId()
+  const inv = await getInvoice(invoiceId)
+  const blob = await frozenInvoicePdfBlob(inv)
+  await archiveDocument({
+    orgId: org_id,
+    documentType: 'invoice',
+    documentId: inv.id,
+    belegnummer: inv.invoice_number,
+    dealerName: inv.dealer?.name ?? null,
+    belegDatum: inv.invoice_date,
+    blob,
+  })
+}
+
+/** Einen Lieferschein ins Archiv legen (aus den eingefrorenen Positionen). */
+export async function archiveDeliveryNoteById(noteId: string): Promise<void> {
+  const org_id = await getMyOrgId()
+  const { blob, ctx } = await frozenDeliveryNotePdfBlob(noteId)
+  await archiveDocument({
+    orgId: org_id,
+    documentType: 'delivery_note',
+    documentId: noteId,
+    belegnummer: ctx.note_number,
+    dealerName: ctx.dealer.name,
+    belegDatum: ctx.note_date,
+    blob,
+  })
+}
+
+/** Archiveintrag eines Belegs laden (oder null) — auch nach Storno abrufbar. */
+export async function getBelegArchiv(
+  documentType: BelegArchivType,
+  documentId: string,
+): Promise<BelegArchivEntry | null> {
+  const { data, error } = await supabase
+    .from('belege_archiv')
+    .select('*')
+    .eq('document_type', documentType)
+    .eq('document_id', documentId)
+    .maybeSingle()
+  if (error) throw error
+  return (data as BelegArchivEntry | null) ?? null
+}
+
+/** Signierte Download-URL für ein archiviertes PDF (privater Bucket). */
+export async function signedArchiveUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(ARCHIVE_BUCKET)
+    .createSignedUrl(storagePath, SIGNED_URL_TTL)
+  if (error || !data) throw error ?? new Error('URL konnte nicht erzeugt werden.')
+  return data.signedUrl
 }
 
 /**
@@ -1066,6 +1203,26 @@ export async function setInvoiceStatus(
       'Diese Rechnung ist bereits versendet oder storniert und kann nicht erneut versendet werden.',
     )
   }
+
+  // Die Lieferscheine derselben Lieferung, die mit diesem Versand gesperrt
+  // werden (noch Entwurf). Sie werden — wie die Rechnung — mitarchiviert.
+  const noteIdsToLock: string[] = []
+  if (cur.delivery_id) {
+    const { data: draftNotes, error: dnErr } = await supabase
+      .from('delivery_notes')
+      .select('id')
+      .eq('delivery_id', cur.delivery_id)
+      .eq('status', 'draft')
+    if (dnErr) throw dnErr
+    for (const n of draftNotes ?? []) noteIdsToLock.push((n as { id: string }).id)
+  }
+
+  // ARCHIV ZUERST (BAO §132): finale PDFs aus den eingefrorenen Snapshots
+  // unveränderbar ablegen, BEVOR der Status kippt. Schlägt das Archivieren fehl,
+  // bleibt alles Entwurf → sauber wiederholbar, keine „versendet ohne Archiv".
+  // Idempotent — ein zweiter Lauf legt nichts doppelt ab.
+  await archiveInvoiceById(id)
+  for (const noteId of noteIdsToLock) await archiveDeliveryNoteById(noteId)
 
   const { data, error } = await supabase
     .from('invoices')

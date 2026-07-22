@@ -3,13 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   cancelInvoice,
   getInvoice,
+  getBelegArchiv,
   markInvoicePaid,
   regenerateInvoicePdf,
   setInvoiceStatus,
+  signedArchiveUrl,
   signedPdfUrl,
 } from '../lib/invoices'
 import { formatEUR } from '../lib/money'
-import { type InvoiceWithItems } from '../types/invoice'
+import { type BelegArchivEntry, type InvoiceWithItems } from '../types/invoice'
 import {
   loadInvoiceReturnContext,
   createReturn,
@@ -58,18 +60,21 @@ export default function InvoiceEdit() {
   const [returnsCtx, setReturnsCtx] = useState<InvoiceReturnContext | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<ReturnWithItems | null>(null)
+  const [archive, setArchive] = useState<BelegArchivEntry | null>(null)
 
   async function load() {
     if (!id) return
     setLoading(true)
     setError(null)
     try {
-      const [inv, ctx] = await Promise.all([
+      const [inv, ctx, arch] = await Promise.all([
         getInvoice(id),
         loadInvoiceReturnContext(id).catch(() => null),
+        getBelegArchiv('invoice', id).catch(() => null),
       ])
       setInvoice(inv)
       setReturnsCtx(ctx)
+      setArchive(arch)
     } catch {
       setError(t('invoiceEdit.loadError'))
     } finally {
@@ -111,6 +116,15 @@ export default function InvoiceEdit() {
    * Datensatz und aktualisiert ausschließlich pdf_path). Die Snapshot-Werte der
    * Rechnung bleiben unverändert.
    */
+  async function openArchive() {
+    if (!archive) return
+    try {
+      window.open(await signedArchiveUrl(archive.storage_path), '_blank', 'noopener')
+    } catch {
+      setError(t('common.pdfOpenError'))
+    }
+  }
+
   async function handleRegenerate() {
     if (!invoice) return
     setBusy(true)
@@ -269,6 +283,16 @@ export default function InvoiceEdit() {
           >
             {t('common.openPdf')}
           </button>
+          {archive && (
+            <button
+              type="button"
+              onClick={openArchive}
+              title={t('common.archiveHint')}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink"
+            >
+              {t('common.archivePdf')}
+            </button>
+          )}
           <button
             type="button"
             disabled={busy}

@@ -202,6 +202,25 @@ export interface DeliveryNoteWithItems extends DeliveryNote {
   delivery_note_items: DeliveryNoteItem[]
 }
 
+/** Beleg-Archiv-Typen (englisch gespeichert; app-validiert, kein DB-CHECK). */
+export type BelegArchivType = 'invoice' | 'delivery_note' | 'correction'
+
+/** Ein unveränderbarer Archiveintrag (Snapshot beim Versand, BAO §132). */
+export interface BelegArchivEntry {
+  id: string
+  org_id: string
+  document_type: BelegArchivType
+  document_id: string
+  belegnummer: string
+  dealer_name: string | null
+  beleg_datum: string | null
+  storage_path: string
+  content_type: string | null
+  file_size: number | null
+  created_by: string | null
+  created_at: string | null
+}
+
 /** Händlerdaten, wie sie auf Beleg-PDFs gebraucht werden. */
 export interface Dealerish {
   name: string

@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getDeliveryNote,
+  getBelegArchiv,
   deleteDeliveryNoteItem,
   updateDeliveryNoteItemQuantity,
   updateDeliveryNoteNotes,
+  signedArchiveUrl,
   signedPdfUrl,
 } from '../lib/invoices'
-import { isDeliveryNoteLocked, type DeliveryNoteWithItems } from '../types/invoice'
+import {
+  isDeliveryNoteLocked,
+  type BelegArchivEntry,
+  type DeliveryNoteWithItems,
+} from '../types/invoice'
 import { deliveryNoteTotalQuantity } from '../lib/deliveryNoteCalc'
 import { useT } from '../i18n'
 import type { TranslationKey } from '../i18n/dict'
@@ -32,6 +38,7 @@ export default function DeliveryNoteEdit() {
   const t = useT()
   const [note, setNote] = useState<DeliveryNoteWithItems | null>(null)
   const [notes, setNotes] = useState('')
+  const [archive, setArchive] = useState<BelegArchivEntry | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,9 +46,13 @@ export default function DeliveryNoteEdit() {
     if (!id) return
     setLoading(true)
     try {
-      const n = await getDeliveryNote(id)
+      const [n, arch] = await Promise.all([
+        getDeliveryNote(id),
+        getBelegArchiv('delivery_note', id).catch(() => null),
+      ])
       setNote(n)
       setNotes(n.notes ?? '')
+      setArchive(arch)
       setError(null)
     } catch {
       setError(t('deliveryNoteEdit.loadError'))
@@ -59,6 +70,15 @@ export default function DeliveryNoteEdit() {
     if (!note?.pdf_path) return
     try {
       window.open(await signedPdfUrl(note.pdf_path), '_blank', 'noopener')
+    } catch {
+      setError(t('common.pdfOpenError'))
+    }
+  }
+
+  async function openArchive() {
+    if (!archive) return
+    try {
+      window.open(await signedArchiveUrl(archive.storage_path), '_blank', 'noopener')
     } catch {
       setError(t('common.pdfOpenError'))
     }
@@ -133,13 +153,25 @@ export default function DeliveryNoteEdit() {
             {formatDate(note.note_date)} · {t(deliveryNoteStatusKey(note.status))}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openPdf}
-          className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
-        >
-          {t('common.openPdf')}
-        </button>
+        <div className="flex items-center gap-2">
+          {archive && (
+            <button
+              type="button"
+              onClick={openArchive}
+              title={t('common.archiveHint')}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink"
+            >
+              {t('common.archivePdf')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openPdf}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+          >
+            {t('common.openPdf')}
+          </button>
+        </div>
       </div>
 
       {locked && (
