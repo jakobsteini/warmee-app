@@ -256,6 +256,57 @@ export type OrderPaymentTermsParse =
     }
   | { ok: false; error: string }
 
+/**
+ * Bestimmt, welche Zahlungsbedingungen eine Rechnung EINFRIERT — Session 2 des
+ * Order→Rechnung-Links.
+ *
+ * Ist die Rechnung mit einer Order verlinkt (delivery.order_id), gewinnt IMMER
+ * die Order: ihr Zahlungsziel und ihr Skonto werden 1:1 genommen (kein Auffüllen
+ * mit dem WARM-ME-Standard — die Order-Werte sind die bewusste Entscheidung der
+ * Mitarbeiterin, „kein Skonto" bleibt „kein Skonto"). Der Freitext kommt ebenfalls
+ * aus der Order. Ohne Order-Link (Altlieferung / freie Rechnung) gelten die bereits
+ * gefüllten Händlerkonditionen (effectivePaymentTerms) und kein Freitext.
+ */
+export interface InvoiceOrderTerms {
+  zahlungsziel_tage: number
+  skonto_prozent: number | null
+  skonto_tage: number | null
+  freitext: string | null
+}
+
+export interface FrozenInvoiceTerms {
+  zahlungsziel_tage: number
+  /** 0 = kein Skonto. */
+  skonto_prozent: number
+  skonto_tage: number
+  freitext: string | null
+}
+
+export function resolveInvoicePaymentTerms(
+  order: InvoiceOrderTerms | null,
+  dealerEffective: {
+    zahlungsziel_tage: number
+    skonto_prozent: number
+    skonto_tage: number
+  },
+): FrozenInvoiceTerms {
+  if (order) {
+    const freitext = order.freitext?.trim()
+    return {
+      zahlungsziel_tage: order.zahlungsziel_tage,
+      skonto_prozent: order.skonto_prozent ?? 0,
+      skonto_tage: order.skonto_tage ?? 0,
+      freitext: freitext ? freitext : null,
+    }
+  }
+  return {
+    zahlungsziel_tage: dealerEffective.zahlungsziel_tage,
+    skonto_prozent: dealerEffective.skonto_prozent,
+    skonto_tage: dealerEffective.skonto_tage,
+    freitext: null,
+  }
+}
+
 export function validateOrderPaymentTerms(form: {
   zahlungsziel_tage: string
   skonto_prozent: string

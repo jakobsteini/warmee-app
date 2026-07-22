@@ -15,6 +15,10 @@ import {
   type PaymentTerms,
   type PartialPaymentTerms,
 } from './tax'
+import {
+  resolveInvoicePaymentTerms,
+  type InvoiceOrderTerms,
+} from './paymentTerms'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
 import { listOssRates, ossRateMap } from './ossRates'
 import type { CustomerGroup } from '../types/dealer'
@@ -139,8 +143,14 @@ interface DeliveryContext {
   dealer: Dealerish
   /** Steuerfelder des Händlers für die Kategorie-Ableitung. */
   taxDealer: TaxDealer
-  /** Zahlungskonditionen des Händlers (roh, nullable) – Grundlage der Fälligkeit. */
+  /** Zahlungskonditionen des Händlers (roh, nullable) – Fallback ohne Order-Link. */
   terms: PartialPaymentTerms
+  /**
+   * Zahlungskonditionen der verlinkten Order (delivery.order_id) — Session 2.
+   * null, wenn keine Order verlinkt ist (Altlieferung) → dann gelten die
+   * Händlerkonditionen. Order gewinnt bei gesetztem Link.
+   */
+  orderTerms: InvoiceOrderTerms | null
   seasonLabel: string | null
   items: {
     product_id: string
@@ -159,7 +169,7 @@ async function loadDeliveryContext(
   const { data: del, error: delErr } = await supabase
     .from('deliveries')
     .select(
-      'dealer_id, dealer:dealers(name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage), production_order:production_orders(season:seasons(label))',
+      'dealer_id, order_id, dealer:dealers(name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage), order:orders(zahlungsziel_tage, skonto_prozent, skonto_tage, zahlungsbedingung_freitext), production_order:production_orders(season:seasons(label))',
     )
     .eq('id', deliveryId)
     .single()
@@ -174,7 +184,14 @@ async function loadDeliveryContext(
 
   const d = del as unknown as {
     dealer_id: string
+    order_id: string | null
     dealer: (Dealerish & PartialPaymentTerms & Partial<TaxDealer>) | null
+    order: {
+      zahlungsziel_tage: number | null
+      skonto_prozent: number | string | null
+      skonto_tage: number | null
+      zahlungsbedingung_freitext: string | null
+    } | null
     production_order: { season: { label: string } | null } | null
   }
 
@@ -218,9 +235,26 @@ async function loadDeliveryContext(
       skonto_tage: d.dealer?.skonto_tage ?? null,
       zahlungsziel_tage: d.dealer?.zahlungsziel_tage ?? null,
     },
+    // Order-Konditionen nur, wenn die Lieferung mit einer Order verlinkt ist.
+    orderTerms:
+      d.order_id && d.order
+        ? {
+            zahlungsziel_tage: d.order.zahlungsziel_tage ?? 30,
+            skonto_prozent: num2(d.order.skonto_prozent),
+            skonto_tage: d.order.skonto_tage ?? null,
+            freitext: d.order.zahlungsbedingung_freitext ?? null,
+          }
+        : null,
     seasonLabel: d.production_order?.season?.label ?? null,
     items,
   }
+}
+
+/** numeric/number/null der Order-Skontosatz robust zu number|null (kein 0-Zwang). */
+function num2(v: number | string | null): number | null {
+  if (v === null || v === '') return null
+  const n = typeof v === 'string' ? Number(v) : v
+  return Number.isNaN(n) ? null : n
 }
 
 /** Eingefrorene Steuerwerte einer neuen Rechnung. */
@@ -423,12 +457,15 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     .single()
   if (insErr) throw insErr
 
-  // Zahlungskonditionen aus dem Händler (zahlungsziel_tage/skonto_*), sonst
-  // WARM-ME-Standard (30 Tage netto, 3 %/10 Skonto). Die daraus berechnete
-  // Fälligkeit wird als konkretes due_date auf der Rechnung EINGEFROREN (unten im
-  // update) — eine spätere Änderung des Händler-Zahlungsziels verschiebt bereits
-  // gestellte Rechnungen dadurch NICHT rückwirkend.
-  const terms = effectivePaymentTerms(ctx.terms)
+  // Zahlungskonditionen einfrieren: bei verlinkter Order gewinnt die Order
+  // (Session 2), sonst die Händlerkonditionen (WARM-ME-Standard aufgefüllt). Die
+  // daraus berechnete Fälligkeit wird als konkretes due_date EINGEFROREN (unten im
+  // update) — spätere Änderungen an Order/Händler verschieben gestellte Rechnungen
+  // NICHT rückwirkend.
+  const terms = resolveInvoicePaymentTerms(
+    ctx.orderTerms,
+    effectivePaymentTerms(ctx.terms),
+  )
   const dueDate = addDaysIso(invoice.invoice_date, terms.zahlungsziel_tage)
 
   const itemRows = ctx.items.map((i) => ({
@@ -475,6 +512,7 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     taxNote: tax_note,
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(invoice.invoice_date, total, terms),
+    paymentTermsFreitext: terms.freitext,
     notes: null,
   })
   const path = await uploadPdf(
@@ -487,9 +525,10 @@ export async function createInvoice(deliveryId: string): Promise<Invoice> {
     .update({
       pdf_path: path,
       due_date: dueDate,
-      // Skonto zum Rechnungszeitpunkt einfrieren (Snapshot wie due_date).
+      // Skonto + Freitext zum Rechnungszeitpunkt einfrieren (Snapshot wie due_date).
       skonto_prozent: terms.skonto_prozent,
       skonto_tage: terms.skonto_tage,
+      zahlungsbedingung_freitext: terms.freitext,
     })
     .eq('id', invoice.id)
     .select()
@@ -697,6 +736,8 @@ export async function regenerateInvoicePdf(id: string): Promise<Invoice> {
     taxNote: inv.tax_note ?? null,
     zahlungszielTage: terms.zahlungsziel_tage,
     skonto: skontoForPdf(inv.invoice_date, total, terms),
+    // Eingefrorener Freitext bleibt (Snapshot); Altbelege haben null → keine Zeile.
+    paymentTermsFreitext: inv.zahlungsbedingung_freitext ?? null,
     notes: inv.notes,
   })
   const path = await uploadPdf(

@@ -39,6 +39,8 @@ export interface Invoice {
   total: number | string
   /** Eingefrorener Pflichthinweis (Reverse Charge / Ausfuhr); null bei Inland/Altbelegen. */
   tax_note: string | null
+  /** Eingefrorener Zahlungsbedingungs-Freitext aus der Order; null bei Altbelegen/frei. */
+  zahlungsbedingung_freitext: string | null
   /** Eingefrorene Steuerkategorie (Audit-Snapshot); null bei Altbelegen. */
   tax_category: string | null
   status: InvoiceStatus

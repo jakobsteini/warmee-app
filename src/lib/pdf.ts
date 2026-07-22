@@ -302,6 +302,11 @@ export interface InvoicePdfData {
     /** Zahlbetrag bei Skonto (Brutto − Skonto) in EUR. */
     payable: number
   } | null
+  /**
+   * Eingefrorener Zahlungsbedingungs-Freitext (aus der verlinkten Order). null/leer
+   * → keine Zeile (Altbelege, freie Rechnung, Inland ohne Freitext).
+   */
+  paymentTermsFreitext?: string | null
   notes: string | null
 }
 
@@ -385,6 +390,19 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
       y,
       { maxWidth: PAGE_W - MARGIN * 2 },
     )
+    doc.setTextColor(26, 26, 26)
+  }
+
+  // Zahlungsbedingungs-Freitext (eingefroren aus der Order) — eigene Zeile.
+  // null/leer (Altbelege, freie Rechnung) → keine Zeile, Layout unverändert.
+  if (data.paymentTermsFreitext && data.paymentTermsFreitext.trim()) {
+    y += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90, 85, 80)
+    doc.text(data.paymentTermsFreitext.trim(), MARGIN, y, {
+      maxWidth: PAGE_W - MARGIN * 2,
+    })
     doc.setTextColor(26, 26, 26)
   }
 

@@ -7,6 +7,7 @@ import {
   parseIntField,
   buildPaymentTermsText,
   validateOrderPaymentTerms,
+  resolveInvoicePaymentTerms,
 } from './paymentTerms.ts'
 
 test('Standard-Fall: Skonto + Netto', () => {
@@ -363,4 +364,45 @@ test('validateOrderPaymentTerms: Zahlungsziel nicht deutbar → Fehler (kein sti
     }),
     { ok: false, error: 'order.payment.err.zielInvalid' },
   )
+})
+
+// ─── resolveInvoicePaymentTerms (Order→Rechnung-Link, Session 2) ─────────────
+
+const DEALER_EFFECTIVE = { zahlungsziel_tage: 30, skonto_prozent: 3, skonto_tage: 10 }
+
+test('resolveInvoicePaymentTerms: mit Order → Order gewinnt (inkl. Freitext)', () => {
+  assert.deepEqual(
+    resolveInvoicePaymentTerms(
+      { zahlungsziel_tage: 14, skonto_prozent: 2, skonto_tage: 7, freitext: 'Vorkasse' },
+      DEALER_EFFECTIVE,
+    ),
+    { zahlungsziel_tage: 14, skonto_prozent: 2, skonto_tage: 7, freitext: 'Vorkasse' },
+  )
+})
+
+test('resolveInvoicePaymentTerms: Order OHNE Skonto → 0/0 (NICHT auf Standard auffüllen)', () => {
+  assert.deepEqual(
+    resolveInvoicePaymentTerms(
+      { zahlungsziel_tage: 30, skonto_prozent: null, skonto_tage: null, freitext: null },
+      DEALER_EFFECTIVE,
+    ),
+    { zahlungsziel_tage: 30, skonto_prozent: 0, skonto_tage: 0, freitext: null },
+  )
+})
+
+test('resolveInvoicePaymentTerms: Freitext wird getrimmt, leer → null', () => {
+  const r = resolveInvoicePaymentTerms(
+    { zahlungsziel_tage: 30, skonto_prozent: null, skonto_tage: null, freitext: '   ' },
+    DEALER_EFFECTIVE,
+  )
+  assert.equal(r.freitext, null)
+})
+
+test('resolveInvoicePaymentTerms: ohne Order (Altbeleg/frei) → Händlerkonditionen, kein Freitext', () => {
+  assert.deepEqual(resolveInvoicePaymentTerms(null, DEALER_EFFECTIVE), {
+    zahlungsziel_tage: 30,
+    skonto_prozent: 3,
+    skonto_tage: 10,
+    freitext: null,
+  })
 })
