@@ -114,6 +114,9 @@ export interface DeliveryNote {
   dealer_id: string
   note_number: string
   note_date: string
+  /** Eingefrorene Versandart aus der Order (Snapshot); null bei Altbelegen/ohne Order. */
+  shipping_method: string | null
+  shipping_method_freitext: string | null
   notes: string | null
   pdf_path: string | null
   created_by: string | null

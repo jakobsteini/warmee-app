@@ -61,6 +61,8 @@ export interface DeliveryNotePdfLabels {
   number: string
   date: string
   season: string
+  /** Label der Versandart-Zeile (aus der verlinkten Order). */
+  shipping: string
   colArticle: string
   colColor: string
   colSize: string
@@ -122,6 +124,7 @@ const DELIVERY_NOTE_LABELS: Record<PdfLang, DeliveryNotePdfLabels> = {
     number: 'Nr.',
     date: 'Datum',
     season: 'Saison',
+    shipping: 'Versandart',
     colArticle: 'Artikel',
     colColor: 'Farbe',
     colSize: 'Größe',
@@ -134,6 +137,7 @@ const DELIVERY_NOTE_LABELS: Record<PdfLang, DeliveryNotePdfLabels> = {
     number: 'No.',
     date: 'Date',
     season: 'Season',
+    shipping: 'Shipping method',
     colArticle: 'Article',
     colColor: 'Colour',
     colSize: 'Size',

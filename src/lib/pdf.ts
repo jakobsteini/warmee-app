@@ -1275,6 +1275,8 @@ export interface DeliveryNotePdfData {
   date: string
   dealer: Dealerish
   seasonLabel: string | null
+  /** Aufgelöste Versandart (aus der verlinkten Order); null → keine Zeile. */
+  shipping?: string | null
   items: BelegItem[]
   notes: string | null
 }
@@ -1284,9 +1286,12 @@ export function buildDeliveryNotePdf(data: DeliveryNotePdfData): Blob {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const L = data.labels
 
-  const meta = data.seasonLabel
-    ? [{ label: L.season, value: data.seasonLabel }]
-    : []
+  const meta = [
+    ...(data.seasonLabel ? [{ label: L.season, value: data.seasonLabel }] : []),
+    ...(data.shipping && data.shipping.trim()
+      ? [{ label: L.shipping, value: data.shipping.trim() }]
+      : []),
+  ]
   const headerBottom = drawHeader(doc, {
     title: L.title,
     number: data.number,

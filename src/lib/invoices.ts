@@ -19,6 +19,7 @@ import {
   resolveInvoicePaymentTerms,
   type InvoiceOrderTerms,
 } from './paymentTerms'
+import { shippingDisplay } from './shipping'
 import { taxCalc, applyVat as applyVatAt } from './taxCalc'
 import { listOssRates, ossRateMap } from './ossRates'
 import type { CustomerGroup } from '../types/dealer'
@@ -151,6 +152,11 @@ interface DeliveryContext {
    * Händlerkonditionen. Order gewinnt bei gesetztem Link.
    */
   orderTerms: InvoiceOrderTerms | null
+  /**
+   * Versandart der verlinkten Order (delivery.order_id) — Session 3. null ohne
+   * Order-Link (Altlieferung) → keine Versandart-Zeile auf dem Lieferschein.
+   */
+  orderShipping: { method: string | null; freitext: string | null } | null
   seasonLabel: string | null
   items: {
     product_id: string
@@ -169,7 +175,7 @@ async function loadDeliveryContext(
   const { data: del, error: delErr } = await supabase
     .from('deliveries')
     .select(
-      'dealer_id, order_id, dealer:dealers(name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage), order:orders(zahlungsziel_tage, skonto_prozent, skonto_tage, zahlungsbedingung_freitext), production_order:production_orders(season:seasons(label))',
+      'dealer_id, order_id, dealer:dealers(name, contact_name, email, city, country, customer_group, country_iso2, uid, language, skonto_prozent, skonto_tage, zahlungsziel_tage), order:orders(zahlungsziel_tage, skonto_prozent, skonto_tage, zahlungsbedingung_freitext, shipping_method, shipping_method_freitext), production_order:production_orders(season:seasons(label))',
     )
     .eq('id', deliveryId)
     .single()
@@ -191,6 +197,8 @@ async function loadDeliveryContext(
       skonto_prozent: number | string | null
       skonto_tage: number | null
       zahlungsbedingung_freitext: string | null
+      shipping_method: string | null
+      shipping_method_freitext: string | null
     } | null
     production_order: { season: { label: string } | null } | null
   }
@@ -243,6 +251,13 @@ async function loadDeliveryContext(
             skonto_prozent: num2(d.order.skonto_prozent),
             skonto_tage: d.order.skonto_tage ?? null,
             freitext: d.order.zahlungsbedingung_freitext ?? null,
+          }
+        : null,
+    orderShipping:
+      d.order_id && d.order
+        ? {
+            method: d.order.shipping_method ?? null,
+            freitext: d.order.shipping_method_freitext ?? null,
           }
         : null,
     seasonLabel: d.production_order?.season?.label ?? null,
@@ -339,13 +354,21 @@ export async function createDeliveryNote(
   const created_by = await getMyUserId()
   const ctx = await loadDeliveryContext(deliveryId)
 
+  // Versandart aus der verlinkten Order — beim Erzeugen EINFRIEREN (Snapshot) und
+  // in Kundensprache anzeigen. Ohne Order-Link (Altlieferung) → keine Versandart.
+  const lang = pdfLang(ctx.taxDealer.language)
+  const shippingText = ctx.orderShipping
+    ? shippingDisplay(ctx.orderShipping.method, ctx.orderShipping.freitext, lang)
+    : null
+
   const { data: number, error: numErr } = await supabase.rpc(
     'next_delivery_note_number',
     { p_org_id: org_id },
   )
   if (numErr) throw numErr
 
-  // Kopf zuerst committen (Nummer ist damit vergeben).
+  // Kopf zuerst committen (Nummer ist damit vergeben). Versandart als eingefrorenen
+  // Snapshot mitschreiben (roh: Methode + Freitext).
   const { data: note, error: insErr } = await supabase
     .from('delivery_notes')
     .insert({
@@ -353,6 +376,8 @@ export async function createDeliveryNote(
       delivery_id: deliveryId,
       dealer_id: ctx.dealer_id,
       note_number: number as string,
+      shipping_method: ctx.orderShipping?.method ?? null,
+      shipping_method_freitext: ctx.orderShipping?.freitext ?? null,
       created_by,
     })
     .select()
@@ -368,11 +393,12 @@ export async function createDeliveryNote(
 
   const { buildDeliveryNotePdf } = await import('./pdf')
   const blob = buildDeliveryNotePdf({
-    labels: deliveryNotePdfLabels(pdfLang(ctx.taxDealer.language)),
+    labels: deliveryNotePdfLabels(lang),
     number: note.note_number,
     date: note.note_date,
     dealer: ctx.dealer,
     seasonLabel: ctx.seasonLabel,
+    shipping: shippingText,
     items: belegItems,
     notes: null,
   })
