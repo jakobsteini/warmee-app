@@ -27,6 +27,7 @@ import DunningSettings from './pages/DunningSettings'
 import OssRates from './pages/OssRates'
 import Suppliers from './pages/Suppliers'
 import Commission from './pages/Commission'
+import DefectReturns from './pages/DefectReturns'
 import Analytics from './pages/Analytics'
 
 export default function App() {
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/dunning" element={<Dunning />} />
             <Route path="/dunning/settings" element={<DunningSettings />} />
             <Route path="/commission" element={<Commission />} />
+            <Route path="/defect-returns" element={<DefectReturns />} />
             <Route path="/analytics" element={<Analytics />} />
           </Route>
         </Route>

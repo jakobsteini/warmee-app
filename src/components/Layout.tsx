@@ -39,6 +39,7 @@ const warenItems: NavDef[] = [
   { to: '/dunning', key: 'nav.dunning' },
   { to: '/dunning/settings', key: 'nav.dunningSettings' },
   { to: '/commission', key: 'nav.commission' },
+  { to: '/defect-returns', key: 'nav.defectReturns' },
   { to: '/analytics', key: 'nav.analytics' },
 ]
 
