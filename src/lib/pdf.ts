@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import { type Dealerish } from '../types/invoice'
 import type {
   InvoicePdfLabels,
+  CorrectionPdfLabels,
   DeliveryNotePdfLabels,
   SupplierOrderPdfLabels,
 } from './pdfLabels'
@@ -438,6 +439,102 @@ export function buildInvoicePdf(data: InvoicePdfData): Blob {
     doc.setFontSize(8.5)
     doc.setTextColor(120, 115, 108)
     doc.text(data.notes, MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+  }
+
+  drawFooter(doc)
+  return doc.output('blob')
+}
+
+/** Daten für die Rechnungskorrektur-PDF. */
+export interface CorrectionPdfData {
+  labels: CorrectionPdfLabels
+  /** Korrektur-Nummer RK-YYYY-NNNN. */
+  number: string
+  date: string
+  dealer: Dealerish
+  /** Nummer der ursprünglichen Rechnung (Bezugszeile). */
+  originalInvoiceNumber: string
+  /** Korrigierte Positionen (Preise positiv — was gutgeschrieben wird). */
+  items: BelegItem[]
+  /** Beträge bereits als MINUS (correctionTotals). */
+  subtotal: number
+  tax: number
+  /** Steuersatz als Faktor (aus dem eingefrorenen return.tax_rate). */
+  taxRate: number
+  total: number
+  /** Eingefrorener Pflichthinweis (Reverse Charge / Ausfuhr) oder null. */
+  taxNote?: string | null
+  /** Grund der Korrektur (optional). */
+  reason?: string | null
+}
+
+/** Rechnungskorrektur als PDF-Blob (wie Rechnung, aber Minusbeträge). */
+export function buildCorrectionPdf(data: CorrectionPdfData): Blob {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const L = data.labels
+
+  const headerBottom = drawHeader(doc, {
+    title: L.title,
+    number: data.number,
+    date: data.date,
+    dealer: data.dealer,
+    recipientLabel: L.recipient,
+    numberLabel: L.number,
+    dateLabel: L.date,
+    meta: [],
+  })
+
+  let y = drawItemsTable(doc, data.items, headerBottom, true, {
+    article: L.colArticle,
+    color: L.colColor,
+    size: L.colSize,
+    quantity: L.colQty,
+    unitPrice: L.colUnit,
+    sum: L.colSum,
+  })
+
+  const right = PAGE_W - MARGIN
+  y += 2
+  doc.setFontSize(9.5)
+  doc.setTextColor(90, 85, 80)
+  doc.text(L.subtotal, right - 42, y)
+  doc.setTextColor(26, 26, 26)
+  doc.text(eur(data.subtotal), right, y, { align: 'right' })
+
+  y += 5
+  doc.setTextColor(90, 85, 80)
+  doc.text(`${L.vat} (${Math.round(data.taxRate * 100)} %)`, right - 42, y)
+  doc.setTextColor(26, 26, 26)
+  doc.text(eur(data.tax), right, y, { align: 'right' })
+
+  y += 3
+  doc.setDrawColor(26, 26, 26)
+  doc.line(right - 55, y, right, y)
+  y += 6
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text(L.correctionAmount, right - 72, y)
+  doc.text(eur(data.total), right, y, { align: 'right' })
+
+  // Bezug auf die ursprüngliche Rechnung.
+  y += 12
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(26, 26, 26)
+  doc.text(L.reference(data.originalInvoiceNumber), MARGIN, y, {
+    maxWidth: PAGE_W - MARGIN * 2,
+  })
+
+  if (data.reason && data.reason.trim()) {
+    y += 6
+    doc.setTextColor(90, 85, 80)
+    doc.text(data.reason.trim(), MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
+    doc.setTextColor(26, 26, 26)
+  }
+
+  if (data.taxNote && data.taxNote.trim()) {
+    y += 8
+    doc.text(data.taxNote.trim(), MARGIN, y, { maxWidth: PAGE_W - MARGIN * 2 })
   }
 
   drawFooter(doc)

@@ -196,6 +196,34 @@ export function invoicePdfLabels(lang: PdfLang): InvoicePdfLabels {
   return INVOICE_LABELS[lang]
 }
 
+/** Labels der Rechnungskorrektur (Titel + Bezugszeile; Rest wie Rechnung). */
+export interface CorrectionPdfLabels extends InvoicePdfLabels {
+  /** Bezug auf die ursprüngliche Rechnung. */
+  reference: (invoiceNumber: string) => string
+  /** Überschrift des Korrekturbetrags. */
+  correctionAmount: string
+}
+
+const CORRECTION_LABELS: Record<PdfLang, CorrectionPdfLabels> = {
+  de: {
+    ...INVOICE_LABELS.de,
+    title: 'Rechnungskorrektur',
+    reference: (n) => `Korrektur zu Rechnung ${n}`,
+    correctionAmount: 'Korrekturbetrag (brutto)',
+  },
+  en: {
+    ...INVOICE_LABELS.en,
+    title: 'Invoice correction',
+    reference: (n) => `Correction to invoice ${n}`,
+    correctionAmount: 'Correction amount (gross)',
+  },
+}
+
+/** Rechnungskorrektur-Labels in der gewählten Sprache. */
+export function correctionPdfLabels(lang: PdfLang): CorrectionPdfLabels {
+  return CORRECTION_LABELS[lang]
+}
+
 /** Lieferanten-Bestell-Labels in der gewählten Sprache. */
 export function supplierOrderPdfLabels(lang: PdfLang): SupplierOrderPdfLabels {
   return SUPPLIER_ORDER_LABELS[lang]

@@ -4,6 +4,7 @@ import {
   cancelInvoice,
   getInvoice,
   getBelegArchiv,
+  issueInvoiceCorrection,
   markInvoicePaid,
   regenerateInvoicePdf,
   setInvoiceStatus,
@@ -195,6 +196,27 @@ export default function InvoiceEdit() {
     await createReturn({ invoice_id: invoice.id, ...payload })
     await reloadReturns()
     setReturnOpen(false)
+  }
+
+  async function handleIssueCorrection(returnId: string) {
+    setBusy(true)
+    try {
+      await issueInvoiceCorrection(returnId)
+      await reloadReturns()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('correction.error'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function openCorrectionPdf(path: string | null) {
+    if (!path) return
+    try {
+      window.open(await signedPdfUrl(path), '_blank', 'noopener')
+    } catch {
+      setError(t('common.pdfOpenError'))
+    }
   }
 
   async function handleCancelReturn(reason: string) {
@@ -554,6 +576,35 @@ export default function InvoiceEdit() {
                           reason: r.cancellation_reason,
                         })}
                       </p>
+                    )}
+                    {!cancelled && (
+                      <div className="mt-2 flex items-center gap-3 border-t-[0.5px] border-line pt-2 text-xs">
+                        {r.credit_note_number ? (
+                          <>
+                            <span className="text-muted">
+                              {t('correction.issued', {
+                                number: r.credit_note_number,
+                              })}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openCorrectionPdf(r.pdf_path)}
+                              className="text-muted transition-colors hover:text-ink"
+                            >
+                              {t('common.openPdf')}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleIssueCorrection(r.id)}
+                            className="text-ink underline-offset-2 transition-colors hover:underline disabled:opacity-50"
+                          >
+                            {t('correction.create')}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </li>
                 )

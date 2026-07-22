@@ -21,6 +21,8 @@ export interface Return {
   tax_amount: number | string
   /** Eingefrorene Gutschrift-Summe BRUTTO (Netto + USt); numeric(10,2). */
   total_amount: number | string
+  /** Eingefrorener Pflichthinweis (Reverse Charge / Ausfuhr); null bei Inland. */
+  tax_note: string | null
   status: ReturnStatus
   cancelled_at: string | null
   cancelled_by: string | null

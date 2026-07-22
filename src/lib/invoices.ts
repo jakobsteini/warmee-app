@@ -9,8 +9,11 @@ import type { BelegItem } from './pdf'
 import {
   pdfLang,
   invoicePdfLabels,
+  correctionPdfLabels,
   deliveryNotePdfLabels,
 } from './pdfLabels'
+import { correctionTotals } from './correctionCalc'
+import type { Return } from '../types/return'
 import { addDaysIso, daysBetweenIso } from './dates'
 import {
   computeSkonto,
@@ -1282,6 +1285,120 @@ export async function signedArchiveUrl(storagePath: string): Promise<string> {
     .createSignedUrl(storagePath, SIGNED_URL_TTL)
   if (error || !data) throw error ?? new Error('URL konnte nicht erzeugt werden.')
   return data.signedUrl
+}
+
+// ─── Rechnungskorrektur (S7) ─────────────────────────────────────────────────
+
+/**
+ * Formalen Rechnungskorrektur-Beleg zu einer rechnungs-verankerten Retoure
+ * erstellen: lückenlose Nummer RK-YYYY-NNNN + PDF (Minusbeträge, aus den
+ * EINGEFRORENEN Retouren-Summen), in returns.credit_note_number/pdf_path
+ * eingefroren und ins Archiv (document_type 'correction') gelegt. Idempotent —
+ * ist bereits eine Korrektur ausgestellt, wird sie unverändert zurückgegeben.
+ * Nur für recorded, rechnungs-verankerte Retouren (LS-Retouren sind mangels
+ * Fakturierung nicht monetär und bekommen keine Korrektur).
+ */
+export async function issueInvoiceCorrection(returnId: string): Promise<Return> {
+  const org_id = await getMyOrgId()
+  const { data, error } = await supabase
+    .from('returns')
+    .select(
+      '*, return_items(*, invoice_item:invoice_items(description)), ' +
+        'invoice:invoices(invoice_number), ' +
+        'dealer:dealers(name, contact_name, email, city, country, language)',
+    )
+    .eq('id', returnId)
+    .single()
+  if (error) throw error
+  const ret = data as unknown as Return & {
+    return_items: {
+      product_id: string | null
+      color: string | null
+      size: string | null
+      quantity: number
+      unit_price: number | string
+      line_total: number | string
+      invoice_item: { description: string } | null
+    }[]
+    invoice: { invoice_number: string } | null
+    dealer: (Dealerish & { language: string | null }) | null
+  }
+
+  if (ret.status !== 'recorded') {
+    throw new Error('Nur eine erfasste (nicht stornierte) Retoure kann korrigiert werden.')
+  }
+  if (!ret.invoice_id || !ret.invoice) {
+    throw new Error('Eine Rechnungskorrektur braucht eine rechnungs-verankerte Retoure.')
+  }
+  if (ret.credit_note_number) {
+    // Bereits ausgestellt → unverändert zurückgeben (idempotent).
+    return ret as Return
+  }
+
+  const dealerish: Dealerish = {
+    name: ret.dealer?.name ?? 'Unbekannt',
+    contact_name: ret.dealer?.contact_name ?? null,
+    email: ret.dealer?.email ?? null,
+    city: ret.dealer?.city ?? null,
+    country: ret.dealer?.country ?? null,
+  }
+
+  const { data: number, error: numErr } = await supabase.rpc(
+    'next_correction_number',
+    { p_org_id: org_id },
+  )
+  if (numErr) throw numErr
+  const correctionNumber = number as string
+
+  const totals = correctionTotals(ret.subtotal_net, ret.tax_amount, ret.total_amount)
+  const { buildCorrectionPdf } = await import('./pdf')
+  const blob = buildCorrectionPdf({
+    labels: correctionPdfLabels(pdfLang(ret.dealer?.language ?? null)),
+    number: correctionNumber,
+    date: ret.return_date,
+    dealer: dealerish,
+    originalInvoiceNumber: ret.invoice.invoice_number,
+    items: ret.return_items.map((i) => ({
+      description: i.invoice_item?.description ?? '—',
+      color: i.color,
+      size: i.size,
+      quantity: i.quantity,
+      unitPrice: num(i.unit_price),
+      lineTotal: num(i.line_total),
+    })),
+    subtotal: totals.net,
+    tax: totals.tax,
+    taxRate: num(ret.tax_rate),
+    total: totals.gross,
+    taxNote: ret.tax_note,
+    reason: ret.reason,
+  })
+
+  const path = await uploadPdf(
+    org_id,
+    `rechnungskorrektur-${safeName(correctionNumber)}.pdf`,
+    blob,
+  )
+  const { data: updated, error: upErr } = await supabase
+    .from('returns')
+    .update({ credit_note_number: correctionNumber, pdf_path: path })
+    .eq('id', returnId)
+    .select()
+    .single()
+  if (upErr) throw upErr
+
+  // Ins unveränderbare Archiv (BAO §132) — document_type 'correction' (S4).
+  await archiveDocument({
+    orgId: org_id,
+    documentType: 'correction',
+    documentId: returnId,
+    belegnummer: correctionNumber,
+    dealerName: dealerish.name,
+    belegDatum: ret.return_date,
+    blob,
+  })
+
+  return updated as Return
 }
 
 /**
