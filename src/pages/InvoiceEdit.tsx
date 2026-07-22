@@ -11,6 +11,8 @@ import {
   signedArchiveUrl,
   signedPdfUrl,
 } from '../lib/invoices'
+import { loadInvoiceMailContext, type InvoiceMailContext } from '../lib/belegMail'
+import BelegMailDialog from '../components/BelegMailDialog'
 import { formatEUR } from '../lib/money'
 import { type BelegArchivEntry, type InvoiceWithItems } from '../types/invoice'
 import {
@@ -62,6 +64,8 @@ export default function InvoiceEdit() {
   const [returnOpen, setReturnOpen] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<ReturnWithItems | null>(null)
   const [archive, setArchive] = useState<BelegArchivEntry | null>(null)
+  const [mailCtx, setMailCtx] = useState<InvoiceMailContext | null>(null)
+  const [mailSent, setMailSent] = useState(false)
 
   async function load() {
     if (!id) return
@@ -117,6 +121,20 @@ export default function InvoiceEdit() {
    * Datensatz und aktualisiert ausschließlich pdf_path). Die Snapshot-Werte der
    * Rechnung bleiben unverändert.
    */
+  async function openMail() {
+    if (!invoice) return
+    setBusy(true)
+    setError(null)
+    try {
+      const ctx = await loadInvoiceMailContext(invoice.id)
+      setMailCtx(ctx)
+    } catch {
+      setError(t('belegMail.loadError'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openArchive() {
     if (!archive) return
     try {
@@ -313,6 +331,16 @@ export default function InvoiceEdit() {
               className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-card hover:text-ink"
             >
               {t('common.archivePdf')}
+            </button>
+          )}
+          {archive && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={openMail}
+              className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+            >
+              {mailSent ? t('belegMail.sentButton') : t('belegMail.button')}
             </button>
           )}
           <button
@@ -646,6 +674,17 @@ export default function InvoiceEdit() {
           amount={cancelTarget.total_amount}
           onConfirm={handleCancelReturn}
           onClose={() => setCancelTarget(null)}
+        />
+      )}
+
+      {mailCtx && (
+        <BelegMailDialog
+          context={mailCtx}
+          onSent={() => {
+            setMailCtx(null)
+            setMailSent(true)
+          }}
+          onClose={() => setMailCtx(null)}
         />
       )}
     </div>

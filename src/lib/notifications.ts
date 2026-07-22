@@ -70,3 +70,24 @@ export async function createNotification(
   })
   if (error) throw error
 }
+
+/**
+ * E-Mail-Versand protokollieren (nutzt die Vorrüstung channel='email' + sent_at).
+ * NUR nach erfolgreichem Versand aufrufen — sent_at belegt den tatsächlichen
+ * Versandzeitpunkt.
+ */
+export async function createEmailNotification(
+  input: NotificationInput,
+): Promise<void> {
+  const org_id = await getMyOrgId()
+  const { error } = await supabase.from('notifications').insert({
+    org_id,
+    type: input.type,
+    title: input.title,
+    body: input.body ?? null,
+    link: input.link ?? null,
+    channel: 'email',
+    sent_at: new Date().toISOString(),
+  })
+  if (error) throw error
+}
