@@ -49,18 +49,26 @@ function uniqueEntryName(base: string, used: Set<string>): string {
   return candidate
 }
 
+/** Ergebnis der ZIP-Erzeugung: der Blob (null, wenn kein Bild gepackt wurde). */
+export interface DealerImagesZip {
+  blob: Blob | null
+  zipped: number
+  skipped: number
+}
+
+/** Sprechender ZIP-Dateiname für einen Händler. */
+export function dealerImagesZipName(dealerName: string): string {
+  return `${safeName(dealerName, 'Haendler')}_Bilder.zip`
+}
+
 /**
- * Die Bilder eines Händlers als eine ZIP herunterladen. Lädt jede Datei über
- * ihre Signed-URL, packt sie unter ihrem (eindeutig gemachten) Dateinamen und
- * stößt den Download an. Bilder ohne URL oder mit fehlgeschlagenem Download
- * werden übersprungen und zurückgemeldet (kein stiller Verlust).
- *
- * @returns { zipped, skipped } — Anzahl gepackter bzw. übersprungener Bilder.
+ * Die Bilder eines Händlers zu EINER ZIP packen (ohne Download). Lädt jede Datei
+ * über ihre Signed-URL. Bilder ohne URL oder mit fehlgeschlagenem Download werden
+ * übersprungen und gezählt (kein stiller Verlust). blob=null, wenn nichts ging.
  */
-export async function downloadDealerImagesZip(
+export async function buildDealerImagesZip(
   assets: AssetWithMeta[],
-  dealerName: string,
-): Promise<{ zipped: number; skipped: number }> {
+): Promise<DealerImagesZip> {
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
   const used = new Set<string>()
@@ -86,9 +94,22 @@ export async function downloadDealerImagesZip(
     }
   }
 
-  if (zipped === 0) return { zipped: 0, skipped }
+  if (zipped === 0) return { blob: null, zipped: 0, skipped }
+  const blob = await zip.generateAsync({ type: 'blob' })
+  return { blob, zipped, skipped }
+}
 
-  const out = await zip.generateAsync({ type: 'blob' })
-  triggerDownload(out, `${safeName(dealerName, 'Haendler')}_Bilder.zip`)
+/**
+ * Die Bilder eines Händlers als eine ZIP herunterladen (Teil A, Direkt-Download).
+ * Baut die ZIP und stößt den Browser-Download an.
+ *
+ * @returns { zipped, skipped } — Anzahl gepackter bzw. übersprungener Bilder.
+ */
+export async function downloadDealerImagesZip(
+  assets: AssetWithMeta[],
+  dealerName: string,
+): Promise<{ zipped: number; skipped: number }> {
+  const { blob, zipped, skipped } = await buildDealerImagesZip(assets)
+  if (blob) triggerDownload(blob, dealerImagesZipName(dealerName))
   return { zipped, skipped }
 }

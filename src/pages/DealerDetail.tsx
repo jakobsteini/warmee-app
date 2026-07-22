@@ -12,6 +12,7 @@ import { listDealerAliases } from '../lib/dealerAliases'
 import { listDealerOrderedImages } from '../lib/assets'
 import { downloadDealerImagesZip } from '../lib/dealerImageZip'
 import { groupImagesByArticle } from '../lib/dealerImages'
+import DealerImageMailDialog from '../components/DealerImageMailDialog'
 import type { AssetWithMeta } from '../types/asset'
 import CollectionBadge from '../components/CollectionBadge'
 import DealerEditModal from '../components/DealerEditModal'
@@ -624,7 +625,12 @@ export default function DealerDetail() {
       </Section>
 
       {/* ── Bildmaterial (nur zu den bestellten Artikeln) ── */}
-      <DealerImagesSection dealerId={dealer.id} dealerName={dealer.name} />
+      <DealerImagesSection
+        dealerId={dealer.id}
+        dealerName={dealer.name}
+        dealerLanguage={dealer.language}
+        recipientDefault={dealer.email ?? ''}
+      />
 
       {/* ── Rechnungen ── */}
       <Section title={t('dealerDetail.section.invoices')} count={data.invoices.length}>
@@ -830,9 +836,13 @@ export default function DealerDetail() {
 function DealerImagesSection({
   dealerId,
   dealerName,
+  dealerLanguage,
+  recipientDefault,
 }: {
   dealerId: string
   dealerName: string
+  dealerLanguage: string | null
+  recipientDefault: string
 }) {
   const t = useT()
   const [images, setImages] = useState<AssetWithMeta[]>([])
@@ -840,6 +850,8 @@ function DealerImagesSection({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [mailOpen, setMailOpen] = useState(false)
+  const [sentNote, setSentNote] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -889,19 +901,29 @@ function DealerImagesSection({
         <div className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted">{t('dealerImages.hint')}</p>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={busy}
-              className="shrink-0 rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? t('dealerImages.downloading') : t('dealerImages.download')}
-            </button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setMailOpen(true)}
+                className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card"
+              >
+                {t('dealerImageMail.button')}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={busy}
+                className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? t('dealerImages.downloading') : t('dealerImages.download')}
+              </button>
+            </div>
           </div>
 
           {(notice || error) && (
             <p className="mb-4 text-xs text-amber-700">{error ?? notice}</p>
           )}
+          {sentNote && <p className="mb-4 text-xs text-ink">{sentNote}</p>}
 
           <div className="flex flex-col gap-6">
             {groups.map((g) => (
@@ -931,6 +953,25 @@ function DealerImagesSection({
             ))}
           </div>
         </div>
+      )}
+
+      {mailOpen && (
+        <DealerImageMailDialog
+          dealerId={dealerId}
+          dealerName={dealerName}
+          language={dealerLanguage}
+          recipientDefault={recipientDefault}
+          images={images}
+          onClose={() => setMailOpen(false)}
+          onSent={(skipped) => {
+            setMailOpen(false)
+            setSentNote(
+              skipped > 0
+                ? t('dealerImageMail.sentWithSkipped', { count: skipped })
+                : t('dealerImageMail.sent'),
+            )
+          }}
+        />
       )}
     </Section>
   )

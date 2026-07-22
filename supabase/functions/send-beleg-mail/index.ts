@@ -61,9 +61,12 @@ Deno.serve(async (req: Request) => {
     if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
       return json({ ok: false, error: 'Ungültige Empfänger-Adresse.' })
     }
+    // Anhänge sind OPTIONAL: Belege hängen PDFs an, der Händler-Bildversand
+    // schickt stattdessen nur einen Download-Link im Body (attachments = []).
+    // Ein Body ist immer Pflicht, damit nie eine leere Mail rausgeht.
     const attachments = Array.isArray(payload?.attachments) ? payload.attachments : []
-    if (attachments.length === 0) {
-      return json({ ok: false, error: 'Keine anzuhängenden Belege gefunden.' })
+    if (attachments.length === 0 && !(payload?.html ?? '').trim()) {
+      return json({ ok: false, error: 'Weder Anhang noch Inhalt vorhanden.' })
     }
 
     // Supabase-Client mit dem JWT des Aufrufers → Storage-RLS greift (eigene Org).
