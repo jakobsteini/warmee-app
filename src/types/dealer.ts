@@ -14,6 +14,14 @@ export interface Dealer {
   created_at: string | null
   updated_at: string | null
 
+  // ─── CRM-Notiz (freies Feld je Händler, kein Historien-Log) ──────────────
+  /** Freie Kundennotiz; null = keine Notiz. */
+  crm_notiz: string | null
+  /** Zeitpunkt der letzten Änderung; null = nie gesetzt. */
+  crm_notiz_updated_at: string | null
+  /** Persona-Name der letzten Änderung (Freitext); null = nie gesetzt. */
+  crm_notiz_updated_by: string | null
+
   // ─── CRM-Erweiterung (Provision / Versand / Mahnwesen) ───────────────────
   /** Kundengruppe, NOT NULL DEFAULT 'b2b' in der DB. */
   customer_group: CustomerGroup

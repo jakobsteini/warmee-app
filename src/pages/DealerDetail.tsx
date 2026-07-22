@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { loadDealerDetail, type DealerDetailData } from '../lib/dealerDetail'
+import { saveDealerNote } from '../lib/dealers'
+import { useCurrentUser } from '../context/CurrentUser'
 import { formatEUR } from '../lib/money'
 import { lineTotal, type OrderListRow } from '../types/order'
 import type { DealerEmailRole } from '../types/dealerEmail'
@@ -164,6 +166,14 @@ export default function DealerDetail() {
   const [error, setError] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
 
+  const { currentUser } = useCurrentUser()
+  const [note, setNote] = useState('')
+  const [noteMeta, setNoteMeta] = useState<{ at: string | null; by: string | null }>({
+    at: null,
+    by: null,
+  })
+  const [noteSaving, setNoteSaving] = useState(false)
+
   async function load() {
     if (!id) return
     setLoading(true)
@@ -189,6 +199,36 @@ export default function DealerDetail() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Notizfeld aus den geladenen Händlerdaten übernehmen (je Händler einmal).
+  useEffect(() => {
+    if (data) {
+      setNote(data.dealer.crm_notiz ?? '')
+      setNoteMeta({
+        at: data.dealer.crm_notiz_updated_at,
+        by: data.dealer.crm_notiz_updated_by,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.dealer.id])
+
+  async function handleSaveNote() {
+    if (!id) return
+    setNoteSaving(true)
+    setError(null)
+    try {
+      const updated = await saveDealerNote(id, note, currentUser?.name ?? '—')
+      setNote(updated.crm_notiz ?? '')
+      setNoteMeta({
+        at: updated.crm_notiz_updated_at,
+        by: updated.crm_notiz_updated_by,
+      })
+    } catch {
+      setError(t('crmNote.saveError'))
+    } finally {
+      setNoteSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -336,6 +376,40 @@ export default function DealerDetail() {
           }
         />
       </div>
+
+      {/* ── CRM-Notiz (freies Feld, alle Nutzer, kein Log) ── */}
+      <section className="mt-8">
+        <h2 className="mb-3 flex items-baseline gap-2 text-sm font-medium uppercase tracking-wider text-ink">
+          {t('crmNote.title')}
+        </h2>
+        <div className="rounded-md border-[0.5px] border-line bg-card px-5 py-4">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            placeholder={t('crmNote.placeholder')}
+            className="w-full resize-y rounded-md border-[0.5px] border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-ink"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-muted">
+              {noteMeta.at
+                ? t('crmNote.lastChanged', {
+                    date: fmtDate(noteMeta.at),
+                    by: noteMeta.by ?? '—',
+                  })
+                : t('crmNote.never')}
+            </span>
+            <button
+              type="button"
+              onClick={handleSaveNote}
+              disabled={noteSaving || note === (dealer.crm_notiz ?? '')}
+              className="rounded-md bg-ink px-4 py-2 text-sm text-cream transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {noteSaving ? t('common.saving') : t('crmNote.save')}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* ── Offene Posten ── */}
       <Section title={t('dealerDetail.section.openItems')} count={data.openItems.length}>

@@ -449,6 +449,12 @@ export const de = {
 
   // ─── Kundendetailansicht (360°-Blick) ────────────────────────────────────
   'dealerDetail.back': 'Zurück zur Händlerliste',
+  'crmNote.title': 'Notiz',
+  'crmNote.placeholder': 'Freie Notiz zum Kunden — z. B. „auf Kundentour, für nächste Saison merken".',
+  'crmNote.save': 'Notiz speichern',
+  'crmNote.never': 'Noch keine Notiz.',
+  'crmNote.lastChanged': 'Zuletzt geändert am {date} von {by}',
+  'crmNote.saveError': 'Die Notiz konnte nicht gespeichert werden.',
   'dealerDetail.loadError': 'Die Kundendaten konnten nicht geladen werden.',
   'dealerDetail.notFound': 'Händler nicht gefunden.',
   'dealerDetail.aliases': 'auch: {list}',
@@ -1601,6 +1607,12 @@ export const en: Record<TranslationKey, string> = {
 
   // ─── Customer detail view (360° view) ────────────────────────────────────
   'dealerDetail.back': 'Back to dealer list',
+  'crmNote.title': 'Note',
+  'crmNote.placeholder': 'Free note about the customer — e.g. “on a customer tour, remember for next season”.',
+  'crmNote.save': 'Save note',
+  'crmNote.never': 'No note yet.',
+  'crmNote.lastChanged': 'Last changed on {date} by {by}',
+  'crmNote.saveError': 'The note could not be saved.',
   'dealerDetail.loadError': 'The customer data could not be loaded.',
   'dealerDetail.notFound': 'Dealer not found.',
   'dealerDetail.aliases': 'also: {list}',
