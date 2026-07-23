@@ -90,3 +90,73 @@ export function normCountry(raw: string | null | undefined): 'AT' | 'DE' | 'CH' 
     return 'CH'
   return null
 }
+
+// ============================================================================
+// Standort-Umkreissuche (Handy): Praezise Adress-Koordinate mit Fallback auf den
+// PLZ-Zentroid, Entfernungs-Formatierung (Meter unter 1 km) und Deep-Links fuer
+// Anruf/Route. Alles supabase-frei und rein → unter `node --test` pruefbar.
+// ============================================================================
+
+/** Ergebnis der Punkt-Aufloesung: welche Koordinate gilt, und wie genau. */
+export interface ResolvedPoint {
+  coord: LatLng
+  /** true = PLZ-Zentroid (ungefaehr), false = echte Adress-Koordinate. */
+  approximate: boolean
+}
+
+/**
+ * Distanz-Grundlage eines Haendlers bestimmen — KEIN stiller Datenverlust:
+ *  - echte Adress-Koordinate (lat/lng geokodiert) → exakt (approximate=false),
+ *  - sonst PLZ-Zentroid → ungefaehr (approximate=true),
+ *  - keins von beidem → null (Aufrufer weist den Haendler sichtbar als „ohne
+ *    Koordinate" aus, statt ihn wegzuwerfen).
+ * Es wird nie geraten: ohne echte Koordinate UND ohne Zentroid gibt es keinen Punkt.
+ */
+export function resolveDealerPoint(
+  precise: LatLng | null,
+  fallback: LatLng | null,
+): ResolvedPoint | null {
+  if (precise) return { coord: precise, approximate: false }
+  if (fallback) return { coord: fallback, approximate: true }
+  return null
+}
+
+/** Ganze Zahl auf den naechsten Schritt runden (z. B. Meter auf 10er). */
+function roundTo(value: number, step: number): number {
+  return Math.round(value / step) * step
+}
+
+/**
+ * Entfernung menschenlesbar formatieren (deutsches Zahlenformat, internes Tool):
+ *  - unter 1 km → Meter auf 10 m gerundet, z. B. „450 m",
+ *  - 1 bis unter 10 km → eine Nachkommastelle mit Komma, z. B. „3,2 km"
+ *    (glatte Werte ohne „,0", z. B. „5 km"),
+ *  - ab 10 km → ganze Kilometer, z. B. „24 km".
+ * Negative Eingaben werden wie 0 behandelt.
+ */
+export function formatDistance(km: number): string {
+  const d = km > 0 ? km : 0
+  if (d < 1) {
+    return `${roundTo(d * 1000, 10)} m`
+  }
+  if (d < 10) {
+    const oneDecimal = Math.round(d * 10) / 10
+    return `${oneDecimal.toFixed(1).replace(/\.0$/, '').replace('.', ',')} km`
+  }
+  return `${Math.round(d)} km`
+}
+
+/** `tel:`-Link aus einer bereits normalisierten Nummer (E.164) oder null. */
+export function telHref(e164: string | null): string | null {
+  if (!e164) return null
+  return `tel:${e164}`
+}
+
+/**
+ * Universeller Google-Maps-Routen-Link zu einer Koordinate. Oeffnet auf dem Handy
+ * die native Karten-App (Android/iOS) bzw. im Desktop-Browser Maps. Rein aus den
+ * Koordinaten gebaut — keine personenbezogenen Daten in der URL.
+ */
+export function mapsRouteUrl(coord: LatLng): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${coord.lat},${coord.lng}`
+}

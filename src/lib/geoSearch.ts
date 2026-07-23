@@ -3,9 +3,11 @@ import {
   rankByDistance,
   withinRadius,
   normCountry,
+  resolveDealerPoint,
   type LatLng,
   type GeoItem,
 } from './geoDistance'
+import { normalizePhone } from './phoneNormalize'
 
 // ============================================================================
 // Umkreissuche Händler (reine Lese-Funktion). Ursprung (PLZ/Ort) → Koordinate
@@ -66,6 +68,12 @@ interface DealerRow {
   store_country_code: string | null
   shipping_country_code: string | null
   billing_country_code: string | null
+  // Nur fuer die Standort-Suche (searchDealersByLocation) selektiert:
+  lat?: number | string | null
+  lng?: number | string | null
+  store_phone?: string | null
+  shipping_phone?: string | null
+  billing_phone?: string | null
 }
 
 interface PlzRow {
@@ -214,4 +222,139 @@ export async function searchDealersNearby(
     within,
     noCoord,
   }
+}
+
+// ============================================================================
+// TEIL 2 — Standort-Umkreissuche (Handy). Ursprung ist die BROWSER-Koordinate
+// (Geolocation), nicht eine PLZ. Jeder Haendler wird moeglichst ueber seine echte
+// Adress-Koordinate (dealers.lat/lng, einmalig per Skript geokodiert) verortet;
+// fehlt sie, faellt die Verortung auf den PLZ-Zentroid zurueck und wird als
+// „ungefaehr" gekennzeichnet (kein stiller Datenverlust). Getrennte Funktion —
+// die PLZ-Suche oben (searchDealersNearby) bleibt unveraendert.
+// ============================================================================
+
+/** Ein Treffer der Standort-Suche mit allem, was die mobile Liste braucht. */
+export interface NearbyLocationDealer {
+  id: string
+  name: string
+  city: string | null
+  plz: string | null
+  crmNote: string | null
+  /** Ziel-Koordinate fuer den Routen-Link (echte Adresse oder Zentroid). */
+  coord: LatLng
+  /** Normalisierte Telefonnummer (E.164) fuer den Anruf-Link, oder null. */
+  phone: string | null
+}
+
+export interface NearbyLocationResult {
+  within: {
+    dealer: NearbyLocationDealer
+    distanceKm: number
+    /** true = ueber PLZ-Zentroid verortet (ungefaehr), nicht exakt. */
+    approximate: boolean
+  }[]
+  noCoord: { dealer: NearbyDealer; reason: NoCoordReason }[]
+}
+
+/** numeric aus Postgres kommt via supabase-js als string — robust parsen. */
+function num(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Telefon store→shipping→billing (gleiche Prioritaet wie PLZ), normalisiert. */
+function dealerPhone(d: DealerRow, country: string | null): string | null {
+  const raw = d.store_phone ?? d.shipping_phone ?? d.billing_phone
+  return normalizePhone(raw, country)
+}
+
+/**
+ * Haendler im Umkreis um eine echte Standort-Koordinate. `radiusKm` = Radius.
+ * Read-only; RLS scoped die Haendler auf die eigene Org. Verortung je Haendler:
+ * echte Adress-Koordinate (exakt) → sonst PLZ-Zentroid (ungefaehr) → sonst in
+ * `noCoord` (reason 'noZip' ohne PLZ, 'notFound' wenn PLZ nicht im Verzeichnis).
+ */
+export async function searchDealersByLocation(
+  coord: LatLng,
+  radiusKm: number,
+): Promise<NearbyLocationResult> {
+  const { data: dealerRaw, error } = await supabase
+    .from('dealers')
+    .select(
+      'id, name, city, country, crm_notiz, store_zip, shipping_zip, billing_zip, store_city, shipping_city, billing_city, store_country_code, shipping_country_code, billing_country_code, lat, lng, store_phone, shipping_phone, billing_phone',
+    )
+  if (error) throw error
+  const dealers = (dealerRaw ?? []) as DealerRow[]
+
+  // Fuer den Zentroid-Fallback: PLZ der Haendler ohne echte Koordinate sammeln.
+  const needCentroid: { dealer: DealerRow; country: string; plz: string }[] = []
+  for (const d of dealers) {
+    if (num(d.lat) !== null && num(d.lng) !== null) continue
+    const plz = dealerPlz(d)
+    if (!plz) continue
+    const country = normCountry(dealerCountryRaw(d))
+    if (!country) continue
+    needCentroid.push({ dealer: d, country, plz })
+  }
+  const coordByKey = new Map<string, LatLng>()
+  const plzList = [...new Set(needCentroid.map((g) => g.plz))]
+  if (plzList.length > 0) {
+    const { data: plzRaw } = await supabase
+      .from('plz_coordinates')
+      .select('country_code, plz, lat, lng')
+      .in('plz', plzList)
+    for (const p of (plzRaw ?? []) as PlzRow[]) {
+      coordByKey.set(geoKey(p.country_code, p.plz), { lat: p.lat, lng: p.lng })
+    }
+  }
+
+  interface GeoPayload {
+    dealer: NearbyLocationDealer
+    approximate: boolean
+  }
+  const geoItems: GeoItem<GeoPayload>[] = []
+  const noCoord: { dealer: NearbyDealer; reason: NoCoordReason }[] = []
+
+  for (const d of dealers) {
+    const country = normCountry(dealerCountryRaw(d))
+    const precise: LatLng | null =
+      num(d.lat) !== null && num(d.lng) !== null
+        ? { lat: num(d.lat) as number, lng: num(d.lng) as number }
+        : null
+    const plz = dealerPlz(d)
+    const fallback =
+      !precise && plz && country ? coordByKey.get(geoKey(country, plz)) ?? null : null
+
+    const point = resolveDealerPoint(precise, fallback)
+    if (!point) {
+      // Sichtbar ausweisen, nicht verschlucken: kein PLZ → 'noZip', sonst 'notFound'.
+      noCoord.push({ dealer: toNearby(d), reason: plz ? 'notFound' : 'noZip' })
+      continue
+    }
+
+    const base = toNearby(d)
+    geoItems.push({
+      item: {
+        dealer: { ...base, coord: point.coord, phone: dealerPhone(d, country) },
+        approximate: point.approximate,
+      },
+      coord: point.coord,
+    })
+  }
+
+  const ranked = rankByDistance(coord, geoItems)
+  const within = withinRadius(ranked, radiusKm).map((r) => ({
+    dealer: r.item.dealer,
+    distanceKm: r.distanceKm as number,
+    approximate: r.item.approximate,
+  }))
+
+  noCoord.sort(
+    (a, b) =>
+      (a.reason === b.reason ? 0 : a.reason === 'noZip' ? -1 : 1) ||
+      a.dealer.name.localeCompare(b.dealer.name),
+  )
+
+  return { within, noCoord }
 }
