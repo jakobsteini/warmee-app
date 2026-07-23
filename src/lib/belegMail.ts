@@ -1,6 +1,13 @@
 import { supabase } from './supabase'
 import { getInvoice, getBelegArchiv } from './invoices'
 import { createEmailNotification } from './notifications'
+import { postMail } from './mailWebhook'
+import {
+  belegTypForDocuments,
+  kundentypFromAssignments,
+  type Kundentyp,
+  type MailAttachment,
+} from './mailPayload'
 import {
   belegMailSubject,
   belegMailBodyHtml,
@@ -10,12 +17,23 @@ import {
 } from './belegMailPayload'
 
 // ============================================================================
-// Beleg-Mailversand (S10). Der eigentliche Versand läuft über die Supabase Edge
-// Function `send-beleg-mail` (Resend-Key als Secret, nie im Client). Hier wird
-// der Kontext geladen (welche archivierten PDFs), der Payload gebaut und die
-// Function aufgerufen. Nur bei Erfolg wird der Versand protokolliert (sent_at).
-// Kein Eingriff in Belegzahlen/Snapshots.
+// Beleg-Mailversand. Der Versand läuft über den zentralen n8n-Webhook
+// (mailWebhook.postMail) — EIN Mailweg für Belege + Bilder. Hier wird der
+// Kontext geladen (welche archivierten PDFs, Empfänger, kundentyp), die PDFs als
+// base64 angehängt und der Payload gebaut. Nur bei Erfolg wird der Versand
+// protokolliert (sent_at). Kein Eingriff in Belegzahlen/Snapshots.
 // ============================================================================
+
+/** Privater Bucket mit den archivierten Beleg-PDFs. */
+const ARCHIVE_BUCKET = 'belege-archiv'
+
+/** Blob (PDF aus dem Storage) → base64-String für den Mail-Payload. */
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
 
 /** Ein anzuhängender, bereits archivierter Beleg. */
 export interface BelegMailAttachment {
@@ -33,6 +51,8 @@ export interface InvoiceMailContext {
   dealerName: string
   recipientDefault: string
   language: BelegLang
+  /** Läuft über die Agentin (Ilka CC) oder intern — aus der Order-Zuteilung. */
+  kundentyp: Kundentyp
   attachments: BelegMailAttachment[]
 }
 
@@ -83,6 +103,21 @@ export async function loadInvoiceMailContext(
     }
   }
 
+  // kundentyp aus der Order-Zuteilung (delivery → order.assignment): enthält
+  // 'agent' → Ilka bekommt CC (Regel zentral in agentGetsCommission). Freie
+  // Rechnung ohne Order → keine Zuteilung ableitbar → 'internal' (kein CC).
+  let assignment: string | null = null
+  if (inv.delivery_id) {
+    const { data: del } = await supabase
+      .from('deliveries')
+      .select('order:orders(assignment)')
+      .eq('id', inv.delivery_id)
+      .maybeSingle()
+    assignment =
+      (del?.order as { assignment?: string | null } | null)?.assignment ?? null
+  }
+  const kundentyp = kundentypFromAssignments(assignment ? [assignment] : [])
+
   return {
     invoiceId,
     invoiceNumber: inv.invoice_number,
@@ -90,14 +125,16 @@ export async function loadInvoiceMailContext(
     dealerName,
     recipientDefault,
     language,
+    kundentyp,
     attachments,
   }
 }
 
 /**
- * Beleg-Mail versenden: ruft die Edge Function (EINE Mail mit allen Anhängen).
- * Wirft mit sichtbarer Meldung bei Fehler. Nur bei Erfolg wird der Versand als
- * E-Mail-Benachrichtigung protokolliert (channel='email', sent_at).
+ * Beleg-Mail versenden: die archivierten PDFs als base64 anhängen und EINE Mail
+ * über den n8n-Webhook schicken. Wirft mit sichtbarer Meldung bei Fehler. Nur
+ * bei Erfolg wird der Versand als E-Mail-Benachrichtigung protokolliert
+ * (channel='email', sent_at).
  */
 export async function sendInvoiceMail(
   ctx: InvoiceMailContext,
@@ -116,25 +153,40 @@ export async function sendInvoiceMail(
     noteNumber: ctx.noteNumber,
   })
 
-  const { data, error } = await supabase.functions.invoke('send-beleg-mail', {
-    body: {
-      to: to.trim(),
-      subject,
-      html,
-      attachments: ctx.attachments.map((a) => ({
-        storage_path: a.storage_path,
-        filename: a.filename,
-      })),
-    },
+  // beleg_typ aus den vorhandenen Belegen ableiten.
+  const hasInvoice = ctx.attachments.some((a) => a.type === 'invoice')
+  const hasNote = ctx.attachments.some((a) => a.type === 'delivery_note')
+  const beleg_typ = belegTypForDocuments({ hasInvoice, hasNote })
+  if (!beleg_typ) {
+    throw new Error('Es sind keine archivierten Belege zum Anhängen vorhanden.')
+  }
+
+  // PDFs aus dem privaten Archiv laden (RLS greift über den Caller) und als
+  // base64 anhängen.
+  const anhaenge: MailAttachment[] = []
+  for (const a of ctx.attachments) {
+    const { data, error } = await supabase.storage
+      .from(ARCHIVE_BUCKET)
+      .download(a.storage_path)
+    if (error || !data) {
+      throw new Error(`Anhang nicht ladbar: ${a.filename}`)
+    }
+    anhaenge.push({
+      dateiname: a.filename,
+      base64: await blobToBase64(data),
+      content_type: 'application/pdf',
+    })
+  }
+
+  await postMail({
+    beleg_typ,
+    empfaenger_email: to.trim(),
+    sprache: ctx.language,
+    kundentyp: ctx.kundentyp,
+    betreff: subject,
+    html,
+    anhaenge,
   })
-  if (error) {
-    throw new Error(
-      'Der Versand-Dienst ist nicht erreichbar (Edge Function nicht deployt?).',
-    )
-  }
-  if (!data?.ok) {
-    throw new Error(data?.error ?? 'Der Versand ist fehlgeschlagen.')
-  }
 
   // Erst NACH erfolgreichem Versand protokollieren.
   await createEmailNotification({

@@ -2,6 +2,8 @@ import { supabase } from './supabase'
 import { getMyOrgId } from './org'
 import { createEmailNotification } from './notifications'
 import { buildDealerImagesZip } from './dealerImageZip'
+import { postMail } from './mailWebhook'
+import { kundentypFromAssignments } from './mailPayload'
 import {
   dealerImageMailSubject,
   dealerImageMailBodyHtml,
@@ -10,11 +12,10 @@ import type { BelegLang } from './belegMailPayload'
 import type { AssetWithMeta } from '../types/asset'
 
 // ============================================================================
-// Händler-Bildversand (Teil B). Nutzt DIESELBE Edge Function `send-beleg-mail`
-// wie der Belegversand (S10, Resend-Key als Secret, nie im Client) — hier aber
-// OHNE Anhang: die Bilder werden als EINE ZIP in einen privaten Bucket geladen
-// und per zeitlich begrenzter Signed-URL VERLINKT (Größenlimit von Resend so
-// umgangen). Nur bei erfolgreichem Versand wird protokolliert (sent_at).
+// Händler-Bildversand (Teil B). Nutzt den zentralen n8n-Webhook wie der
+// Belegversand — hier aber OHNE Anhang: die Bilder werden als EINE ZIP in einen
+// privaten Bucket geladen und per zeitlich begrenzter Signed-URL VERLINKT
+// (bild_link). Nur bei erfolgreichem Versand wird protokolliert (sent_at).
 // ============================================================================
 
 /** Privater Bucket für die versendeten Händler-ZIPs (org-scoped Pfad). */
@@ -84,7 +85,18 @@ export async function sendDealerImagesMail(params: {
     throw new Error('Der Download-Link konnte nicht erzeugt werden.')
   }
 
-  // 4) Mail (Link im Body, KEIN Anhang) über die bestehende Edge Function.
+  // 4) kundentyp: hat der Händler IRGENDEINE Order mit assignment='agent', geht
+  // CC an Ilka (Regel zentral in agentGetsCommission). CC ist reine Info → im
+  // Zweifel einschließen; leere/interne Orderlage → 'internal'.
+  const { data: orderRows } = await supabase
+    .from('orders')
+    .select('assignment')
+    .eq('dealer_id', dealerId)
+  const kundentyp = kundentypFromAssignments(
+    (orderRows ?? []).map((o) => (o as { assignment: string }).assignment),
+  )
+
+  // 5) Mail (Link im Body, KEIN Anhang) über den n8n-Webhook.
   const subject = dealerImageMailSubject(lang)
   const html = dealerImageMailBodyHtml(lang, {
     dealerName,
@@ -93,19 +105,17 @@ export async function sendDealerImagesMail(params: {
     expiresDays: LINK_TTL_DAYS,
   })
 
-  const { data, error } = await supabase.functions.invoke('send-beleg-mail', {
-    body: { to: to.trim(), subject, html, attachments: [] },
+  await postMail({
+    beleg_typ: 'bilder',
+    empfaenger_email: to.trim(),
+    sprache: lang,
+    kundentyp,
+    betreff: subject,
+    html,
+    bild_link: signed.signedUrl,
   })
-  if (error) {
-    throw new Error(
-      'Der Versand-Dienst ist nicht erreichbar (Edge Function nicht deployt?).',
-    )
-  }
-  if (!data?.ok) {
-    throw new Error(data?.error ?? 'Der Versand ist fehlgeschlagen.')
-  }
 
-  // 5) Erst NACH erfolgreichem Versand protokollieren.
+  // 6) Erst NACH erfolgreichem Versand protokollieren.
   await createEmailNotification({
     type: 'dealer_images_email',
     title: subject,
