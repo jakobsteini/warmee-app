@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { assetGroup, availableGroups, filterAssets } from './assetFilter.ts'
+import {
+  assetGroup,
+  availableGroups,
+  filterAssets,
+  isOpenAsset,
+  openAssignableCount,
+} from './assetFilter.ts'
 import type { AssetWithMeta } from '../types/asset.ts'
 
 /** Knappes Test-Asset — nur die vom Filter gelesenen Felder, Rest gecastet. */
@@ -93,4 +99,43 @@ test('filterAssets: Typ UND Gruppe UND Suche zusammen', () => {
 
 test('filterAssets: leere Suche + kein Typ + keine Gruppe = alles', () => {
   assert.deepEqual(filterAssets(all, { type: null, search: '  ', group: null }), all)
+})
+
+// ─── Offen-Definition (Fortschritt + Nav-Sichtbarkeit) ───────────────────────
+
+/** Minimal-Asset nur mit den von isOpenAsset/openAssignableCount gelesenen Feldern. */
+function openAsset(p: {
+  product_id?: string | null
+  no_product_match?: boolean
+  asset_type?: AssetWithMeta['asset_type']
+}) {
+  return {
+    product_id: p.product_id ?? null,
+    no_product_match: p.no_product_match ?? false,
+    asset_type: p.asset_type ?? 'product',
+  }
+}
+
+test('isOpenAsset: offen nur ohne Artikel UND ohne kein-Artikel-Flag', () => {
+  assert.equal(isOpenAsset(openAsset({})), true) // product_id null, no_match false
+  assert.equal(isOpenAsset(openAsset({ product_id: 'p1' })), false) // zugeordnet
+  assert.equal(isOpenAsset(openAsset({ no_product_match: true })), false) // kein Artikel
+  assert.equal(isOpenAsset(openAsset({ product_id: 'p1', no_product_match: true })), false)
+})
+
+test('openAssignableCount: zaehlt offene, aber KEINE Farbmuster (swatch)', () => {
+  const assets = [
+    openAsset({}), // offen, product → zaehlt
+    openAsset({ asset_type: 'lifestyle' }), // offen, lifestyle → zaehlt
+    openAsset({ asset_type: 'swatch' }), // offen, aber swatch → zaehlt NICHT
+    openAsset({ product_id: 'p1' }), // zugeordnet → nein
+    openAsset({ no_product_match: true }), // kein Artikel → nein
+  ]
+  assert.equal(openAssignableCount(assets), 2)
+})
+
+test('openAssignableCount: nur offene Farbmuster → 0 (Nav-Eintrag bleibt aus)', () => {
+  // Deckt den realen Ist-Stand ab: 36 offene, allesamt swatch → "0 offen".
+  const swatches = Array.from({ length: 5 }, () => openAsset({ asset_type: 'swatch' }))
+  assert.equal(openAssignableCount(swatches), 0)
 })

@@ -46,6 +46,32 @@ export function availableGroups(assets: AssetWithMeta[]): string[] {
  * Produktfotos — sie wirkt nur, wenn type === 'product' (sonst hätten
  * Farbmuster/Kampagnen ohnehin keine Artikel-Kategorie).
  */
+/**
+ * „Offen" = ein Bild, das noch zuzuordnen ist: KEIN Artikel verknüpft UND nicht
+ * bewusst als „kein Artikel" markiert. Kanonische Definition — auch im Schema
+ * dokumentiert (assets: erledigt = product_id not null OR no_product_match=true).
+ * EINE Quelle für die Fortschrittsanzeige der Zuordnungs-Seite und die
+ * Nav-Sichtbarkeit — keine zweite Implementierung.
+ */
+export function isOpenAsset(
+  a: Pick<AssetWithMeta, 'product_id' | 'no_product_match'>,
+): boolean {
+  return a.product_id === null && a.no_product_match !== true
+}
+
+/**
+ * Anzahl offener, tatsächlich ZUZUORDNENDER Bilder = offen UND kein Farbmuster.
+ * Farbmuster (swatch) sind für die Zuordnung Rauschen und auf der Seite per
+ * Default ausgeblendet (`hideSwatches`) — sie zählen hier NICHT als offene
+ * Arbeit. Das deckt sich mit der „0 offen"-Anzeige der Seite und steuert, ob der
+ * Nav-Eintrag „Bilder zuordnen" sichtbar ist.
+ */
+export function openAssignableCount(
+  assets: Pick<AssetWithMeta, 'product_id' | 'no_product_match' | 'asset_type'>[],
+): number {
+  return assets.filter((a) => isOpenAsset(a) && a.asset_type !== 'swatch').length
+}
+
 export function filterAssets(
   assets: AssetWithMeta[],
   { type, search, group }: AssetFilterState,

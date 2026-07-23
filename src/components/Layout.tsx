@@ -1,7 +1,8 @@
-import { type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCurrentUser } from '../context/CurrentUser'
+import { countOpenAssignableAssets } from '../lib/assets'
 import BrandEntryOverlay from './BrandEntryOverlay'
 import NotificationBell from './NotificationBell'
 import { useI18n } from '../i18n'
@@ -70,6 +71,28 @@ export default function Layout() {
   const { t, lang, setLang } = useI18n()
   const { currentUser, setCurrentUser } = useCurrentUser()
 
+  // „Bilder zuordnen" nur zeigen, wenn es tatsächlich offene (zuzuordnende) Bilder
+  // gibt. Leichtgewichtige Count-Abfrage (keine Bildliste) beim Laden der Nav.
+  // null = noch unbekannt, -1 = Abfrage fehlgeschlagen (dann Eintrag als Fallback
+  // zeigen, damit keine offene Arbeit unsichtbar wird). Die Seite bleibt ohnehin
+  // unter /assets/assign direkt erreichbar. Recompute bei jedem Layout-Mount
+  // (App-Start/Re-Login) → neue Bilder einer Saison lassen den Eintrag wieder
+  // auftauchen.
+  const [openAssignable, setOpenAssignable] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    countOpenAssignableAssets()
+      .then((n) => alive && setOpenAssignable(n))
+      .catch(() => alive && setOpenAssignable(-1))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const showAssign = openAssignable === -1 || (openAssignable ?? 0) > 0
+  const visibleNewsletterItems = newsletterItems.filter(
+    (item) => item.to !== '/assets/assign' || showAssign,
+  )
+
   // Persona noch nicht gewählt → Einstiegs-Overlay (pro Sitzung).
   if (!currentUser) {
     return <BrandEntryOverlay onSelect={setCurrentUser} />
@@ -93,7 +116,7 @@ export default function Layout() {
           </NavLink>
 
           <SectionHeading>{t('nav.section.newsletter')}</SectionHeading>
-          {newsletterItems.map((item) => (
+          {visibleNewsletterItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={linkClass}>
               {t(item.key)}
             </NavLink>

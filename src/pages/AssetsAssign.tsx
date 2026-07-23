@@ -13,6 +13,7 @@ import {
   productLabel,
   exactProductMatch,
 } from '../lib/productMatch'
+import { isOpenAsset } from '../lib/assetFilter'
 import type { AssetWithMeta } from '../types/asset'
 import type { Product } from '../types/product'
 import type { ProductVariant } from '../types/productVariant'
@@ -66,10 +67,7 @@ export default function AssetsAssign() {
   const unassigned = useMemo(
     () =>
       assets.filter(
-        (a) =>
-          a.product_id === null &&
-          a.no_product_match !== true &&
-          (!hideSwatches || a.asset_type !== 'swatch'),
+        (a) => isOpenAsset(a) && (!hideSwatches || a.asset_type !== 'swatch'),
       ),
     [assets, hideSwatches],
   )

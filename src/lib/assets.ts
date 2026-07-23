@@ -316,6 +316,26 @@ export async function setAssetNoProductMatch(
   if (error) throw error
 }
 
+/**
+ * Leichtgewichtige Zählung offener, zuzuordnender Bilder — NUR count, keine
+ * Zeilen, kein Produkt-Join. Für die Nav-Sichtbarkeit („Bilder zuordnen"), damit
+ * die Navigation auch bei vielen Bildern billig bleibt (statt listAssets zu
+ * laden). Das WHERE spiegelt die kanonische Definition aus assetFilter.ts
+ * (`openAssignableCount` / `isOpenAsset`): product_id IS NULL (kein Artikel) UND
+ * no_product_match = false (Spalte ist NOT NULL default false) UND kein Farbmuster
+ * (swatch = Rauschen, auf der Seite per Default ausgeblendet). Org-Scoping via RLS.
+ */
+export async function countOpenAssignableAssets(): Promise<number> {
+  const { count, error } = await supabase
+    .from('assets')
+    .select('*', { count: 'exact', head: true })
+    .is('product_id', null)
+    .eq('no_product_match', false)
+    .neq('asset_type', 'swatch')
+  if (error) throw error
+  return count ?? 0
+}
+
 /** Asset löschen: erst die Datei aus dem Bucket, dann den DB-Datensatz. */
 export async function deleteAsset(asset: Asset): Promise<void> {
   const { error: storageError } = await supabase.storage
