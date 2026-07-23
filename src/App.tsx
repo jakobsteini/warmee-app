@@ -31,6 +31,7 @@ import CorrectionNew from './pages/CorrectionNew'
 import DefectReturns from './pages/DefectReturns'
 import Analytics from './pages/Analytics'
 import ArticleGroupsReport from './pages/ArticleGroupsReport'
+import DealersNearby from './pages/DealersNearby'
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dealers" element={<Dealers />} />
             <Route path="/dealers/:id" element={<DealerDetail />} />
+            <Route path="/dealers-nearby" element={<DealersNearby />} />
             <Route path="/assets" element={<Assets />} />
             <Route path="/assets/assign" element={<AssetsAssign />} />
             <Route path="/crop" element={<Crop />} />

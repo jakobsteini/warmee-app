@@ -27,6 +27,7 @@ const newsletterItems: NavDef[] = [
 /** Rubrik WARENWIRTSCHAFT (Baustein A) — Händler (Kundenstamm) zuerst. */
 const warenItems: NavDef[] = [
   { to: '/dealers', key: 'nav.dealers' },
+  { to: '/dealers-nearby', key: 'nav.dealersNearby' },
   { to: '/products', key: 'nav.products' },
   { to: '/suppliers', key: 'nav.suppliers' },
   { to: '/orders', key: 'nav.orders' },
