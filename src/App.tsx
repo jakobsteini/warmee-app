@@ -30,6 +30,7 @@ import Commission from './pages/Commission'
 import CorrectionNew from './pages/CorrectionNew'
 import DefectReturns from './pages/DefectReturns'
 import Analytics from './pages/Analytics'
+import ArticleGroupsReport from './pages/ArticleGroupsReport'
 
 export default function App() {
   return (
@@ -82,6 +83,7 @@ export default function App() {
             <Route path="/commission" element={<Commission />} />
             <Route path="/defect-returns" element={<DefectReturns />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/article-groups-report" element={<ArticleGroupsReport />} />
           </Route>
         </Route>
 

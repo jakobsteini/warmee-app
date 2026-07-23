@@ -41,6 +41,7 @@ const warenItems: NavDef[] = [
   { to: '/commission', key: 'nav.commission' },
   { to: '/defect-returns', key: 'nav.defectReturns' },
   { to: '/analytics', key: 'nav.analytics' },
+  { to: '/article-groups-report', key: 'nav.articleGroupsReport' },
 ]
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
