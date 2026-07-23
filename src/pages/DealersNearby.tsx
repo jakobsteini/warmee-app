@@ -180,6 +180,20 @@ export default function DealersNearby() {
           )}
         </>
       )}
+
+      {/* Datenquelle GeoNames (CC BY 4.0) — Namensnennung laut Lizenz. */}
+      <p className="mt-10 border-t-[0.5px] border-line pt-3 text-xs text-muted">
+        {t('nearby.attribution')}{' '}
+        <a
+          href="https://www.geonames.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-ink"
+        >
+          GeoNames
+        </a>
+        , CC BY 4.0
+      </p>
     </div>
   )
 }
