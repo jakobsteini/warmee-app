@@ -28,6 +28,7 @@ const newsletterItems: NavDef[] = [
 const warenItems: NavDef[] = [
   { to: '/dealers', key: 'nav.dealers' },
   { to: '/dealers-nearby', key: 'nav.dealersNearby' },
+  { to: '/follow-up', key: 'nav.followUp' },
   { to: '/products', key: 'nav.products' },
   { to: '/suppliers', key: 'nav.suppliers' },
   { to: '/orders', key: 'nav.orders' },
