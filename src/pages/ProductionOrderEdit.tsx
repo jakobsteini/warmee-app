@@ -20,6 +20,7 @@ import {
   buildMailtoUrl,
 } from '../lib/supplierOrderMail'
 import GoodsReceiptSection from '../components/GoodsReceiptSection'
+import AllocationOverrideSection from '../components/AllocationOverrideSection'
 import {
   nextProductionStatus,
   isSupplierOrderLocked,
@@ -420,12 +421,14 @@ export default function ProductionOrderEdit() {
 
       {qtyError && <p className="mt-2 text-sm text-red-700">{qtyError}</p>}
 
-      {/* Prioritäts-Aufteilung — nur Positionen, deren Bestellmenge < Bedarf ist. */}
+      {/* Prioritäts-Aufteilung (Vorschau, read-only) — NUR im Entwurf. Ab
+          „gesendet" tritt die eingefrorene, übersteuerbare Zuteilung unten an
+          ihre Stelle. */}
       {(() => {
         const cut = preview.filter(
           (p) => p.orderQuantity < p.demand && p.allocations.length > 0,
         )
-        if (cut.length === 0) return null
+        if (cut.length === 0 || order.status !== 'draft') return null
         return (
           <div className="mt-6">
             <h2 className="mb-1 text-lg font-medium text-ink">
@@ -471,6 +474,9 @@ export default function ProductionOrderEdit() {
           </div>
         )
       })()}
+
+      {/* Eingefrorene Kunden-Zuteilung ansehen/übersteuern (ab „gesendet"). */}
+      {id && <AllocationOverrideSection productionOrderId={id} status={order.status} />}
     </div>
   )
 }

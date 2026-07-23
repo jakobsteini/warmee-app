@@ -62,6 +62,18 @@ export const de = {
   'supplierOrder.allocationHintLocked':
     'Eingefrorene Aufteilung der gesendeten Bestellung.',
   'supplierOrder.allocationOf': 'bestellt {order} von {demand}',
+  'allocOverride.title': 'Kunden-Zuteilung',
+  'allocOverride.hintOpen':
+    'Zuteilung je Kunde anpassbar, bis die Verteilung erzeugt wird. Die Summe je Position darf die verfügbare Menge nicht überschreiten.',
+  'allocOverride.hintLocked':
+    'Die Verteilung wurde erzeugt — die Zuteilung ist eingefroren.',
+  'allocOverride.available': 'verfügbar: {n}',
+  'allocOverride.remaining': 'noch zu verteilen: {n}',
+  'allocOverride.fullyAllocated': 'vollständig verteilt',
+  'allocOverride.over': 'Summe übersteigt die verfügbare Menge um {n}.',
+  'allocOverride.invalid': 'Bitte ganze Zahlen ≥ 0 eingeben.',
+  'allocOverride.saveError': 'Die Zuteilung konnte nicht gespeichert werden.',
+  'allocOverride.overriddenBadge': 'übersteuert {date}',
   'suppliers.contacts.heading': 'Kontakte',
   'suppliers.contacts.hint':
     'Bis zu 3 Kontakte (Name + E-Mail), z. B. Aufsichtsperson. Leer lassen ist erlaubt.',
@@ -1267,6 +1279,18 @@ export const en: Record<TranslationKey, string> = {
     'Suggestion when the order quantity is short — priority flag first, then season priority, then random. Adjustable in a later step.',
   'supplierOrder.allocationHintLocked': 'Frozen allocation of the sent order.',
   'supplierOrder.allocationOf': 'ordered {order} of {demand}',
+  'allocOverride.title': 'Customer allocation',
+  'allocOverride.hintOpen':
+    'Allocation per customer can be adjusted until deliveries are generated. The sum per position must not exceed the available quantity.',
+  'allocOverride.hintLocked':
+    'Deliveries have been generated — the allocation is frozen.',
+  'allocOverride.available': 'available: {n}',
+  'allocOverride.remaining': 'left to allocate: {n}',
+  'allocOverride.fullyAllocated': 'fully allocated',
+  'allocOverride.over': 'The sum exceeds the available quantity by {n}.',
+  'allocOverride.invalid': 'Please enter whole numbers ≥ 0.',
+  'allocOverride.saveError': 'The allocation could not be saved.',
+  'allocOverride.overriddenBadge': 'overridden {date}',
   'suppliers.contacts.heading': 'Contacts',
   'suppliers.contacts.hint':
     'Up to 3 contacts (name + email), e.g. a supervisor. Leaving them empty is fine.',

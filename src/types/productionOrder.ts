@@ -45,6 +45,22 @@ export function isSupplierOrderLocked(status: string): boolean {
   return status !== 'draft'
 }
 
+/**
+ * Darf die eingefrorene Kunden-Zuteilung (supplier_order_allocations) noch manuell
+ * übersteuert werden? Fenster: der Snapshot existiert (ab „gesendet", also
+ * `isSupplierOrderLocked`) UND es wurde noch KEINE Verteilung erzeugt
+ * (`generateDeliveries` verlangt „Erhalten" und legt danach Lieferungen an).
+ * In „Entwurf" gibt es keinen Snapshot (die Prioritäts-Automatik greift, Vorschau
+ * read-only); sobald Lieferungen existieren, ist die Zuteilung realisiert und
+ * read-only. Zentrale Regel — nicht andernorts neu herleiten.
+ */
+export function isAllocationOverrideOpen(
+  status: string,
+  hasDeliveries: boolean,
+): boolean {
+  return isSupplierOrderLocked(status) && !hasDeliveries
+}
+
 /** Eine Produktionsbestellung (snake_case wie in der DB). */
 export interface ProductionOrder {
   id: string

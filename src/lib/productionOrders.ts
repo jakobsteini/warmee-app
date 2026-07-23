@@ -5,8 +5,12 @@ import {
   missingProducerArticleNames,
   type BundleOrderItem,
 } from './supplierBundleCalc'
-import { isSupplierOrderLocked } from '../types/productionOrder'
+import {
+  isSupplierOrderLocked,
+  isAllocationOverrideOpen,
+} from '../types/productionOrder'
 import { itemKey } from './itemKey'
+import { isWithinCapacity } from './allocationOverrideCalc'
 import {
   allocateByPriority,
   type AllocationClaim,
@@ -523,8 +527,13 @@ export async function getAllocationPreview(
 
 /**
  * Prioritäts-Aufteilung als Snapshot festschreiben (beim Übergang auf „gesendet").
- * Idempotent: alte Allokation der Bestellung wird ersetzt. Nur Zuteilungen > 0
- * werden gespeichert (ein Kunde mit 0 bekommt keine Lieferung).
+ * Idempotent: alte Allokation der Bestellung wird ersetzt.
+ *
+ * ALLE Anspruchsteller werden gespeichert — auch die mit Zuteilung 0. Das ist die
+ * Grundlage für das spätere manuelle Übersteuern (man kann so einem leer
+ * ausgegangenen Händler nachträglich zuteilen). Für die Verteilung bleibt das
+ * zahlengleich: generateDeliveries/splitByOrder überspringt Mengen ≤ 0, es
+ * entsteht also KEINE Leer-Lieferung. is_overridden bleibt per Default false.
  */
 export async function freezeSupplierOrderAllocation(
   productionOrderId: string,
@@ -538,22 +547,247 @@ export async function freezeSupplierOrderAllocation(
     .eq('production_order_id', productionOrderId)
 
   const rows = positions.flatMap((p) =>
-    p.allocations
-      .filter((a) => a.allocated > 0)
-      .map((a) => ({
-        org_id,
-        production_order_id: productionOrderId,
-        order_id: a.orderId,
-        product_id: p.productId,
-        color: p.color,
-        size: p.size,
-        allocated_quantity: a.allocated,
-      })),
+    p.allocations.map((a) => ({
+      org_id,
+      production_order_id: productionOrderId,
+      order_id: a.orderId,
+      product_id: p.productId,
+      color: p.color,
+      size: p.size,
+      allocated_quantity: a.allocated,
+    })),
   )
   if (rows.length > 0) {
     const { error } = await supabase
       .from('supplier_order_allocations')
       .insert(rows)
+    if (error) throw error
+  }
+}
+
+// ─── Kunden-Zuteilung manuell übersteuern ────────────────────────────────────
+
+/** Eine Zuteilungszeile (ein Kunden-Auftrag) einer Position. */
+export interface AllocationOverrideRow {
+  allocationId: string
+  orderId: string
+  dealerName: string
+  allocatedQuantity: number
+  isOverridden: boolean
+  overriddenAt: string | null
+}
+
+/** Eine Position mit ihrer verfügbaren Menge (capacity) und den Zuteilungen. */
+export interface AllocationOverridePosition {
+  productId: string | null
+  color: string | null
+  size: string | null
+  productName: string
+  /** Verfügbare/bestellte Menge dieser Position (order_quantity ?? total_quantity). */
+  capacity: number
+  rows: AllocationOverrideRow[]
+}
+
+export interface AllocationOverrideView {
+  /** Ist Übersteuern gerade erlaubt (Snapshot da, noch keine Verteilung)? */
+  open: boolean
+  positions: AllocationOverridePosition[]
+}
+
+/** Ob für die Bestellung bereits eine Verteilung (Lieferungen) erzeugt wurde. */
+async function hasDeliveries(productionOrderId: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('deliveries')
+    .select('id', { count: 'exact', head: true })
+    .eq('production_order_id', productionOrderId)
+  if (error) throw error
+  return (count ?? 0) > 0
+}
+
+/**
+ * Die eingefrorene Kunden-Zuteilung einer Sammelbestellung zum Ansehen/Übersteuern
+ * laden: je Position die verfügbare Menge (capacity) und die Zuteilung je Kunde
+ * aus dem Snapshot (supplier_order_allocations). `open` sagt, ob Übersteuern
+ * gerade erlaubt ist (siehe isAllocationOverrideOpen). Im Entwurf (kein Snapshot)
+ * bleibt die Liste leer und open=false — dort greift die Prioritäts-Vorschau.
+ */
+export async function getAllocationOverrideView(
+  productionOrderId: string,
+): Promise<AllocationOverrideView> {
+  const { data: po, error: poErr } = await supabase
+    .from('production_orders')
+    .select('status')
+    .eq('id', productionOrderId)
+    .single()
+  if (poErr) throw poErr
+
+  const open = isAllocationOverrideOpen(
+    po.status,
+    await hasDeliveries(productionOrderId),
+  )
+
+  const { data: allocRaw, error: allocErr } = await supabase
+    .from('supplier_order_allocations')
+    .select(
+      'id, order_id, product_id, color, size, allocated_quantity, is_overridden, overridden_at, order:orders(dealer:dealers(name))',
+    )
+    .eq('production_order_id', productionOrderId)
+  if (allocErr) throw allocErr
+  const allocs = (allocRaw ?? []) as unknown as {
+    id: string
+    order_id: string
+    product_id: string | null
+    color: string | null
+    size: string | null
+    allocated_quantity: number
+    is_overridden: boolean
+    overridden_at: string | null
+    order: { dealer: { name: string } | null } | null
+  }[]
+
+  if (allocs.length === 0) return { open, positions: [] }
+
+  // Verfügbare Menge + Artikelname je Position aus den Bestellpositionen.
+  const { data: piRaw, error: piErr } = await supabase
+    .from('production_order_items')
+    .select('product_id, color, size, total_quantity, order_quantity, product:products(name)')
+    .eq('production_order_id', productionOrderId)
+  if (piErr) throw piErr
+  const poItems = (piRaw ?? []) as unknown as {
+    product_id: string | null
+    color: string | null
+    size: string | null
+    total_quantity: number
+    order_quantity: number | null
+    product: { name: string } | null
+  }[]
+  const capacityByKey = new Map<string, number>()
+  const nameByKey = new Map<string, string>()
+  for (const it of poItems) {
+    const k = itemKey(it.product_id, it.color, it.size)
+    capacityByKey.set(k, it.order_quantity ?? it.total_quantity)
+    nameByKey.set(k, it.product?.name ?? 'Artikel')
+  }
+
+  const byKey = new Map<string, AllocationOverridePosition>()
+  for (const a of allocs) {
+    const k = itemKey(a.product_id, a.color, a.size)
+    let pos = byKey.get(k)
+    if (!pos) {
+      pos = {
+        productId: a.product_id,
+        color: a.color,
+        size: a.size,
+        productName: nameByKey.get(k) ?? 'Artikel',
+        capacity: capacityByKey.get(k) ?? 0,
+        rows: [],
+      }
+      byKey.set(k, pos)
+    }
+    pos.rows.push({
+      allocationId: a.id,
+      orderId: a.order_id,
+      dealerName: a.order?.dealer?.name ?? '—',
+      allocatedQuantity: a.allocated_quantity,
+      isOverridden: a.is_overridden,
+      overriddenAt: a.overridden_at,
+    })
+  }
+
+  const positions = [...byKey.values()].sort((x, y) =>
+    x.productName.localeCompare(y.productName),
+  )
+  for (const p of positions) {
+    p.rows.sort((x, y) => x.dealerName.localeCompare(y.dealerName))
+  }
+
+  return { open, positions }
+}
+
+/**
+ * Kunden-Zuteilung einer Position manuell übersteuern. Übergeben wird die
+ * KOMPLETTE Zuteilung der Position (alle Zeilen mit neuer Menge), damit die harte
+ * Summenkontrolle greift. Grenze:
+ *  - Nur solange Übersteuern offen ist (Snapshot da, keine Verteilung) — sonst
+ *    sichtbarer Fehler statt stiller Änderung.
+ *  - Σ Zuteilung darf die verfügbare Menge NIE überschreiten (Untermenge erlaubt)
+ *    — sonst sichtbarer Fehler (Block-statt-raten).
+ * Nur tatsächlich geänderte Zeilen werden als übersteuert markiert (Flag +
+ * Zeitstempel + Bearbeiter).
+ */
+export async function saveAllocationOverride(
+  productionOrderId: string,
+  position: { productId: string | null; color: string | null; size: string | null },
+  lines: { allocationId: string; quantity: number }[],
+): Promise<void> {
+  const { data: po, error: poErr } = await supabase
+    .from('production_orders')
+    .select('status')
+    .eq('id', productionOrderId)
+    .single()
+  if (poErr) throw poErr
+  if (!isAllocationOverrideOpen(po.status, await hasDeliveries(productionOrderId))) {
+    throw new Error(
+      'Die Zuteilung kann nicht mehr geändert werden (Verteilung bereits erzeugt oder Bestellung noch Entwurf).',
+    )
+  }
+
+  // Verfügbare Menge der Position bestimmen.
+  const { data: piRaw, error: piErr } = await supabase
+    .from('production_order_items')
+    .select('product_id, color, size, total_quantity, order_quantity')
+    .eq('production_order_id', productionOrderId)
+  if (piErr) throw piErr
+  const key = itemKey(position.productId, position.color, position.size)
+  const item = (piRaw ?? []).find(
+    (it) =>
+      itemKey(
+        (it as { product_id: string | null }).product_id,
+        (it as { color: string | null }).color,
+        (it as { size: string | null }).size,
+      ) === key,
+  ) as
+    | { total_quantity: number; order_quantity: number | null }
+    | undefined
+  const capacity = item ? (item.order_quantity ?? item.total_quantity) : 0
+
+  // Harte Grenze: Summe darf capacity nicht überschreiten (Untermenge erlaubt).
+  if (!isWithinCapacity(capacity, lines)) {
+    const over = lines.reduce((s, l) => s + (l.quantity || 0), 0) - capacity
+    throw new Error(
+      `Die Summe übersteigt die verfügbare Menge um ${over} Stück. Bitte die Zuteilung anpassen.`,
+    )
+  }
+
+  // Aktuelle Mengen laden, um nur tatsächlich geänderte Zeilen zu markieren.
+  const ids = lines.map((l) => l.allocationId)
+  const { data: curRaw, error: curErr } = await supabase
+    .from('supplier_order_allocations')
+    .select('id, allocated_quantity')
+    .in('id', ids)
+    .eq('production_order_id', productionOrderId)
+  if (curErr) throw curErr
+  const currentById = new Map(
+    (curRaw ?? []).map((r) => [
+      (r as { id: string }).id,
+      (r as { allocated_quantity: number }).allocated_quantity,
+    ]),
+  )
+
+  const userId = await getMyUserId()
+  const now = new Date().toISOString()
+  for (const l of lines) {
+    if (currentById.get(l.allocationId) === l.quantity) continue // unverändert
+    const { error } = await supabase
+      .from('supplier_order_allocations')
+      .update({
+        allocated_quantity: l.quantity,
+        is_overridden: true,
+        overridden_at: now,
+        overridden_by: userId,
+      })
+      .eq('id', l.allocationId)
+      .eq('production_order_id', productionOrderId)
     if (error) throw error
   }
 }
