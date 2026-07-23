@@ -12,6 +12,7 @@ import {
   updateOrderStatus,
 } from '../lib/orders'
 import OrderHeadFieldsForm from '../components/OrderHeadFields'
+import AbMailDialog from '../components/AbMailDialog'
 import { listProducts } from '../lib/products'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
@@ -89,6 +90,7 @@ export default function OrderEdit() {
   const [add, setAdd] = useState<AddForm>(emptyAdd)
   const [adding, setAdding] = useState(false)
   const [abBusy, setAbBusy] = useState(false)
+  const [abMailOpen, setAbMailOpen] = useState(false)
   // OSS-Sätze für die MwSt-VORSCHAU (reine Anzeige). Ohne sie fällt taxCalc bei
   // B2C-EU auf ossMissing → neutraler Hinweis (kein Block, Order ≠ Steuerbeleg).
   const [ossMap, setOssMap] = useState<Record<string, number>>({})
@@ -400,8 +402,31 @@ export default function OrderEdit() {
           >
             {abBusy ? t('common.loading') : t('orderEdit.abPdf')}
           </button>
+          <button
+            type="button"
+            onClick={() => setAbMailOpen(true)}
+            disabled={!order.order_number}
+            title={!order.order_number ? t('orderEdit.abNeedsConfirm') : undefined}
+            className="rounded-md border-[0.5px] border-line px-4 py-2 text-sm text-ink transition-colors hover:bg-card disabled:opacity-50"
+          >
+            {t('abMail.button')}
+          </button>
         </div>
       </div>
+
+      {/* Versand-Status der AB (nur Info, kein Auftragswert). */}
+      {order.ab_sent_at && (
+        <p className="mt-2 text-xs text-muted">
+          {t('abMail.sentInfo', {
+            date: new Date(order.ab_sent_at).toLocaleDateString('de-DE', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            }),
+            to: order.ab_sent_to ?? '—',
+          })}
+        </p>
+      )}
 
       {error && (
         <div className="mb-4 rounded-md border-[0.5px] border-line bg-card px-4 py-3 text-sm text-red-700">
@@ -694,6 +719,22 @@ export default function OrderEdit() {
           </button>
         </div>
       </form>
+
+      {abMailOpen && order.order_number && (
+        <AbMailDialog
+          orderId={order.id}
+          orderNumber={order.order_number}
+          dealerName={dealer?.name ?? ''}
+          language={dealer?.language ?? null}
+          assignment={order.assignment}
+          recipientDefault={dealer?.email ?? ''}
+          onClose={() => setAbMailOpen(false)}
+          onSent={() => {
+            setAbMailOpen(false)
+            load()
+          }}
+        />
+      )}
     </div>
   )
 }

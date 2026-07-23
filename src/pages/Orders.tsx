@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createOrder, deleteOrder, listOrders } from '../lib/orders'
+import { createOrder, deleteOrder, listOrders, listOrderAbSent } from '../lib/orders'
 import OrderHeadFieldsForm from '../components/OrderHeadFields'
 import { listDealers } from '../lib/dealers'
 import { listSeasons } from '../lib/seasons'
@@ -99,6 +99,9 @@ export default function Orders() {
   const navigate = useNavigate()
   const t = useT()
   const [orders, setOrders] = useState<OrderListRow[]>([])
+  const [abSent, setAbSent] = useState<Map<string, { at: string | null; to: string | null }>>(
+    new Map(),
+  )
   const [dealers, setDealers] = useState<Dealer[]>([])
   const [seasons, setSeasons] = useState<Season[]>([])
   const [credits, setCredits] = useState<Map<string, DealerCredit>>(new Map())
@@ -152,18 +155,21 @@ export default function Orders() {
     setLoading(true)
     setError(null)
     try {
-      const [ords, deal, seas, creds] = await Promise.all([
+      const [ords, deal, seas, creds, ab] = await Promise.all([
         listOrders(),
         listDealers(),
         listSeasons(),
         // Bonität aus der bestehenden Ampel-Lib (nie hart fehlschlagen lassen —
         // ohne Bewertung bleibt der Hinweis neutral).
         listDealerCredits().catch(() => new Map<string, DealerCredit>()),
+        // AB-Versand-Status (tolerant; leer wenn Migration noch nicht drin).
+        listOrderAbSent(),
       ])
       setOrders(ords)
       setDealers(deal)
       setSeasons(seas)
       setCredits(creds)
+      setAbSent(ab)
     } catch {
       setError(t('orders.loadError'))
     } finally {
@@ -431,6 +437,15 @@ export default function Orders() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={o.status} />
+                        {o.order_number && (
+                          <span
+                            className={`mt-1 block text-xs ${abSent.get(o.id)?.at ? 'text-ink' : 'text-muted/60'}`}
+                          >
+                            {abSent.get(o.id)?.at
+                              ? t('abMail.listSent')
+                              : t('abMail.listNotSent')}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {formatEUR(orderTotal(o))}

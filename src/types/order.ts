@@ -239,6 +239,9 @@ export interface Order extends OrderHeadFields {
   created_by: string | null
   created_at: string | null
   updated_at: string | null
+  /** Auftragsbestätigung zuletzt per Mail versendet am / an (null = noch nie). */
+  ab_sent_at: string | null
+  ab_sent_to: string | null
 }
 
 /**

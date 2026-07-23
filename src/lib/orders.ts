@@ -28,6 +28,29 @@ export async function listOrders(): Promise<OrderListRow[]> {
   return (data ?? []) as unknown as OrderListRow[]
 }
 
+/**
+ * AB-Versand-Status je Auftrag (id → { at, to }). Getrennt von listOrders und
+ * TOLERANT: fehlt die Spalte (Migration noch nicht eingespielt), kommt eine leere
+ * Map zurück — die bestehende Auftragsübersicht bleibt so unberührt.
+ */
+export async function listOrderAbSent(): Promise<
+  Map<string, { at: string | null; to: string | null }>
+> {
+  const map = new Map<string, { at: string | null; to: string | null }>()
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, ab_sent_at, ab_sent_to')
+    if (error || !data) return map
+    for (const o of data as { id: string; ab_sent_at: string | null; ab_sent_to: string | null }[]) {
+      map.set(o.id, { at: o.ab_sent_at, to: o.ab_sent_to })
+    }
+    return map
+  } catch {
+    return map
+  }
+}
+
 /** Eine einzelne Order laden. */
 export async function getOrder(id: string): Promise<Order> {
   const { data, error } = await supabase
